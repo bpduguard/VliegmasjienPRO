@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>VliegmasjienPRO ✈ Flight Tracker</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✈️</text></svg>" />
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header id="topbar">
+    <div class="brand">✈ <strong>Vliegmasjien</strong>PRO</div>
+    <nav id="tabs">
+      <button data-tab="map" class="active">Map</button>
+      <button data-tab="stats">Statistics</button>
+      <button data-tab="watchlist">Watchlist</button>
+      <button data-tab="zones">Zones</button>
+      <button data-tab="alerts">Alerts</button>
+      <button data-tab="settings">Settings</button>
+    </nav>
+    <div id="conn-status" class="conn" title="Connection to receiver">●</div>
+  </header>
+
+  <!-- ============================== MAP TAB ============================== -->
+  <main id="tab-map" class="tab active">
+    <div id="map"></div>
+
+    <div id="filterbar">
+      <button class="filt active" data-filter="all">All</button>
+      <button class="filt" data-filter="airline">✈ Airlines</button>
+      <button class="filt" data-filter="military">🪖 Military</button>
+      <button class="filt" data-filter="private">🛩 Private</button>
+      <button class="filt" data-filter="business">💼 Business</button>
+      <button class="filt" data-filter="emergency">🚨 Emergency</button>
+      <input id="airline-filter" type="text" placeholder="Airline / callsign filter…" />
+      <span class="spacer"></span>
+      <label class="toggle"><input type="checkbox" id="weather-toggle" /> 🌦 Weather</label>
+      <label class="toggle"><input type="checkbox" id="labels-toggle" checked /> Labels</label>
+    </div>
+
+    <div id="ac-list-panel">
+      <div class="panel-head">
+        <span id="ac-count">0 aircraft</span>
+        <button id="ac-list-collapse" title="Collapse">―</button>
+      </div>
+      <div id="ac-list"></div>
+    </div>
+
+    <!-- aircraft detail side panel -->
+    <aside id="detail" class="hidden">
+      <div class="detail-head">
+        <div>
+          <div id="d-callsign">—</div>
+          <div id="d-sub">—</div>
+        </div>
+        <div class="detail-actions">
+          <button id="d-follow" title="Follow this aircraft on the map">📍 Follow</button>
+          <button id="d-close" title="Close">✕</button>
+        </div>
+      </div>
+      <div id="d-photo"></div>
+      <div id="d-badges"></div>
+      <div class="d-grid" id="d-grid"></div>
+      <section class="d-section" id="d-route-section">
+        <h4>Route</h4>
+        <div id="d-route">Looking up route…</div>
+      </section>
+      <section class="d-section" id="d-zones-section">
+        <h4>Zones</h4>
+        <div id="d-zones"></div>
+      </section>
+      <section class="d-section">
+        <h4>Claude AI lookup <span class="muted">facts about this plane & flight</span></h4>
+        <button id="d-ai-btn" class="primary">🤖 Ask Claude about this plane</button>
+        <div id="d-ai" class="ai-output hidden"></div>
+      </section>
+      <section class="d-section">
+        <h4>Seen before</h4>
+        <div id="d-history" class="muted">—</div>
+      </section>
+      <section class="d-section">
+        <button id="d-watch-add">⭐ Add to watchlist</button>
+      </section>
+    </aside>
+  </main>
+
+  <!-- ============================== STATS TAB ============================== -->
+  <main id="tab-stats" class="tab">
+    <div class="page">
+      <h2>Statistics</h2>
+      <div class="row">
+        <label>Period:
+          <select id="stats-days">
+            <option value="1">24 hours</option>
+            <option value="7" selected>7 days</option>
+            <option value="30">30 days</option>
+            <option value="90">90 days</option>
+            <option value="365">1 year</option>
+          </select>
+        </label>
+        <span class="muted">Data retention is configurable in Settings.</span>
+      </div>
+      <div id="stats-cards" class="cards"></div>
+      <div class="stats-grid">
+        <div class="stat-block"><h3>Aircraft per day</h3><div id="chart-perday" class="barchart"></div></div>
+        <div class="stat-block"><h3>Top aircraft types</h3><div id="chart-types" class="barchart h"></div></div>
+        <div class="stat-block"><h3>Top airlines</h3><div id="chart-airlines" class="barchart h"></div></div>
+        <div class="stat-block"><h3>Categories</h3><div id="chart-categories" class="barchart h"></div></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ============================== WATCHLIST TAB ============================== -->
+  <main id="tab-watchlist" class="tab">
+    <div class="page">
+      <h2>Watchlist <span class="muted">(plane-alert-db compatible)</span></h2>
+      <p class="muted">Get notified when these aircraft appear. Matches on ICAO hex, registration or callsign —
+        the same data format used by planefence / plane-alert.</p>
+      <div class="row wrap">
+        <input id="wl-icao" placeholder="ICAO hex (e.g. 4844c2)" size="14" />
+        <input id="wl-reg" placeholder="Registration (PH-BHA)" size="14" />
+        <input id="wl-callsign" placeholder="Callsign (KLM123)" size="12" />
+        <input id="wl-operator" placeholder="Operator / note" size="18" />
+        <button id="wl-add" class="primary">Add</button>
+      </div>
+      <div class="row wrap">
+        <input id="padb-search" placeholder="Search plane-alert-db (operator, reg, type…)" size="40" />
+        <button id="padb-search-btn">Search database</button>
+        <button id="wl-import-btn">Import CSV…</button>
+        <input type="file" id="wl-import-file" accept=".csv,text/csv" hidden />
+      </div>
+      <div id="padb-results"></div>
+      <table class="table" id="wl-table">
+        <thead><tr><th>ICAO</th><th>Reg</th><th>Callsign</th><th>Operator</th><th>Type</th><th>Category</th><th>Notify</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </main>
+
+  <!-- ============================== ZONES TAB ============================== -->
+  <main id="tab-zones" class="tab">
+    <div class="page">
+      <h2>Monitoring zones</h2>
+      <p class="muted">Circular zones with a radius in km. You get a notification when an aircraft enters a zone,
+        and approaching aircraft show an estimated time-to-entry on the map.</p>
+      <div class="row wrap">
+        <input id="z-name" placeholder="Zone name" size="16" />
+        <input id="z-lat" placeholder="Latitude" size="10" />
+        <input id="z-lon" placeholder="Longitude" size="10" />
+        <input id="z-radius" placeholder="Radius km" size="8" type="number" min="0.1" step="0.1" />
+        <input id="z-color" type="color" value="#3b82f6" title="Zone color" />
+        <button id="z-add" class="primary">Add zone</button>
+        <button id="z-use-map">Use map center</button>
+      </div>
+      <table class="table" id="z-table">
+        <thead><tr><th>Name</th><th>Center</th><th>Radius</th><th>Notify</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </main>
+
+  <!-- ============================== ALERTS TAB ============================== -->
+  <main id="tab-alerts" class="tab">
+    <div class="page">
+      <h2>Alert log</h2>
+      <table class="table" id="alerts-table">
+        <thead><tr><th>Time</th><th>Kind</th><th>Aircraft</th><th>Message</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </main>
+
+  <!-- ============================== SETTINGS TAB ============================== -->
+  <main id="tab-settings" class="tab">
+    <div class="page">
+      <h2>Settings</h2>
+
+      <section class="settings-block">
+        <h3>Receiver</h3>
+        <div class="row wrap">
+          <label>dump1090 URL <input id="s-dump-url" size="42" /></label>
+          <label>Poll interval (ms) <input id="s-poll" type="number" min="500" step="500" size="8" /></label>
+        </div>
+        <div class="row wrap">
+          <label>Receiver lat <input id="s-rlat" size="10" /></label>
+          <label>Receiver lon <input id="s-rlon" size="10" /></label>
+          <label>History retention (days) <input id="s-retention" type="number" min="1" size="6" /></label>
+        </div>
+      </section>
+
+      <section class="settings-block">
+        <h3>Notifications</h3>
+        <div class="row wrap">
+          <label class="toggle"><input type="checkbox" id="s-po-enabled" /> Pushover</label>
+          <label>Token <input id="s-po-token" size="22" /></label>
+          <label>User key <input id="s-po-user" size="22" /></label>
+        </div>
+        <div class="row wrap">
+          <label class="toggle"><input type="checkbox" id="s-dc-enabled" /> Discord webhook</label>
+          <label>Webhook URL <input id="s-dc-url" size="50" /></label>
+        </div>
+        <div class="row wrap">
+          <label class="toggle"><input type="checkbox" id="s-browser-enabled" /> Browser notifications</label>
+          <button id="s-browser-perm">Allow in this browser</button>
+          <label>Cooldown (min) <input id="s-cooldown" type="number" min="1" size="5" /></label>
+        </div>
+        <div class="row wrap">
+          <label class="toggle"><input type="checkbox" id="s-notify-mil" /> Notify on any military</label>
+          <label class="toggle"><input type="checkbox" id="s-notify-emerg" /> Notify on emergency squawks</label>
+          <button id="s-test-notify">Send test notification</button>
+        </div>
+      </section>
+
+      <section class="settings-block">
+        <h3>plane-alert-db</h3>
+        <div class="row wrap">
+          <span id="s-padb-meta" class="muted">—</span>
+          <button id="s-padb-refresh">Refresh database now</button>
+        </div>
+      </section>
+
+      <section class="settings-block">
+        <h3>Weather</h3>
+        <p class="muted">Rain radar (RainViewer) works out of the box. For cloud/precipitation/wind layers, add a free
+          <a href="https://openweathermap.org/api" target="_blank" rel="noopener">OpenWeatherMap API key</a>.</p>
+        <div class="row wrap">
+          <label>OpenWeatherMap key <input id="s-owm" size="36" placeholder="(optional)" /></label>
+        </div>
+      </section>
+
+      <section class="settings-block">
+        <h3>Claude AI</h3>
+        <p class="muted">Used for the "Ask Claude about this plane" feature. Get a key at
+          <a href="https://platform.claude.com" target="_blank" rel="noopener">platform.claude.com</a> —
+          or set <code>ANTHROPIC_API_KEY</code> in docker-compose.</p>
+        <div class="row wrap">
+          <label>API key <input id="s-anthropic" size="40" placeholder="sk-ant-…" /></label>
+          <span id="s-anthropic-status" class="muted"></span>
+        </div>
+      </section>
+
+      <div class="row">
+        <button id="s-save" class="primary big">💾 Save settings</button>
+        <span id="s-saved" class="muted"></span>
+      </div>
+    </div>
+  </main>
+
+  <div id="toasts"></div>
+
+  <script src="vendor/leaflet/leaflet.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
