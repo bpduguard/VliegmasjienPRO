@@ -661,6 +661,10 @@ async function loadAlerts() {
 async function loadSettings() {
   const c = await (await fetch('/api/config')).json();
   state.config = c;
+  $('#s-src-mode').value = c.source?.mode || 'json';
+  $('#s-sbs-host').value = c.source?.sbsHost || '';
+  $('#s-sbs-port').value = c.source?.sbsPort || 30003;
+  toggleSourceRows();
   $('#s-dump-url').value = c.dump1090Url;
   $('#s-poll').value = c.pollIntervalMs;
   $('#s-rlat').value = c.receiver.lat ?? '';
@@ -685,8 +689,20 @@ async function loadSettings() {
     ? `${meta.rows.toLocaleString()} aircraft in DB, updated ${meta.updatedAt ? fmt.dateTime(meta.updatedAt) : '(bundled)'}`
     : 'Database not downloaded yet';
 }
+function toggleSourceRows() {
+  const sbs = $('#s-src-mode').value === 'sbs';
+  $('#s-src-json').style.display = sbs ? 'none' : '';
+  $('#s-src-sbs').style.display = sbs ? '' : 'none';
+}
+$('#s-src-mode').addEventListener('change', toggleSourceRows);
+
 $('#s-save').addEventListener('click', async () => {
   const patch = {
+    source: {
+      mode: $('#s-src-mode').value,
+      sbsHost: $('#s-sbs-host').value.trim(),
+      sbsPort: parseInt($('#s-sbs-port').value, 10) || 30003
+    },
     dump1090Url: $('#s-dump-url').value.trim(),
     pollIntervalMs: Math.max(500, parseInt($('#s-poll').value, 10) || 2000),
     receiver: {

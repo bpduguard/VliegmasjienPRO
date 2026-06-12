@@ -7,6 +7,14 @@ export const DATA_DIR = process.env.DATA_DIR || path.resolve(process.cwd(), 'dat
 const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
 
 const DEFAULTS = {
+  // Data source: 'json' fetches aircraft.json over HTTP (dump1090-fa / readsb /
+  // tar1090 web server) — richest data. 'sbs' connects to the BaseStation TCP
+  // output (beasthost port 30003) for setups that only expose the net ports.
+  source: {
+    mode: process.env.SOURCE_MODE || 'json',
+    sbsHost: process.env.SBS_HOST || 'dump1090',
+    sbsPort: parseInt(process.env.SBS_PORT, 10) || 30003
+  },
   // Where to fetch aircraft.json from. dump1090-fa / readsb / tar1090 all serve this.
   dump1090Url: process.env.DUMP1090_URL || 'http://dump1090:8080/data/aircraft.json',
   pollIntervalMs: 2000,
@@ -74,6 +82,9 @@ export function loadConfig() {
   config = deepMerge(DEFAULTS, fileCfg);
   // Env vars always win for secrets/endpoints so docker-compose stays authoritative.
   if (process.env.DUMP1090_URL) config.dump1090Url = process.env.DUMP1090_URL;
+  if (process.env.SOURCE_MODE) config.source.mode = process.env.SOURCE_MODE;
+  if (process.env.SBS_HOST) config.source.sbsHost = process.env.SBS_HOST;
+  if (process.env.SBS_PORT) config.source.sbsPort = parseInt(process.env.SBS_PORT, 10);
   if (process.env.ANTHROPIC_API_KEY) config.anthropic.apiKey = process.env.ANTHROPIC_API_KEY;
   if (process.env.OWM_API_KEY) config.weather.openWeatherMapKey = process.env.OWM_API_KEY;
   return config;

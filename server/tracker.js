@@ -6,6 +6,7 @@ import { haversineKm, secondsToZoneEntry, etaSeconds } from './geo.js';
 import { planeDbLookup, lookupRoute, cachedAirlineName, maybeAutoRefreshPlaneDb } from './enrich.js';
 import { upsertSighting, pruneOldData } from './db.js';
 import { notify } from './notify.js';
+import { ensureSbs, stopSbs, sbsSnapshot, sbsStatus } from './sbs.js';
 
 // hex -> live aircraft object
 const aircraft = new Map();
@@ -66,15 +67,28 @@ function detectAirlineCallsign(flight) {
 async function pollOnce() {
   const cfg = getConfig();
   let data;
-  try {
-    const res = await fetch(cfg.dump1090Url, { signal: AbortSignal.timeout(8000) });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    data = await res.json();
+  if (cfg.source?.mode === 'sbs') {
+    ensureSbs(cfg.source.sbsHost, cfg.source.sbsPort);
+    const st = sbsStatus();
+    if (!st.connected) {
+      lastPollError = st.error || `connecting to ${cfg.source.sbsHost}:${cfg.source.sbsPort}…`;
+      return;
+    }
+    data = sbsSnapshot();
     lastPollOk = Date.now();
     lastPollError = null;
-  } catch (e) {
-    lastPollError = e.message;
-    return;
+  } else {
+    stopSbs();
+    try {
+      const res = await fetch(cfg.dump1090Url, { signal: AbortSignal.timeout(8000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      data = await res.json();
+      lastPollOk = Date.now();
+      lastPollError = null;
+    } catch (e) {
+      lastPollError = e.message;
+      return;
+    }
   }
   messagesTotal = data.messages ?? messagesTotal;
   const now = Date.now();
@@ -352,6 +366,8 @@ function snapshotOne(ac) {
 async function detectReceiver() {
   const cfg = getConfig();
   if (cfg.receiver.lat != null) return;
+  // receiver.json only exists on the HTTP source; with SBS set it manually.
+  if (cfg.source?.mode === 'sbs') return;
   try {
     const url = cfg.dump1090Url.replace(/aircraft\.json.*/, 'receiver.json');
     const res = await fetch(url, { signal: AbortSignal.timeout(5000) });

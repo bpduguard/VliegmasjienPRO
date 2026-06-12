@@ -48,6 +48,30 @@ Open **http://\<your-pi\>:8390** — done. The receiver location is auto-detecte
 > readsb/tar1090 setups often serve it at `http://<host>/tar1090/data/aircraft.json`.
 > Any URL that returns the standard `aircraft.json` works.
 
+### No web server? Use the beasthost ports (SBS)
+
+If your dump1090/readsb container only exposes the network ports (the ones other trackers use as a
+"beasthost"), VliegmasjienPRO can connect to the **SBS/BaseStation output on port 30003** directly:
+
+```bash
+export SOURCE_MODE=sbs SBS_HOST=192.168.1.50 SBS_PORT=30003
+docker compose up -d --build
+```
+
+(or switch the data source in *Settings → Receiver*). Port reference for a typical receiver:
+
+| Port | Protocol | Supported |
+|---|---|---|
+| 30003 | SBS / BaseStation text (decoded) | ✅ use this one |
+| 30005 | Beast binary (raw Mode-S) | ❌ binary feed for feeders — use 30003 or aircraft.json |
+| 30105 / 30205 | MLAT results | ❌ feeder plumbing |
+| 30978 / 30987 | UAT / dump978 (978 MHz, US) | ❌ |
+
+Note: the SBS feed carries positions, altitude, speed, callsign and squawk, but not the extra fields
+the JSON source has (registration/type hints, military dbFlags, signal strength) — plane-alert-db
+enrichment still fills in most of that. With SBS, set the receiver location manually in Settings
+(there is no `receiver.json` to auto-detect from).
+
 If dump1090 runs as a container on the same Docker network, uncomment the `networks` section in
 `docker-compose.yml` and use the container name in `DUMP1090_URL`.
 
@@ -80,7 +104,9 @@ config for secrets and the receiver URL:
 
 | Variable | Purpose |
 |---|---|
-| `DUMP1090_URL` | URL of `aircraft.json` (required) |
+| `DUMP1090_URL` | URL of `aircraft.json` (default source) |
+| `SOURCE_MODE` | `json` (default) or `sbs` for BaseStation TCP |
+| `SBS_HOST` / `SBS_PORT` | Beasthost address + SBS port (default 30003) when `SOURCE_MODE=sbs` |
 | `ANTHROPIC_API_KEY` | Enables the Claude AI aircraft lookup |
 | `OWM_API_KEY` | Optional OpenWeatherMap key for the cloud layer (rain radar needs no key) |
 | `PORT` | HTTP port (default 8390) |

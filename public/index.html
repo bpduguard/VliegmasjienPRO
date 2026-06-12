@@ -179,7 +179,22 @@
       <section class="settings-block">
         <h3>Receiver</h3>
         <div class="row wrap">
-          <label>dump1090 URL <input id="s-dump-url" size="42" /></label>
+          <label>Data source
+            <select id="s-src-mode">
+              <option value="json">aircraft.json over HTTP (dump1090/readsb/tar1090 web)</option>
+              <option value="sbs">SBS / BaseStation TCP (beasthost port 30003)</option>
+            </select>
+          </label>
+        </div>
+        <div class="row wrap" id="s-src-json">
+          <label>aircraft.json URL <input id="s-dump-url" size="42" /></label>
+        </div>
+        <div class="row wrap" id="s-src-sbs">
+          <label>SBS host <input id="s-sbs-host" size="18" placeholder="dump1090 or 192.168.…" /></label>
+          <label>SBS port <input id="s-sbs-port" type="number" size="7" placeholder="30003" /></label>
+          <span class="muted">Use port 30003 (BaseStation text). 30005 is binary Beast — not needed here.</span>
+        </div>
+        <div class="row wrap">
           <label>Poll interval (ms) <input id="s-poll" type="number" min="500" step="500" size="8" /></label>
         </div>
         <div class="row wrap">
