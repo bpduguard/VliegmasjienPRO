@@ -213,36 +213,97 @@ function renderAircraft() {
 }
 
 // ----------------------------------------------------------------- aircraft list
+state.listExpanded = false;
+state.listSort = { key: 'distKm', dir: 1 };
+
+const LIST_COLUMNS = [
+  ['flight', 'Callsign', (ac) => ac.flight || ac.registration || ac.hex.toUpperCase()],
+  ['registration', 'Reg', (ac) => ac.registration || '—'],
+  ['type', 'Type', (ac) => ac.type || '—'],
+  ['airline', 'Airline / operator', (ac) => ac.airline || ac.operator || '—'],
+  ['alt', 'Alt ft', (ac) => (ac.alt == null ? '—' : ac.alt === 0 ? 'gnd' : ac.alt.toLocaleString())],
+  ['gs', 'Spd kt', (ac) => (ac.gs == null ? '—' : Math.round(ac.gs))],
+  ['vr', 'V/S', (ac) => (ac.vr == null ? '—' : (ac.vr > 0 ? '↑' : ac.vr < 0 ? '↓' : '') + Math.abs(ac.vr))],
+  ['distKm', 'Dist km', (ac) => ac.distKm ?? '—'],
+  ['squawk', 'Squawk', (ac) => ac.squawk || '—']
+];
+
+function sortRows(rows) {
+  const { key, dir } = state.listSort;
+  return rows.sort((a, b) => {
+    let va = a[key], vb = b[key];
+    if (key === 'flight') { va = a.flight || a.registration || a.hex; vb = b.flight || b.registration || b.hex; }
+    if (va == null) return 1;
+    if (vb == null) return -1;
+    if (typeof va === 'string') return va.localeCompare(vb) * dir;
+    return (va - vb) * dir;
+  });
+}
+
+function rowClasses(ac, base) {
+  return [
+    base,
+    ac.classification === 'military' ? 'mil' : '',
+    ac.emergency ? 'emerg' : '',
+    state.selected === ac.hex ? 'sel' : ''
+  ].join(' ');
+}
+
 function renderList(visibleCount) {
   $('#ac-count').textContent = `${visibleCount} aircraft`;
-  const rows = [...state.aircraft.values()]
-    .filter((ac) => classifiedVisible(ac))
-    .sort((a, b) => (a.distKm ?? 9e9) - (b.distKm ?? 9e9))
-    .slice(0, 150);
-  const html = rows
-    .map((ac) => {
-      const cls = [
-        'ac-row',
-        ac.classification === 'military' ? 'mil' : '',
-        ac.emergency ? 'emerg' : '',
-        state.selected === ac.hex ? 'sel' : ''
-      ].join(' ');
-      return `<div class="${cls}" data-hex="${ac.hex}">
+  const rows = sortRows([...state.aircraft.values()].filter(classifiedVisible)).slice(0, 250);
+
+  if (state.listExpanded) {
+    const { key, dir } = state.listSort;
+    const head = LIST_COLUMNS.map(
+      ([k, label]) =>
+        `<th data-key="${k}" class="${k === key ? 'sorted' : ''}">${label}${k === key ? (dir > 0 ? ' ▲' : ' ▼') : ''}</th>`
+    ).join('');
+    const body = rows
+      .map(
+        (ac) => `<tr class="${rowClasses(ac, '')}" data-hex="${ac.hex}">
+          ${LIST_COLUMNS.map(([, , render]) => `<td>${render(ac)}</td>`).join('')}
+        </tr>`
+      )
+      .join('');
+    $('#ac-list').innerHTML = `<table class="ac-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+    return;
+  }
+
+  $('#ac-list').innerHTML = rows
+    .slice(0, 150)
+    .map(
+      (ac) => `<div class="${rowClasses(ac, 'ac-row')}" data-hex="${ac.hex}">
         <div>
           <div class="cs">${ac.flight || ac.registration || ac.hex.toUpperCase()}</div>
           <div class="meta">${ac.type || ac.typeName || ''}</div>
         </div>
         <div class="meta">${fmt.alt(ac.alt)}<br>${ac.distKm != null ? ac.distKm + ' km' : ''}</div>
-      </div>`;
-    })
+      </div>`
+    )
     .join('');
-  $('#ac-list').innerHTML = html;
 }
+
 $('#ac-list').addEventListener('click', (e) => {
-  const row = e.target.closest('.ac-row');
+  const th = e.target.closest('th[data-key]');
+  if (th) {
+    const key = th.dataset.key;
+    if (state.listSort.key === key) state.listSort.dir *= -1;
+    else state.listSort = { key, dir: 1 };
+    renderAircraft();
+    return;
+  }
+  const row = e.target.closest('[data-hex]');
   if (row) selectAircraft(row.dataset.hex, true);
 });
 $('#ac-list-collapse').addEventListener('click', () => $('#ac-list-panel').classList.toggle('collapsed'));
+$('#ac-list-expand').addEventListener('click', () => {
+  state.listExpanded = !state.listExpanded;
+  $('#ac-list-panel').classList.toggle('expanded', state.listExpanded);
+  $('#ac-list-expand').classList.toggle('active', state.listExpanded);
+  $('#ac-list-panel').classList.remove('collapsed');
+  renderAircraft();
+});
 
 // ----------------------------------------------------------------- filters
 $$('.filt').forEach((b) =>

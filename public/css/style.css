@@ -130,6 +130,24 @@ button.big { padding: 11px 22px; font-size: 1rem; }
 }
 #ac-list-panel.collapsed { bottom: auto; }
 #ac-list-panel.collapsed #ac-list { display: none; }
+#ac-list-panel.expanded { width: 700px; max-width: calc(100vw - 24px); }
+#ac-list-panel.expanded #ac-list { overflow-x: auto; }
+#ac-list-expand.active { color: var(--accent); }
+
+/* expanded table view */
+.ac-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.ac-table th {
+  position: sticky; top: 0; background: var(--panel); z-index: 1;
+  text-align: left; color: var(--muted); font-weight: 600; padding: 6px 8px;
+  border-bottom: 1px solid var(--border); cursor: pointer; user-select: none; white-space: nowrap;
+}
+.ac-table th:hover { color: var(--text); }
+.ac-table th.sorted { color: var(--accent); }
+.ac-table td { padding: 5px 8px; border-bottom: 1px solid rgba(255,255,255,0.04); white-space: nowrap; }
+.ac-table tr { cursor: pointer; }
+.ac-table tr:hover td, .ac-table tr.sel td { background: rgba(56,189,248,0.12); }
+.ac-table tr.mil td:first-child { color: #4ade80; }
+.ac-table tr.emerg td:first-child { color: var(--danger); }
 .panel-head {
   display: flex; justify-content: space-between; align-items: center;
   padding: 9px 12px; border-bottom: 1px solid var(--border); font-size: 0.9rem; color: var(--muted);
