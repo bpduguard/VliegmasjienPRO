@@ -3,7 +3,10 @@
 // records sightings into the database.
 import { getConfig, saveConfig } from './config.js';
 import { haversineKm, secondsToZoneEntry, etaSeconds } from './geo.js';
-import { planeDbLookup, lookupRoute, cachedAirlineName, maybeAutoRefreshPlaneDb } from './enrich.js';
+import {
+  planeDbLookup, lookupRoute, cachedAirlineName, maybeAutoRefreshPlaneDb,
+  aircraftDbLocal, lookupAircraft
+} from './enrich.js';
 import { upsertSighting, pruneOldData } from './db.js';
 import { notify } from './notify.js';
 import { ensureSbs, stopSbs, sbsSnapshot, sbsStatus } from './sbs.js';
@@ -154,7 +157,7 @@ async function pollOnce() {
     ac.emergency =
       (raw.emergency && raw.emergency !== 'none') || EMERGENCY_SQUAWKS.has(ac.squawk || '');
 
-    // plane-alert-db enrichment
+    // plane-alert-db enrichment (special / interesting aircraft)
     const padb = planeDbLookup(hex);
     if (padb) {
       ac.registration = ac.registration || padb.registration;
@@ -164,6 +167,21 @@ async function pollOnce() {
       ac.padbCategory = padb.category;
       ac.padbTags = padb.tags;
       ac.padbLink = padb.link;
+    }
+
+    // hex → registration / type / operator for the rest (most aircraft).
+    // Fast path: locally stored entry. Unknown hexes get a one-time background
+    // lookup that backfills these fields and the sighting record.
+    if (!ac.registration || !ac.type) {
+      const local = aircraftDbLocal(hex);
+      if (local) {
+        ac.registration = ac.registration || local.registration;
+        ac.type = ac.type || local.type;
+        ac.typeName = ac.typeName || local.typeLong;
+        ac.operator = ac.operator || local.operator;
+      } else {
+        backgroundAircraftLookup(ac, now);
+      }
     }
 
     ac.airlineCallsign = detectAirlineCallsign(ac.flight);
@@ -317,6 +335,30 @@ function backgroundRouteLookup(ac) {
   lookupRoute(ac.flight)
     .catch(() => {})
     .finally(() => routeLookupPending.delete(ac.flight));
+}
+
+// One-time hex → reg/type/operator lookup for unknown aircraft; on success,
+// backfill the live object and the current sighting so the list and the type
+// statistics fill in.
+const acLookupPending = new Set();
+function backgroundAircraftLookup(ac, now) {
+  if (acLookupPending.has(ac.hex)) return;
+  if (acLookupPending.size > 6) return; // throttle concurrent lookups
+  acLookupPending.add(ac.hex);
+  lookupAircraft(ac.hex)
+    .then((entry) => {
+      if (!entry) return;
+      if (!ac.registration) ac.registration = entry.registration || ac.registration;
+      if (!ac.type) ac.type = entry.type || ac.type;
+      if (!ac.typeName) ac.typeName = entry.typeLong || ac.typeName;
+      if (!ac.operator) ac.operator = entry.operator || ac.operator;
+      // re-record so the sighting (and therefore the type stats) gets the type
+      if (entry.registration || entry.type) {
+        try { upsertSighting(ac, now); } catch { /* non-fatal */ }
+      }
+    })
+    .catch(() => {})
+    .finally(() => acLookupPending.delete(ac.hex));
 }
 
 // Compact snapshot for the SSE stream / list endpoint.

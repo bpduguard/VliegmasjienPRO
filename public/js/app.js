@@ -839,7 +839,30 @@ async function loadSettings() {
   $('#s-padb-meta').textContent = meta.rows
     ? `${meta.rows.toLocaleString()} aircraft in DB, updated ${meta.updatedAt ? fmt.dateTime(meta.updatedAt) : '(bundled)'}`
     : 'Database not downloaded yet';
+  const status = await (await fetch('/api/status')).json();
+  const acdb = status.aircraftDb || {};
+  $('#s-acdb-meta').innerHTML = `${(acdb.count || 0).toLocaleString()} aircraft cached locally`
+    + (acdb.error ? ` · <span style="color:var(--danger)">lookup problem: ${acdb.error}</span>` : ' · auto-filling as aircraft are seen');
 }
+
+async function importAircraftDb(body) {
+  $('#s-acdb-meta').textContent = 'Importing… (large files can take a moment)';
+  const res = await fetch('/api/aircraftdb/import', {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  if (!res.ok) { $('#s-acdb-meta').innerHTML = `<span style="color:var(--danger)">Import failed: ${data.error}</span>`; return; }
+  $('#s-acdb-meta').textContent = `✓ imported ${data.imported.toLocaleString()} — ${data.count.toLocaleString()} aircraft cached locally`;
+}
+$('#s-acdb-import-url').addEventListener('click', () => {
+  const url = $('#s-acdb-url').value.trim();
+  if (url) importAircraftDb({ url });
+});
+$('#s-acdb-import-file').addEventListener('click', () => $('#s-acdb-file').click());
+$('#s-acdb-file').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (file) importAircraftDb({ csv: await file.text() });
+});
 function toggleSourceRows() {
   const sbs = $('#s-src-mode').value === 'sbs';
   $('#s-src-json').style.display = sbs ? 'none' : '';

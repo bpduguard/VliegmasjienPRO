@@ -136,6 +136,31 @@ live map, zones, statistics and "seen before" history all keep working offline �
 that calls external APIs needs internet. (The "seen before" history is stored locally in SQLite and is
 independent of any external service.)
 
+### Registration & aircraft type (empty Reg/Type columns)
+
+Plain **dump1090-fa** (and the SBS feed) only broadcast position, callsign and altitude — they do **not**
+include each aircraft's registration or ICAO type. Only **readsb/tar1090** add those (`r`/`t`) from a
+bundled database. So on a plain dump1090 the Reg/Type columns and the type statistics start out empty.
+
+VliegmasjienPRO fills this in automatically: every new aircraft is looked up once (by ICAO hex) and
+**cached locally in SQLite**, so the list, type filters and statistics populate over time and the lookup
+is then instant and offline. You can watch the cache grow in *Settings → Aircraft database*.
+
+If your receiver/host has no outbound internet (Settings shows a "lookup problem"), or you want the whole
+database loaded at once, use **Settings → Aircraft database → Import** with either:
+
+- a CSV with a header naming the columns — `icao24,registration,typecode[,operator]` (the
+  [OpenSky aircraft database](https://opensky-network.org/datasets/metadata/) format works directly), or
+- a newline-delimited JSON file in [basic-ac-db](https://github.com/wiedehopf/basic-ac-db) form
+  (`{"icao":"…","reg":"…","icaotype":"…"}` per line).
+
+The cleanest fix of all, if you can, is to run **readsb/tar1090** as your decoder — then `r`/`t` arrive in
+`aircraft.json` natively with no lookups needed.
+
+> So to answer "1900 planes but only 2 types — is this an issue?": it's expected with a plain dump1090
+> that doesn't send types, and only the handful matched by plane-alert-db showed up. With the per-hex
+> lookup (or an import) the type breakdown becomes representative.
+
 ### Units & icons
 
 *Settings → Receiver → Units* switches the whole UI between **metric** (altitude in m, speed in km/h,

@@ -34,9 +34,75 @@ export function initDb() {
       kind TEXT,
       message TEXT
     );
+    -- Persistent hex -> aircraft database. Filled lazily (per-hex lookups) and/or
+    -- by bulk import, so registration/type survive restarts and are served
+    -- instantly offline. Plain dump1090-fa doesn't provide r/t per aircraft.
+    CREATE TABLE IF NOT EXISTS aircraft_db (
+      hex TEXT PRIMARY KEY,
+      registration TEXT,
+      type TEXT,
+      type_long TEXT,
+      operator TEXT,
+      updated INTEGER NOT NULL
+    );
   `);
   return db;
 }
+
+// --- aircraft database (hex -> reg/type/operator) ---------------------------
+
+export function getAircraftDb(hex) {
+  return db.prepare('SELECT * FROM aircraft_db WHERE hex = ?').get((hex || '').toLowerCase()) || null;
+}
+
+const upsertAircraftStmt = () =>
+  db.prepare(
+    `INSERT INTO aircraft_db (hex, registration, type, type_long, operator, updated)
+     VALUES (?,?,?,?,?,?)
+     ON CONFLICT(hex) DO UPDATE SET
+       registration = COALESCE(NULLIF(excluded.registration,''), aircraft_db.registration),
+       type = COALESCE(NULLIF(excluded.type,''), aircraft_db.type),
+       type_long = COALESCE(NULLIF(excluded.type_long,''), aircraft_db.type_long),
+       operator = COALESCE(NULLIF(excluded.operator,''), aircraft_db.operator),
+       updated = excluded.updated`
+  );
+
+export function putAircraftDb({ hex, registration, type, typeLong, operator }) {
+  if (!hex) return;
+  upsertAircraftStmt().run(
+    hex.toLowerCase(),
+    registration || '',
+    type || '',
+    typeLong || '',
+    operator || '',
+    Date.now()
+  );
+}
+
+// Bulk import for a hex,reg,type[,operator] dataset. Wrapped in a transaction.
+export function bulkImportAircraftDb(rows) {
+  const stmt = upsertAircraftStmt();
+  const now = Date.now();
+  db.exec('BEGIN');
+  let n = 0;
+  try {
+    for (const r of rows) {
+      if (!r.hex) continue;
+      stmt.run(r.hex.toLowerCase(), r.registration || '', r.type || '', r.typeLong || '', r.operator || '', now);
+      n++;
+    }
+    db.exec('COMMIT');
+  } catch (e) {
+    db.exec('ROLLBACK');
+    throw e;
+  }
+  return n;
+}
+
+export function aircraftDbCount() {
+  return db.prepare('SELECT COUNT(*) AS c FROM aircraft_db').get().c;
+}
+
 
 // A "sighting" is one continuous session of an aircraft being received.
 // If the same hex reappears within SESSION_GAP we extend the row, otherwise a

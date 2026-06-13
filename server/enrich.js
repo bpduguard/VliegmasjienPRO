@@ -5,6 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { DATA_DIR, getConfig } from './config.js';
+import { getAircraftDb, putAircraftDb } from './db.js';
 
 // ---------------------------------------------------------------- plane-alert-db
 
@@ -193,6 +194,74 @@ export function cachedAirlineName(callsign) {
   const cs = (callsign || '').trim().toUpperCase();
   const cached = routeCache.get(cs);
   return cached?.route?.airline?.name || null;
+}
+
+// ----------------------------------------------------- aircraft DB (hex→reg/type)
+
+// Plain dump1090-fa / SBS feeds don't carry registration or ICAO type per
+// aircraft (only readsb/tar1090 do). We fill that gap with a persistent per-hex
+// database: SQLite first (instant, offline, survives restarts), and for unknown
+// hexes a one-time lookup against adsbdb that we then store. This mirrors the
+// route-lookup pattern and stays light enough for a Raspberry Pi.
+const acAttempted = new Map(); // hex -> ts of last network attempt (avoid hammering)
+const AC_RETRY_TTL = 6 * 3600000;
+let acDbError = null;
+
+export function aircraftDbError() {
+  return acDbError;
+}
+
+// Synchronous, offline: returns a stored entry or null. Use this every poll.
+export function aircraftDbLocal(hex) {
+  const row = getAircraftDb(hex);
+  if (!row) return null;
+  return {
+    registration: row.registration || '',
+    type: row.type || '',
+    typeLong: row.type_long || '',
+    operator: row.operator || ''
+  };
+}
+
+// Async: fetch an unknown hex from adsbdb once, store it, return the entry.
+// Returns null if unknown/unreachable. Heavily de-duped so each hex is tried
+// at most once per AC_RETRY_TTL.
+export async function lookupAircraft(hex) {
+  hex = (hex || '').toLowerCase();
+  if (!/^[0-9a-f]{6}$/.test(hex)) return null;
+  const local = aircraftDbLocal(hex);
+  if (local && (local.registration || local.type)) return local;
+  const last = acAttempted.get(hex);
+  if (last && Date.now() - last < AC_RETRY_TTL) return local;
+  acAttempted.set(hex, Date.now());
+  if (acAttempted.size > 8000) {
+    for (const k of acAttempted.keys()) { acAttempted.delete(k); if (acAttempted.size <= 6000) break; }
+  }
+  try {
+    const res = await fetch(`https://api.adsbdb.com/v0/aircraft/${hex}`, { signal: AbortSignal.timeout(10000) });
+    if (res.ok) {
+      const data = await res.json();
+      const a = data?.response?.aircraft;
+      if (a) {
+        const entry = {
+          hex,
+          registration: a.registration || '',
+          type: a.icao_type || a.type || '',
+          typeLong: a.type || '',
+          operator: a.registered_owner || ''
+        };
+        putAircraftDb(entry);
+        acDbError = null;
+        return entry;
+      }
+      // res.ok with no aircraft → genuinely unknown hex
+    } else if (res.status !== 404) {
+      acDbError = `aircraft DB service HTTP ${res.status}`;
+    }
+  } catch (e) {
+    acDbError = e.name === 'TimeoutError' ? 'aircraft DB service timed out' : `aircraft DB unreachable (${e.code || e.message})`;
+  }
+  return local;
 }
 
 // ---------------------------------------------------------------- photos

@@ -3,9 +3,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
 import { loadConfig, getConfig, saveConfig, publicConfig } from './config.js';
-import { initDb, aircraftHistory, recentAlerts, statsSummary } from './db.js';
+import { initDb, aircraftHistory, recentAlerts, statsSummary, aircraftDbCount, bulkImportAircraftDb } from './db.js';
 import {
-  loadPlaneDbFromDisk, refreshPlaneDb, planeDbMeta, planeDbLookup, planeDbSearch
+  loadPlaneDbFromDisk, refreshPlaneDb, planeDbMeta, planeDbLookup, planeDbSearch, aircraftDbError
 } from './enrich.js';
 import { lookupPhoto } from './enrich.js';
 import {
@@ -94,8 +94,82 @@ app.get('/api/stats', (req, res) => {
 app.get('/api/alerts', (req, res) => res.json({ alerts: recentAlerts(150) }));
 
 app.get('/api/status', (req, res) =>
-  res.json({ ...trackerStatus(), planeDb: planeDbMeta(), ai: aiAvailable(), version: '1.0.0' })
+  res.json({
+    ...trackerStatus(),
+    planeDb: planeDbMeta(),
+    aircraftDb: { count: aircraftDbCount(), error: aircraftDbError() },
+    ai: aiAvailable(),
+    version: '1.0.0'
+  })
 );
+
+// ------------------------------------------------------------------ aircraft DB
+// Bulk import a hex→registration/type[/operator] dataset (CSV or NDJSON) for
+// users whose receiver/firewall can't do per-hex lookups, or who want the whole
+// database loaded at once. Accepts a `url` to fetch or a pasted `csv` body.
+app.post('/api/aircraftdb/import', async (req, res) => {
+  try {
+    let text = req.body?.csv;
+    if (!text && req.body?.url) {
+      const r = await fetch(req.body.url, { signal: AbortSignal.timeout(120000) });
+      if (!r.ok) return res.status(502).json({ error: `download failed: HTTP ${r.status}` });
+      text = await r.text();
+    }
+    if (!text) return res.status(400).json({ error: 'provide a url or csv body' });
+    const rows = parseAircraftDataset(text);
+    if (!rows.length) return res.status(400).json({ error: 'no usable rows (need hex,registration,type columns)' });
+    const n = bulkImportAircraftDb(rows);
+    res.json({ imported: n, count: aircraftDbCount() });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Parse either NDJSON (one JSON object per line, basic-ac-db style:
+// {icao,reg,icaotype,...}) or CSV with a header naming the columns.
+function parseAircraftDataset(text) {
+  const out = [];
+  const lines = text.split(/\r?\n/);
+  const trimmed = lines.find((l) => l.trim());
+  if (trimmed && trimmed.trim().startsWith('{')) {
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        const o = JSON.parse(line);
+        const hex = (o.icao || o.hex || o.icao24 || '').toLowerCase();
+        if (!/^[0-9a-f]{6}$/.test(hex)) continue;
+        out.push({
+          hex,
+          registration: o.reg || o.registration || o.r || '',
+          type: o.icaotype || o.icao_type || o.typecode || o.t || '',
+          typeLong: o.type || o.model || '',
+          operator: o.ownop || o.operator || o.registered_owner || ''
+        });
+      } catch { /* skip bad line */ }
+    }
+    return out;
+  }
+  // CSV with header
+  const header = (lines[0] || '').split(',').map((h) => h.trim().toLowerCase().replace(/^["']|["']$/g, ''));
+  const col = (...names) => names.map((n) => header.indexOf(n)).find((i) => i >= 0) ?? -1;
+  const iHex = col('icao24', 'icao', 'hex');
+  const iReg = col('registration', 'reg', 'r');
+  const iType = col('typecode', 'icaotype', 'icao_type', 'type', 't');
+  const iOwner = col('operator', 'ownop', 'registered_owner', 'owner');
+  if (iHex < 0) return out;
+  for (let n = 1; n < lines.length; n++) {
+    const c = lines[n].split(',').map((v) => v.replace(/^["']|["']$/g, '').trim());
+    const hex = (c[iHex] || '').toLowerCase();
+    if (!/^[0-9a-f]{6}$/.test(hex)) continue;
+    out.push({
+      hex,
+      registration: iReg >= 0 ? c[iReg] : '',
+      type: iType >= 0 ? c[iType] : '',
+      operator: iOwner >= 0 ? c[iOwner] : ''
+    });
+  }
+  return out;
+}
 
 // ------------------------------------------------------------------ config
 app.get('/api/config', (req, res) => res.json(publicConfig()));

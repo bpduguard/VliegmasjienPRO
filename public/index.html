@@ -267,6 +267,24 @@
       </section>
 
       <section class="settings-block">
+        <h3>Aircraft database <span class="muted">(registration &amp; type)</span></h3>
+        <p class="muted">Plain dump1090-fa and the SBS feed don't include registration or aircraft type
+          per plane — only readsb/tar1090 do. VliegmasjienPRO fills the gap automatically: each new
+          aircraft is looked up once and cached here, so the list, type filters and statistics fill in
+          over time. To load a whole database at once (e.g. if your receiver has no internet), import a
+          CSV/NDJSON below.</p>
+        <div class="row wrap">
+          <span id="s-acdb-meta" class="muted">—</span>
+        </div>
+        <div class="row wrap">
+          <input id="s-acdb-url" size="46" placeholder="Import URL (CSV: icao24,registration,typecode or basic-ac-db NDJSON)" />
+          <button id="s-acdb-import-url">Import from URL</button>
+          <button id="s-acdb-import-file">Import file…</button>
+          <input type="file" id="s-acdb-file" accept=".csv,.json,.ndjson,text/csv" hidden />
+        </div>
+      </section>
+
+      <section class="settings-block">
         <h3>Weather</h3>
         <p class="muted">Rain radar (RainViewer) works out of the box. For cloud/precipitation/wind layers, add a free
           <a href="https://openweathermap.org/api" target="_blank" rel="noopener">OpenWeatherMap API key</a>.</p>
