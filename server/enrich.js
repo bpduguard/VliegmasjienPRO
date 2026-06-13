@@ -120,19 +120,25 @@ export function maybeAutoRefreshPlaneDb() {
 
 // ---------------------------------------------------------------- routes (adsbdb)
 
-// callsign -> { ts, route } ; route = { airline, origin, destination } or null
+// callsign -> { ts, route, error } ; route = { airline, origin, destination } or null
 const routeCache = new Map();
-const ROUTE_TTL = 6 * 3600000;
-const ROUTE_NEG_TTL = 30 * 60000;
+const ROUTE_TTL = 6 * 3600000; // remember a found route for 6h
+const ROUTE_NOTFOUND_TTL = 30 * 60000; // genuine "unknown callsign" — back off 30m
+const ROUTE_ERROR_TTL = 20000; // network/egress failure — retry soon
 
+// Returns { route, error }. `error` is set when the lookup service could not be
+// reached (DNS/egress/timeout) so the UI can explain *why* there's no route,
+// instead of showing the same "no route" as a genuinely unknown callsign.
 export async function lookupRoute(callsign) {
   const cs = (callsign || '').trim().toUpperCase();
-  if (!cs) return null;
+  if (!cs) return { route: null, error: null };
   const cached = routeCache.get(cs);
-  if (cached && Date.now() - cached.ts < (cached.route ? ROUTE_TTL : ROUTE_NEG_TTL)) {
-    return cached.route;
+  if (cached) {
+    const ttl = cached.route ? ROUTE_TTL : cached.error ? ROUTE_ERROR_TTL : ROUTE_NOTFOUND_TTL;
+    if (Date.now() - cached.ts < ttl) return { route: cached.route, error: cached.error };
   }
   let route = null;
+  let error = null;
   try {
     const res = await fetch(`https://api.adsbdb.com/v0/callsign/${encodeURIComponent(cs)}`, {
       signal: AbortSignal.timeout(10000)
@@ -150,16 +156,22 @@ export async function lookupRoute(callsign) {
           destination: airportInfo(fr.destination)
         };
       }
+      // res.ok with no flightroute === genuinely unknown callsign (not an error)
+    } else if (res.status === 404) {
+      // adsbdb returns 404 for unknown callsigns — treat as "not found", not an error
+    } else {
+      error = `route service HTTP ${res.status}`;
     }
-  } catch {
-    /* network hiccup — cache negative briefly */
+  } catch (e) {
+    // DNS / no egress / timeout — the most common real-world cause on a
+    // firewalled Raspberry Pi. Surface it instead of swallowing it.
+    error = e.name === 'TimeoutError' ? 'route service timed out' : `route service unreachable (${e.code || e.message})`;
   }
-  routeCache.set(cs, { ts: Date.now(), route });
+  routeCache.set(cs, { ts: Date.now(), route, error });
   if (routeCache.size > 2000) {
-    // crude LRU trim
     for (const k of routeCache.keys()) { routeCache.delete(k); if (routeCache.size <= 1500) break; }
   }
-  return route;
+  return { route, error };
 }
 
 function airportInfo(a) {

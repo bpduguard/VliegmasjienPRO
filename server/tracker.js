@@ -64,6 +64,34 @@ function detectAirlineCallsign(flight) {
   return m ? m[1] : null;
 }
 
+// ICAO type-designator heuristics for the map pictogram. The ADS-B emitter
+// category (A1..A7/B1..B7) is the primary signal; these regexes only refine or
+// fill in when the category is generic/absent. Boundaries (?![0-9]) prevent
+// short codes like C17 (Globemaster) from matching C172 (Cessna).
+const HELI_TYPES = /^(EC2[05]|EC30|EC35|EC45|EC55|EC75|H1[0-9]{2}|H2[0-9]{2}|A109|A119|A129|A139|A149|A169|A189|R22|R44|R66|S55|S58|S61|S64|S70|S76|S92|B06|B47|B06T|B412|B427|B429|B505|AS3[0-9]|AS50|AS55|AS65|UH[0-9]{2}|CH[0-9]{2}|AH[0-9]{2}|MH[0-9]{2}|MI[0-9]{1,2}|NH90|EH10|BK17|EXPL|GAZL|LYNX|PUMA|TIGR|KA[0-9]{2})(?![A-Z0-9])/;
+const FIGHTER_TYPES = /^(F1[045]|F16|F18|F22|F35|F4|F5|EUFI|RFAL|GR[0-9]|MIG[0-9]|SU[0-9]{2}|J39|A10|HARR|HUNT|TOR|F117|B1|B2|B52)(?![A-Z0-9])/;
+const HEAVY_TYPES = /^(B74[0-9]|B77[0-9]|B78[0-9]|A33[0-9]|A34[0-9]|A35[0-9]|A38[0-9]|B76[0-9]|MD11|IL76|IL96|AN12|AN22|A124|A225|C5|C5M|C17|C130|C30J|KC10|KC13|KC46|E3[A-Z]{2}|A400|BLCF)(?![0-9])/;
+const LIGHT_TYPES = /^(C1[0-9]{2}|C20[0-9]|C210|P28[A-Z]|PA[0-9]{2}|DA[0-9]{2}|DV20|DR[0-9]{2}|SR2[02]|M20[A-Z]|DG[0-9]{2}|BE3[0-9]|BE58|BE76|RV[0-9]{1,2}|TBM[0-9]|TB[0-9]{2}|PC[0-9]|AA[0-9]|G1[0-9]{2}|GLAS|VL3|GLST|EUPA|SAVG|EXTR|Z42|AT[0-9]{2}|GA8)(?![A-Z])/;
+
+// Returns a pictogram kind for the map marker. Shape reflects the physical
+// airframe class; the marker *colour* (set in the UI) conveys role, so a
+// military transport shows as a heavy in green, a military heli as a heli in
+// green, and only fast jets get the delta "military" shape.
+function iconKind(ac) {
+  const cat = (ac.emitterCategory || '').toUpperCase();
+  const t = (ac.type || '').toUpperCase();
+  if (cat === 'A7' || HELI_TYPES.test(t)) return 'heli';
+  if (cat === 'B1') return 'glider';
+  if (cat === 'B2') return 'balloon'; // lighter-than-air
+  if (cat === 'B6' || cat === 'B7') return 'drone'; // UAV / space
+  if (cat === 'A6' || FIGHTER_TYPES.test(t)) return 'military'; // high-performance / fast jet
+  if (cat === 'A5' || HEAVY_TYPES.test(t)) return 'heavy';
+  if (cat === 'A1' || cat === 'B4' || LIGHT_TYPES.test(t)) return 'light';
+  if (cat === 'A3' || cat === 'A4' || cat === 'A2') return 'airliner';
+  if (ac.airlineCallsign || t) return 'airliner';
+  return 'unknown';
+}
+
 async function pollOnce() {
   const cfg = getConfig();
   let data;
@@ -308,6 +336,8 @@ export function snapshot() {
       airlineCallsign: ac.airlineCallsign || null,
       classification: ac.classification,
       padbCategory: ac.padbCategory || null,
+      category: ac.emitterCategory || null,
+      iconKind: iconKind(ac),
       lat: ac.lat ?? null,
       lon: ac.lon ?? null,
       alt: ac.alt_baro ?? null,
@@ -335,7 +365,7 @@ export function snapshot() {
 export async function aircraftDetail(hex) {
   const ac = getAircraft(hex);
   if (!ac) return null;
-  const route = ac.flight ? await lookupRoute(ac.flight) : null;
+  const { route, error: routeError } = ac.flight ? await lookupRoute(ac.flight) : { route: null, error: null };
   let etaDest = null;
   let distToDestKm = null;
   let distFromOriginKm = null;
@@ -350,6 +380,7 @@ export async function aircraftDetail(hex) {
   return {
     ...snapshotOne(ac),
     route,
+    routeError,
     etaDestSec: etaDest,
     distToDestKm,
     distFromOriginKm,

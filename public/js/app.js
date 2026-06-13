@@ -12,16 +12,46 @@ const state = {
   showLabels: true,
   zones: [],
   config: null,
-  weatherOn: false
+  weatherOn: false,
+  units: 'aviation' // 'aviation' (ft/kt) or 'metric' (m, km/h); distance is always km
 };
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
 
+// Unit labels for column headers etc.
+const unitLabels = () =>
+  state.units === 'metric' ? { alt: 'Alt m', spd: 'Spd km/h', vr: 'V/S m/s' } : { alt: 'Alt ft', spd: 'Spd kt', vr: 'V/S fpm' };
+
 const fmt = {
-  alt: (v) => (v == null ? '—' : v === 0 ? 'ground' : `${v.toLocaleString()} ft`),
-  spd: (v) => (v == null ? '—' : `${Math.round(v)} kt (${Math.round(v * 1.852)} km/h)`),
-  vr: (v) => (v == null ? '—' : `${v > 0 ? '+' : ''}${v} fpm`),
+  // altitude: input is feet (the ADS-B native unit)
+  alt: (v) => {
+    if (v == null) return '—';
+    if (v === 0) return 'ground';
+    return state.units === 'metric'
+      ? `${Math.round(v * 0.3048).toLocaleString()} m`
+      : `${v.toLocaleString()} ft`;
+  },
+  // raw numeric (for table cells)
+  altN: (v) => (v == null ? '—' : v === 0 ? 'gnd' : (state.units === 'metric' ? Math.round(v * 0.3048) : v).toLocaleString()),
+  // ground speed: input is knots
+  spd: (v) => {
+    if (v == null) return '—';
+    return state.units === 'metric' ? `${Math.round(v * 1.852)} km/h` : `${Math.round(v)} kt (${Math.round(v * 1.852)} km/h)`;
+  },
+  spdN: (v) => (v == null ? '—' : Math.round(state.units === 'metric' ? v * 1.852 : v)),
+  // vertical rate: input is feet/min
+  vr: (v) => {
+    if (v == null) return '—';
+    return state.units === 'metric'
+      ? `${v > 0 ? '+' : ''}${(v * 0.00508).toFixed(1)} m/s`
+      : `${v > 0 ? '+' : ''}${v} fpm`;
+  },
+  vrN: (v) => {
+    if (v == null) return '—';
+    const val = state.units === 'metric' ? (v * 0.00508).toFixed(1) : v;
+    return (v > 0 ? '↑' : v < 0 ? '↓' : '') + Math.abs(val);
+  },
   dist: (v) => (v == null ? '—' : `${v} km`),
   dur: (s) => {
     if (s == null) return '—';
@@ -100,6 +130,20 @@ $('#labels-toggle').addEventListener('change', (e) => {
   renderAircraft();
 });
 
+// legend
+$('#legend-toggle').addEventListener('click', () => {
+  const body = $('#legend-body');
+  body.classList.toggle('hidden');
+  if (!body.dataset.filled) {
+    $$('#legend-body .leg-ico').forEach((el) => {
+      const kind = el.dataset.kind;
+      const color = kind === 'military' ? CLASS_COLORS.military : '#cbd5e1';
+      el.innerHTML = planeSvg(kind, color, 0, kind === 'ground');
+    });
+    body.dataset.filled = '1';
+  }
+});
+
 // zone circles on map
 let zoneCircles = [];
 function drawZones() {
@@ -128,12 +172,48 @@ const CLASS_COLORS = {
   unknown: '#64748b'
 };
 
-function planeSvg(color, track, onGround) {
+// Distinct silhouettes per aircraft kind. All drawn nose-up in a 26×26 box and
+// rotated by ground track. Helicopters get a rotor cross; light/GA get straight
+// wings; airliners swept wings; heavy 4 engines; military a delta; etc.
+const SHAPES = {
+  airliner:
+    'M13 1.5 L15 9 L24 14.5 L24 17 L15 14 L14.6 20.5 L17.5 23 L17.5 24.8 L13 23.4 L8.5 24.8 L8.5 23 L11.4 20.5 L11 14 L2 17 L2 14.5 L11 9 Z',
+  // straight wings + straight tailplane = light / general-aviation
+  light:
+    'M13 3 L13.9 10 L23 11.3 L23 12.7 L13.9 12 L13.7 18 L16.6 20.4 L16.6 21.6 L13 20.6 L9.4 21.6 L9.4 20.4 L12.3 18 L12.1 12 L3 12.7 L3 11.3 L12.1 10 Z',
+  // strong delta = military / fast jet
+  military:
+    'M13 1.5 L14 12 L22.5 21 L22.5 22.4 L13.6 18.4 L13.4 22 L15.4 24.4 L15.4 25.4 L13 24.2 L10.6 25.4 L10.6 24.4 L12.6 22 L12.4 18.4 L3.5 22.4 L3.5 21 L12 12 Z',
+  // heavy: swept wings with 4 engine nacelles hinted
+  heavy:
+    'M13 1.5 L15 9 L24 15 L24 17.2 L15 14 L14.6 20.5 L17.6 23 L17.6 24.6 L13 23.4 L8.4 24.6 L8.4 23 L11.4 20.5 L11 14 L2 17.2 L2 15 L11 9 Z',
+  glider:
+    'M13 4 L13.7 11 L24 12 L24 13 L13.7 12.6 L13.5 19 L15.5 21 L15.5 22 L13 21.2 L10.5 22 L10.5 21 L12.5 19 L12.3 12.6 L2 13 L2 12 L12.3 11 Z'
+};
+
+function planeSvg(kind, color, track, onGround) {
   const rot = track ?? 0;
-  const shape = onGround
-    ? `<circle cx="13" cy="13" r="5" fill="${color}" stroke="#0b1220" stroke-width="1.2"/>`
-    : `<path transform="rotate(${rot} 13 13)" fill="${color}" stroke="#0b1220" stroke-width="0.8"
-        d="M13 1.5 L15 9 L24 14.5 L24 17 L15 14 L14.6 20.5 L17.5 23 L17.5 24.8 L13 23.4 L8.5 24.8 L8.5 23 L11.4 20.5 L11 14 L2 17 L2 14.5 L11 9 Z"/>`;
+  const stroke = `stroke="#0b1220" stroke-width="0.8"`;
+  let shape;
+  if (onGround) {
+    shape = `<circle cx="13" cy="13" r="5" fill="${color}" stroke="#0b1220" stroke-width="1.2"/>`;
+  } else if (kind === 'heli') {
+    // body + tail boom + main rotor cross + tail rotor
+    shape = `<g transform="rotate(${rot} 13 13)">
+      <rect x="12.3" y="12.5" width="1.4" height="11" rx="0.6" fill="${color}" ${stroke}/>
+      <circle cx="13" cy="13" r="3.2" fill="${color}" ${stroke}/>
+      <rect x="3.5" y="12.3" width="19" height="1.4" rx="0.7" fill="${color}"/>
+      <rect x="12.3" y="3.5" width="1.4" height="19" rx="0.7" fill="${color}"/>
+      <rect x="9.5" y="22.6" width="7" height="1.3" rx="0.6" fill="${color}"/>
+    </g>`;
+  } else if (kind === 'balloon') {
+    shape = `<g><circle cx="13" cy="11" r="7" fill="${color}" ${stroke}/><rect x="11" y="18" width="4" height="4" rx="1" fill="${color}" ${stroke}/></g>`;
+  } else if (kind === 'drone') {
+    shape = `<g transform="rotate(${rot} 13 13)"><circle cx="6" cy="6" r="3" fill="${color}"/><circle cx="20" cy="6" r="3" fill="${color}"/><circle cx="6" cy="20" r="3" fill="${color}"/><circle cx="20" cy="20" r="3" fill="${color}"/><rect x="5" y="11.5" width="16" height="3" rx="1.5" fill="${color}"/><rect x="11.5" y="5" width="3" height="16" rx="1.5" fill="${color}"/></g>`;
+  } else {
+    const d = SHAPES[kind] || SHAPES.airliner;
+    shape = `<path transform="rotate(${rot} 13 13)" fill="${color}" ${stroke} d="${d}"/>`;
+  }
   return `<svg width="26" height="26" viewBox="0 0 26 26" xmlns="http://www.w3.org/2000/svg">${shape}</svg>`;
 }
 
@@ -161,7 +241,7 @@ function renderAircraft() {
     visibleCount++;
     live.add(ac.hex);
     const color = ac.emergency ? CLASS_COLORS.emergency : CLASS_COLORS[ac.classification] || CLASS_COLORS.unknown;
-    const html = planeSvg(color, ac.track, ac.onGround);
+    const html = planeSvg(ac.iconKind || 'airliner', color, ac.track, ac.onGround);
     let entry = markers.get(ac.hex);
     const labelText = ac.flight || ac.registration || ac.hex.toUpperCase();
     if (!entry) {
@@ -216,14 +296,15 @@ function renderAircraft() {
 state.listExpanded = false;
 state.listSort = { key: 'distKm', dir: 1 };
 
+// label can be a string or a function (for unit-dependent headers).
 const LIST_COLUMNS = [
   ['flight', 'Callsign', (ac) => ac.flight || ac.registration || ac.hex.toUpperCase()],
   ['registration', 'Reg', (ac) => ac.registration || '—'],
   ['type', 'Type', (ac) => ac.type || '—'],
   ['airline', 'Airline / operator', (ac) => ac.airline || ac.operator || '—'],
-  ['alt', 'Alt ft', (ac) => (ac.alt == null ? '—' : ac.alt === 0 ? 'gnd' : ac.alt.toLocaleString())],
-  ['gs', 'Spd kt', (ac) => (ac.gs == null ? '—' : Math.round(ac.gs))],
-  ['vr', 'V/S', (ac) => (ac.vr == null ? '—' : (ac.vr > 0 ? '↑' : ac.vr < 0 ? '↓' : '') + Math.abs(ac.vr))],
+  ['alt', () => unitLabels().alt, (ac) => fmt.altN(ac.alt)],
+  ['gs', () => unitLabels().spd, (ac) => fmt.spdN(ac.gs)],
+  ['vr', () => unitLabels().vr, (ac) => fmt.vrN(ac.vr)],
   ['distKm', 'Dist km', (ac) => ac.distKm ?? '—'],
   ['squawk', 'Squawk', (ac) => ac.squawk || '—']
 ];
@@ -256,8 +337,10 @@ function renderList(visibleCount) {
   if (state.listExpanded) {
     const { key, dir } = state.listSort;
     const head = LIST_COLUMNS.map(
-      ([k, label]) =>
-        `<th data-key="${k}" class="${k === key ? 'sorted' : ''}">${label}${k === key ? (dir > 0 ? ' ▲' : ' ▼') : ''}</th>`
+      ([k, label]) => {
+        const text = typeof label === 'function' ? label() : label;
+        return `<th data-key="${k}" class="${k === key ? 'sorted' : ''}">${text}${k === key ? (dir > 0 ? ' ▲' : ' ▼') : ''}</th>`;
+      }
     ).join('');
     const body = rows
       .map(
@@ -330,7 +413,9 @@ async function selectAircraft(hex, pan = false) {
   const ac = state.aircraft.get(hex);
   if (ac && pan && ac.lat != null) map.panTo([ac.lat, ac.lon]);
   renderAircraft();
-  updateDetailLive(ac);
+  // Guard the live panel so a render glitch can never block the route / photo /
+  // "seen before" fetches that follow.
+  try { updateDetailLive(ac); } catch (e) { console.warn('detail render error', e); }
   loadDetailExtras(hex);
 }
 
@@ -405,7 +490,11 @@ async function loadDetailExtras(hex) {
     .then((d) => {
       if (state.selected !== hex) return;
       if (!d.route) {
-        $('#d-route').innerHTML = '<span class="muted">No route data for this callsign</span>';
+        $('#d-route').innerHTML = d.routeError
+          ? `<span class="muted">Route unavailable — ${d.routeError}. Check the container's internet access.</span>`
+          : d.flight
+            ? '<span class="muted">No route data for this callsign</span>'
+            : '<span class="muted">No callsign yet — route needs a flight number</span>';
         return;
       }
       const o = d.route.origin, dst = d.route.destination;
@@ -442,7 +531,7 @@ async function loadDetailExtras(hex) {
         .slice(0, 12)
         .map(
           (h) => `<div class="hist-line">${fmt.dateTime(h.first_seen)} — ${fmt.dur((h.last_seen - h.first_seen) / 1000)}
-            ${h.callsign ? ' · ' + h.callsign : ''}${h.max_alt ? ' · max ' + h.max_alt + ' ft' : ''}
+            ${h.callsign ? ' · ' + h.callsign : ''}${h.max_alt ? ' · max ' + fmt.alt(h.max_alt) : ''}
             ${h.min_dist_km != null ? ' · closest ' + h.min_dist_km.toFixed(1) + ' km' : ''}</div>`
         )
         .join('');
@@ -731,6 +820,7 @@ async function loadSettings() {
   $('#s-rlat').value = c.receiver.lat ?? '';
   $('#s-rlon').value = c.receiver.lon ?? '';
   $('#s-retention').value = c.retentionDays;
+  $('#s-units').value = c.ui?.units || 'aviation';
   $('#s-po-enabled').checked = c.pushover.enabled;
   $('#s-po-token').value = c.pushover.token;
   $('#s-po-user').value = c.pushover.user;
@@ -780,17 +870,27 @@ $('#s-save').addEventListener('click', async () => {
     browserNotifications: { enabled: $('#s-browser-enabled').checked },
     notifyCooldownMin: Math.max(1, parseInt($('#s-cooldown').value, 10) || 15),
     notifyMilitary: $('#s-notify-mil').checked,
-    notifyEmergency: $('#s-notify-emerg').checked
+    notifyEmergency: $('#s-notify-emerg').checked,
+    ui: { units: $('#s-units').value }
   };
   if ($('#s-owm').value.trim()) patch.weather = { openWeatherMapKey: $('#s-owm').value.trim() };
   if ($('#s-anthropic').value.trim()) patch.anthropic = { apiKey: $('#s-anthropic').value.trim() };
   await fetch('/api/config', {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch)
   });
+  // Apply units immediately, no reload needed.
+  state.units = patch.ui.units;
+  applyUnits();
   $('#s-saved').textContent = '✓ saved';
   setTimeout(() => ($('#s-saved').textContent = ''), 3000);
   loadSettings();
 });
+
+// Re-render everything that shows units when the unit system changes.
+function applyUnits() {
+  renderAircraft();
+  if (state.selected) updateDetailLive(state.aircraft.get(state.selected));
+}
 $('#s-browser-perm').addEventListener('click', async () => {
   const perm = await Notification.requestPermission();
   toast({ kind: 'test', title: 'Browser notifications', message: `Permission: ${perm}` });
@@ -809,6 +909,7 @@ $('#s-padb-refresh').addEventListener('click', async () => {
 (async function boot() {
   try {
     state.config = await (await fetch('/api/config')).json();
+    state.units = state.config.ui?.units || 'aviation';
   } catch { /* server starting */ }
   loadZones();
   connectStream();

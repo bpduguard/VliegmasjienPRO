@@ -39,6 +39,26 @@
       <label class="toggle"><input type="checkbox" id="labels-toggle" checked /> Labels</label>
     </div>
 
+    <div id="legend">
+      <button id="legend-toggle" title="Icon legend">❔ Legend</button>
+      <div id="legend-body" class="hidden">
+        <div class="leg-row"><span class="leg-ico" data-kind="airliner"></span> Airliner (jet)</div>
+        <div class="leg-row"><span class="leg-ico" data-kind="heavy"></span> Heavy / widebody</div>
+        <div class="leg-row"><span class="leg-ico" data-kind="light"></span> Light / single-engine</div>
+        <div class="leg-row"><span class="leg-ico" data-kind="heli"></span> Helicopter</div>
+        <div class="leg-row"><span class="leg-ico" data-kind="military"></span> Military / fast jet</div>
+        <div class="leg-row"><span class="leg-ico" data-kind="glider"></span> Glider</div>
+        <div class="leg-row"><span class="leg-ico" data-kind="drone"></span> Drone / UAV</div>
+        <div class="leg-row"><span class="leg-ico" data-kind="ground"></span> On ground</div>
+        <hr>
+        <div class="leg-row"><span class="leg-dot" style="background:#38bdf8"></span> Airline</div>
+        <div class="leg-row"><span class="leg-dot" style="background:#4ade80"></span> Military</div>
+        <div class="leg-row"><span class="leg-dot" style="background:#facc15"></span> Private</div>
+        <div class="leg-row"><span class="leg-dot" style="background:#c084fc"></span> Business</div>
+        <div class="leg-row"><span class="leg-dot" style="background:#ef4444"></span> Emergency</div>
+      </div>
+    </div>
+
     <div id="ac-list-panel">
       <div class="panel-head">
         <span id="ac-count">0 aircraft</span>
@@ -204,6 +224,14 @@
           <label>Receiver lat <input id="s-rlat" size="10" /></label>
           <label>Receiver lon <input id="s-rlon" size="10" /></label>
           <label>History retention (days) <input id="s-retention" type="number" min="1" size="6" /></label>
+        </div>
+        <div class="row wrap">
+          <label>Units
+            <select id="s-units">
+              <option value="metric">Metric — altitude in m, speed in km/h, distance in km</option>
+              <option value="aviation">Aviation — altitude in ft, speed in kt, distance in km</option>
+            </select>
+          </label>
         </div>
       </section>
 

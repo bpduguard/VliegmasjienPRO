@@ -127,6 +127,23 @@ Notes on route/ETA data: adsbdb provides the airports for a callsign, not the ai
 **ETA at destination** is computed live from position, ground speed and remaining great-circle
 distance; "tracked since" is when *your receiver* first saw the flight.
 
+### Routes / photos show "unavailable"?
+
+Route lookups (adsbdb), aircraft photos (planespotters) and the plane-alert-db download all need
+**outbound internet** from the container. If the detail panel says *"Route unavailable — … check the
+container's internet access"*, your Docker network or firewall is blocking egress to those hosts. The
+live map, zones, statistics and "seen before" history all keep working offline — only the enrichment
+that calls external APIs needs internet. (The "seen before" history is stored locally in SQLite and is
+independent of any external service.)
+
+### Units & icons
+
+*Settings → Receiver → Units* switches the whole UI between **metric** (altitude in m, speed in km/h,
+vertical rate in m/s; distance is always km) and **aviation** (ft / kt / fpm). The map pictograms are
+shaped by aircraft type — airliner, heavy/widebody, light single-engine, helicopter, military/fast jet,
+glider, drone and on-ground — with colour showing the role; the **Legend** button on the map explains
+them.
+
 ## Development
 
 ```bash
