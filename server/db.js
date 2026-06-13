@@ -45,6 +45,18 @@ export function initDb() {
       operator TEXT,
       updated INTEGER NOT NULL
     );
+    -- Airport communication frequencies (OurAirports). One row per airport that
+    -- has at least one frequency; freqs is a JSON array of {type,description,mhz}.
+    CREATE TABLE IF NOT EXISTS airport_freqs (
+      ident TEXT PRIMARY KEY,
+      name TEXT,
+      municipality TEXT,
+      country TEXT,
+      lat REAL NOT NULL,
+      lon REAL NOT NULL,
+      freqs TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_freqs_lat ON airport_freqs(lat);
   `);
   return db;
 }
@@ -102,6 +114,52 @@ export function bulkImportAircraftDb(rows) {
 export function aircraftDbCount() {
   return db.prepare('SELECT COUNT(*) AS c FROM aircraft_db').get().c;
 }
+
+// --- airport frequencies ----------------------------------------------------
+
+export function replaceAirportFreqs(rows) {
+  const stmt = db.prepare(
+    'INSERT OR REPLACE INTO airport_freqs (ident, name, municipality, country, lat, lon, freqs) VALUES (?,?,?,?,?,?,?)'
+  );
+  db.exec('BEGIN');
+  let n = 0;
+  try {
+    db.exec('DELETE FROM airport_freqs');
+    for (const r of rows) {
+      stmt.run(r.ident, r.name || '', r.municipality || '', r.country || '', r.lat, r.lon, JSON.stringify(r.freqs));
+      n++;
+    }
+    db.exec('COMMIT');
+  } catch (e) {
+    db.exec('ROLLBACK');
+    throw e;
+  }
+  return n;
+}
+
+export function airportFreqsCount() {
+  return db.prepare('SELECT COUNT(*) AS c FROM airport_freqs').get().c;
+}
+
+// Bounding-box query (handles antimeridian-free common case). lon filter is a
+// plain BETWEEN; callers pass normalized west<east bounds.
+export function airportFreqsInBounds(s, w, n, e, limit = 500) {
+  const rows = db
+    .prepare(
+      'SELECT * FROM airport_freqs WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? LIMIT ?'
+    )
+    .all(s, n, w, e, limit);
+  return rows.map((r) => ({
+    ident: r.ident,
+    name: r.name,
+    municipality: r.municipality,
+    country: r.country,
+    lat: r.lat,
+    lon: r.lon,
+    freqs: JSON.parse(r.freqs)
+  }));
+}
+
 
 
 // A "sighting" is one continuous session of an aircraft being received.

@@ -36,6 +36,7 @@
       <input id="airline-filter" type="text" placeholder="Airline / callsign filter…" />
       <span class="spacer"></span>
       <label class="toggle"><input type="checkbox" id="weather-toggle" /> 🌦 Weather</label>
+      <label class="toggle"><input type="checkbox" id="freq-toggle" /> 📻 Freqs</label>
       <label class="toggle"><input type="checkbox" id="labels-toggle" checked /> Labels</label>
     </div>
 
@@ -281,6 +282,18 @@
           <button id="s-acdb-import-url">Import from URL</button>
           <button id="s-acdb-import-file">Import file…</button>
           <input type="file" id="s-acdb-file" accept=".csv,.json,.ndjson,text/csv" hidden />
+        </div>
+      </section>
+
+      <section class="settings-block">
+        <h3>Communication frequencies <span class="muted">(map layer)</span></h3>
+        <p class="muted">Toggle the 📻 <strong>Freqs</strong> layer on the map to see airport radio
+          frequencies (tower, ground, approach, ATIS…) near your view. Data is the public-domain
+          <a href="https://ourairports.com/data/" target="_blank" rel="noopener">OurAirports</a> dataset —
+          download it once below (a few MB), then it's served locally and offline.</p>
+        <div class="row wrap">
+          <span id="s-freq-meta" class="muted">—</span>
+          <button id="s-freq-refresh">Download frequencies now</button>
         </div>
       </section>
 

@@ -169,6 +169,22 @@ button.big { padding: 11px 22px; font-size: 1rem; }
 .ac-row.mil .cs { color: #4ade80; }
 .ac-row.emerg .cs { color: var(--danger); }
 
+/* frequency markers + popup */
+.freq-pin {
+  width: 20px; height: 20px; line-height: 20px; text-align: center; font-size: 13px;
+  background: rgba(13, 20, 38, 0.85); border: 1px solid var(--accent); border-radius: 50%;
+}
+.freq-pop .freq-h { margin-bottom: 6px; }
+.freq-pop .freq-h .muted { font-size: 0.78rem; }
+.freq-tbl { border-collapse: collapse; font-size: 0.82rem; }
+.freq-tbl td { padding: 2px 8px 2px 0; vertical-align: top; }
+.freq-tbl .ft { font-weight: 700; color: var(--accent); white-space: nowrap; }
+.freq-tbl .fd { color: var(--muted); }
+/* Leaflet popups are light by default; theme them dark to match. */
+.leaflet-popup-content-wrapper, .leaflet-popup-tip { background: #0f1830; color: var(--text); }
+.leaflet-popup-content-wrapper { border: 1px solid var(--border); }
+.leaflet-popup-content a.leaflet-popup-close-button { color: var(--muted); }
+
 /* legend */
 #legend { position: absolute; left: 50%; transform: translateX(-50%); bottom: 12px; z-index: 1000; text-align: center; }
 #legend-body { text-align: left; }

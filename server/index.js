@@ -13,6 +13,8 @@ import {
 } from './tracker.js';
 import { setBroadcast, notify } from './notify.js';
 import { streamAircraftFacts, aiAvailable } from './ai.js';
+import { refreshFrequencies, frequenciesMeta } from './freq.js';
+import { airportFreqsInBounds } from './db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 8390;
@@ -335,6 +337,30 @@ app.get('/api/weather/owm/:layer/:z/:x/:y', async (req, res) => {
   } catch {
     res.status(502).end();
   }
+});
+
+// ------------------------------------------------------------------ frequencies
+app.get('/api/frequencies/meta', (req, res) => res.json(frequenciesMeta()));
+
+app.post('/api/frequencies/refresh', async (req, res) => {
+  try {
+    res.json(await refreshFrequencies());
+  } catch (e) {
+    res.status(502).json({ error: e.message });
+  }
+});
+
+// Airports (with comm frequencies) within the given map bounds.
+app.get('/api/frequencies', (req, res) => {
+  const n = parseFloat(req.query.n);
+  const s = parseFloat(req.query.s);
+  const e = parseFloat(req.query.e);
+  const w = parseFloat(req.query.w);
+  if ([n, s, e, w].some((v) => !Number.isFinite(v))) {
+    return res.status(400).json({ error: 'n, s, e, w bounds required' });
+  }
+  const limit = Math.min(800, Math.max(1, parseInt(req.query.limit, 10) || 500));
+  res.json({ airports: airportFreqsInBounds(s, w, n, e, limit) });
 });
 
 // ------------------------------------------------------------------ test notification

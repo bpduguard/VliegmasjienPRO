@@ -25,6 +25,9 @@ Designed to run in Docker on a **Raspberry Pi 5** (arm64) next to your existing 
 - 📷 **Aircraft photos** via planespotters.net
 - 🤖 **Claude AI lookup**: select a plane and ask Claude for facts about the airframe, operator and the
   current flight (uses the Anthropic API with web search)
+- 📻 **Communication-frequencies layer**: a toggleable map overlay showing airport radio frequencies
+  (tower, ground, approach, ATIS…) for airports near your view, from the public-domain
+  [OurAirports](https://ourairports.com/data/) dataset — downloaded once, then served locally and offline
 - 🚨 Optional alerts for **any military** aircraft and **emergency squawks** (7500/7600/7700)
 
 ## Quick start (Raspberry Pi 5 / Docker)
@@ -119,6 +122,7 @@ config for secrets and the receiver URL:
 | [plane-alert-db](https://github.com/sdr-enthusiasts/plane-alert-db) | watchlist data, categories, operator/type enrichment | no |
 | [adsbdb.com](https://www.adsbdb.com) | callsign → route (origin/destination, airline) | no |
 | [planespotters.net](https://www.planespotters.net) | aircraft photos | no |
+| [OurAirports](https://ourairports.com/data/) | airport communication frequencies (map layer) | no |
 | [RainViewer](https://www.rainviewer.com) | rain radar overlay | no |
 | [OpenWeatherMap](https://openweathermap.org) | extra cloud layer (optional) | free key |
 | [Anthropic](https://platform.claude.com) | Claude AI aircraft lookup (optional) | API key |
@@ -160,6 +164,13 @@ The cleanest fix of all, if you can, is to run **readsb/tar1090** as your decode
 > So to answer "1900 planes but only 2 types — is this an issue?": it's expected with a plain dump1090
 > that doesn't send types, and only the handful matched by plane-alert-db showed up. With the per-hex
 > lookup (or an import) the type breakdown becomes representative.
+
+### Communication frequencies layer
+
+The **📻 Freqs** toggle on the map shows airport radio frequencies near your current view. The first
+time, download the data in *Settings → Communication frequencies → Download frequencies now* (a few MB
+from OurAirports); after that it's stored locally and works offline. Pan/zoom and the airports in view
+update automatically; click a 📻 pin to see that airport's tower/ground/approach/ATIS/etc. frequencies.
 
 ### Units & icons
 

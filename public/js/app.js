@@ -13,6 +13,7 @@ const state = {
   zones: [],
   config: null,
   weatherOn: false,
+  freqOn: false,
   units: 'aviation' // 'aviation' (ft/kt) or 'metric' (m, km/h); distance is always km
 };
 
@@ -160,6 +161,71 @@ function drawZones() {
       .addTo(map)
   );
 }
+
+// ----------------------------------------------------------------- frequencies layer
+const freqLayer = L.layerGroup();
+let freqLoadToken = 0;
+
+const freqIcon = L.divIcon({
+  className: 'freq-icon',
+  html: '<div class="freq-pin">📻</div>',
+  iconSize: [20, 20],
+  iconAnchor: [10, 10]
+});
+
+// group frequencies by type and format the popup
+function freqPopup(ap) {
+  const ORDER = ['TWR', 'GND', 'APP', 'DEP', 'ATIS', 'CTAF', 'UNICOM', 'AFIS', 'CLD', 'A/D'];
+  const rank = (t) => {
+    const i = ORDER.indexOf((t || '').toUpperCase());
+    return i < 0 ? ORDER.length : i;
+  };
+  const list = [...ap.freqs].sort((a, b) => rank(a.type) - rank(b.type));
+  const rows = list
+    .map((f) => `<tr><td class="ft">${f.type || ''}</td><td>${f.mhz}</td><td class="fd">${f.description || ''}</td></tr>`)
+    .join('');
+  const where = [ap.municipality, ap.country].filter(Boolean).join(', ');
+  return `<div class="freq-pop"><div class="freq-h"><b>${ap.ident}</b> ${ap.name || ''}<div class="muted">${where}</div></div>
+    <table class="freq-tbl">${rows}</table></div>`;
+}
+
+async function loadFrequencies() {
+  if (!state.freqOn) return;
+  const b = map.getBounds();
+  const token = ++freqLoadToken;
+  try {
+    const params = new URLSearchParams({
+      n: b.getNorth(), s: b.getSouth(), e: b.getEast(), w: b.getWest()
+    });
+    const { airports } = await (await fetch(`/api/frequencies?${params}`)).json();
+    if (token !== freqLoadToken || !state.freqOn) return; // superseded by a newer pan/zoom
+    freqLayer.clearLayers();
+    for (const ap of airports || []) {
+      L.marker([ap.lat, ap.lon], { icon: freqIcon, interactive: true })
+        .bindPopup(freqPopup(ap), { maxWidth: 320 })
+        .addTo(freqLayer);
+    }
+  } catch { /* ignore */ }
+}
+
+$('#freq-toggle').addEventListener('change', async (e) => {
+  state.freqOn = e.target.checked;
+  if (state.freqOn) {
+    const meta = await (await fetch('/api/frequencies/meta')).json();
+    if (!meta.count) {
+      e.target.checked = false;
+      state.freqOn = false;
+      toast({ kind: 'test', title: 'No frequency data yet', message: 'Download it first: Settings → Communication frequencies.' });
+      return;
+    }
+    freqLayer.addTo(map);
+    loadFrequencies();
+  } else {
+    map.removeLayer(freqLayer);
+    freqLayer.clearLayers();
+  }
+});
+map.on('moveend', () => { if (state.freqOn) loadFrequencies(); });
 
 // ----------------------------------------------------------------- plane icons
 const CLASS_COLORS = {
@@ -843,7 +909,20 @@ async function loadSettings() {
   const acdb = status.aircraftDb || {};
   $('#s-acdb-meta').innerHTML = `${(acdb.count || 0).toLocaleString()} aircraft cached locally`
     + (acdb.error ? ` · <span style="color:var(--danger)">lookup problem: ${acdb.error}</span>` : ' · auto-filling as aircraft are seen');
+  const fmeta = await (await fetch('/api/frequencies/meta')).json();
+  $('#s-freq-meta').textContent = fmeta.count
+    ? `${fmeta.count.toLocaleString()} airports with frequencies${fmeta.updatedAt ? ', updated ' + fmt.dateTime(fmeta.updatedAt) : ''}`
+    : 'Not downloaded yet';
 }
+
+$('#s-freq-refresh').addEventListener('click', async () => {
+  $('#s-freq-meta').textContent = 'Downloading OurAirports data… (a few MB)';
+  const res = await fetch('/api/frequencies/refresh', { method: 'POST' });
+  const data = await res.json();
+  $('#s-freq-meta').textContent = res.ok
+    ? `✓ ${data.airports.toLocaleString()} airports with frequencies loaded`
+    : `Failed: ${data.error}`;
+});
 
 async function importAircraftDb(body) {
   $('#s-acdb-meta').textContent = 'Importing… (large files can take a moment)';
