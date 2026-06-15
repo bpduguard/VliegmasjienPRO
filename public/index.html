@@ -35,6 +35,7 @@
       <button class="filt" data-filter="emergency">🚨 Emergency</button>
       <input id="airline-filter" type="text" placeholder="Airline / callsign filter…" />
       <span class="spacer"></span>
+      <button id="replay-open" class="toolbtn" title="Replay a past day on the map">⏮ Replay</button>
       <label class="toggle"><input type="checkbox" id="weather-toggle" /> 🌦 Weather</label>
       <label class="toggle"><input type="checkbox" id="freq-toggle" /> 📻 Freqs</label>
       <label class="toggle"><input type="checkbox" id="labels-toggle" checked /> Labels</label>
@@ -57,7 +58,38 @@
         <div class="leg-row"><span class="leg-dot" style="background:#facc15"></span> Private</div>
         <div class="leg-row"><span class="leg-dot" style="background:#c084fc"></span> Business</div>
         <div class="leg-row"><span class="leg-dot" style="background:#ef4444"></span> Emergency</div>
+        <hr>
+        <div class="leg-cap muted">Reception (list row colour)</div>
+        <div class="leg-row"><span class="leg-dot" style="background:#22c55e"></span> ADS-B</div>
+        <div class="leg-row"><span class="leg-dot" style="background:#84cc16"></span> ADS-R</div>
+        <div class="leg-row"><span class="leg-dot" style="background:#a855f7"></span> TIS-B</div>
+        <div class="leg-row"><span class="leg-dot" style="background:#eab308"></span> MLAT</div>
+        <div class="leg-row"><span class="leg-dot" style="background:#38bdf8"></span> Mode-S</div>
+        <div class="leg-row"><span class="leg-dot" style="background:#14b8a6"></span> ADS-C</div>
       </div>
+    </div>
+
+    <!-- replay controls (hidden until Replay is opened) -->
+    <div id="replay-bar" class="hidden">
+      <div class="rb-row">
+        <span class="rb-badge">⏮ REPLAY</span>
+        <label>Day <input type="date" id="rb-date" /></label>
+        <button id="rb-play" title="Play / pause">▶</button>
+        <label>Speed
+          <select id="rb-speed">
+            <option value="1">1×</option>
+            <option value="8">8×</option>
+            <option value="30" selected>30×</option>
+            <option value="120">120×</option>
+            <option value="600">600×</option>
+          </select>
+        </label>
+        <span id="rb-clock" class="rb-clock">—</span>
+        <span class="spacer"></span>
+        <span id="rb-count" class="muted"></span>
+        <button id="rb-close" title="Exit replay, back to live">✕ Live</button>
+      </div>
+      <input type="range" id="rb-scrub" min="0" max="1000" value="0" step="1" />
     </div>
 
     <div id="ac-list-panel">
@@ -93,11 +125,6 @@
       <section class="d-section" id="d-zones-section">
         <h4>Zones</h4>
         <div id="d-zones"></div>
-      </section>
-      <section class="d-section">
-        <h4>Claude AI lookup <span class="muted">facts about this plane & flight</span></h4>
-        <button id="d-ai-btn" class="primary">🤖 Ask Claude about this plane</button>
-        <div id="d-ai" class="ai-output hidden"></div>
       </section>
       <section class="d-section">
         <h4>Seen before</h4>
@@ -303,17 +330,6 @@
           <a href="https://openweathermap.org/api" target="_blank" rel="noopener">OpenWeatherMap API key</a>.</p>
         <div class="row wrap">
           <label>OpenWeatherMap key <input id="s-owm" size="36" placeholder="(optional)" /></label>
-        </div>
-      </section>
-
-      <section class="settings-block">
-        <h3>Claude AI</h3>
-        <p class="muted">Used for the "Ask Claude about this plane" feature. Get a key at
-          <a href="https://platform.claude.com" target="_blank" rel="noopener">platform.claude.com</a> —
-          or set <code>ANTHROPIC_API_KEY</code> in docker-compose.</p>
-        <div class="row wrap">
-          <label>API key <input id="s-anthropic" size="40" placeholder="sk-ant-…" /></label>
-          <span id="s-anthropic-status" class="muted"></span>
         </div>
       </section>
 

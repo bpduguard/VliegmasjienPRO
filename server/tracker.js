@@ -7,7 +7,7 @@ import {
   planeDbLookup, lookupRoute, cachedAirlineName, maybeAutoRefreshPlaneDb,
   aircraftDbLocal, lookupAircraft
 } from './enrich.js';
-import { upsertSighting, pruneOldData } from './db.js';
+import { upsertSighting, pruneOldData, insertTracks, pruneTracks } from './db.js';
 import { notify } from './notify.js';
 import { ensureSbs, stopSbs, sbsSnapshot, sbsStatus } from './sbs.js';
 
@@ -67,6 +67,24 @@ function detectAirlineCallsign(flight) {
   return m ? m[1] : null;
 }
 
+// How the position/track was received, from dump1090-fa / readsb fields.
+// `raw.type` is the underlying message type; `raw.mlat` lists fields derived
+// via multilateration. Returns: adsb | adsr | tisb | mlat | modes | uat | adsc | other.
+function deriveSource(raw, ac) {
+  if (Array.isArray(raw.mlat) && raw.mlat.includes('lat')) return 'mlat';
+  const t = (raw.type || '').toLowerCase();
+  if (t.startsWith('adsb')) return 'adsb';
+  if (t.startsWith('adsr')) return 'adsr';
+  if (t.startsWith('tisb')) return 'tisb';
+  if (t === 'mlat') return 'mlat';
+  if (t === 'mode_s' || t === 'modes') return 'modes';
+  if (t === 'uat' || t === 'adsb_uat') return 'uat';
+  if (t === 'adsc') return 'adsc';
+  if (t) return 'other';
+  // No type field (e.g. SBS feed): a decoded position implies ADS-B, otherwise Mode-S only.
+  return (raw.lat ?? ac.lat) != null ? 'adsb' : 'modes';
+}
+
 // ICAO type-designator heuristics for the map pictogram. The ADS-B emitter
 // category (A1..A7/B1..B7) is the primary signal; these regexes only refine or
 // fill in when the category is generic/absent. Boundaries (?![0-9]) prevent
@@ -94,6 +112,10 @@ function iconKind(ac) {
   if (ac.airlineCallsign || t) return 'airliner';
   return 'unknown';
 }
+
+// Replay recording: at most one stored position per aircraft per interval.
+const TRACK_RECORD_MS = 8000;
+const lastTrackRec = new Map(); // hex -> ts of last recorded track point
 
 async function pollOnce() {
   const cfg = getConfig();
@@ -124,6 +146,7 @@ async function pollOnce() {
   messagesTotal = data.messages ?? messagesTotal;
   const now = Date.now();
   const seen = new Set();
+  const trackBuf = []; // replay position points recorded this poll
 
   for (const raw of data.aircraft || []) {
     const hex = (raw.hex || '').toLowerCase().replace('~', '');
@@ -150,6 +173,7 @@ async function pollOnce() {
     ac.messages = raw.messages ?? ac.messages;
     ac.seen = raw.seen ?? 0;
     ac.emitterCategory = raw.category || ac.emitterCategory;
+    ac.source = deriveSource(raw, ac);
     // readsb/tar1090 extras when available
     ac.registration = raw.r || ac.registration;
     ac.type = raw.t || ac.type;
@@ -211,6 +235,18 @@ async function pollOnce() {
     // zone math (ETA + inside detection)
     ac.zones = computeZones(ac, cfg);
 
+    // record a replay track point (throttled per aircraft)
+    if (ac.lat != null && ac.lon != null && now - (lastTrackRec.get(hex) || 0) >= TRACK_RECORD_MS) {
+      lastTrackRec.set(hex, now);
+      trackBuf.push({
+        ts: now, hex, lat: ac.lat, lon: ac.lon,
+        alt: Number.isFinite(ac.alt_baro) ? ac.alt_baro : null,
+        gs: Number.isFinite(ac.gs) ? Math.round(ac.gs) : null,
+        trk: Number.isFinite(ac.track) ? Math.round(ac.track) : null,
+        callsign: ac.flight || null, src: ac.source || null
+      });
+    }
+
     // persist sighting
     try {
       upsertSighting(ac, now);
@@ -227,7 +263,13 @@ async function pollOnce() {
     if (!seen.has(hex) && now - ac.lastSeen > 60000) {
       aircraft.delete(hex);
       zonePresence.delete(hex);
+      lastTrackRec.delete(hex);
     }
+  }
+
+  // flush replay track points for this poll
+  if (trackBuf.length) {
+    try { insertTracks(trackBuf); } catch (e) { console.warn('[db] track insert failed:', e.message); }
   }
 
   if (broadcast) broadcast('aircraft', snapshot());
@@ -377,6 +419,7 @@ export function snapshot() {
       airline: ac.airline || null,
       airlineCallsign: ac.airlineCallsign || null,
       classification: ac.classification,
+      source: ac.source || null,
       padbCategory: ac.padbCategory || null,
       category: ac.emitterCategory || null,
       iconKind: iconKind(ac),
@@ -470,6 +513,7 @@ export function startTracker() {
   // housekeeping every 6h: prune DB + maybe refresh plane-alert-db
   setInterval(() => {
     try { pruneOldData(getConfig().retentionDays); } catch (e) { console.warn('[db] prune failed:', e.message); }
+    try { pruneTracks(getConfig().replayRetentionDays); } catch (e) { console.warn('[db] track prune failed:', e.message); }
     maybeAutoRefreshPlaneDb();
   }, 6 * 3600000);
 }

@@ -57,6 +57,21 @@ export function initDb() {
       freqs TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_freqs_lat ON airport_freqs(lat);
+    -- Time-series position log powering the map replay. High-volume, so it has
+    -- its own (shorter) retention than sightings (config.replayRetentionDays).
+    CREATE TABLE IF NOT EXISTS tracks (
+      ts INTEGER NOT NULL,
+      hex TEXT NOT NULL,
+      lat REAL NOT NULL,
+      lon REAL NOT NULL,
+      alt INTEGER,
+      gs INTEGER,
+      trk INTEGER,
+      callsign TEXT,
+      src TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_tracks_ts ON tracks(ts);
+    CREATE INDEX IF NOT EXISTS idx_tracks_hex_ts ON tracks(hex, ts);
   `);
   return db;
 }
@@ -287,4 +302,52 @@ export function pruneOldData(retentionDays) {
   const cutoff = Date.now() - retentionDays * 86400000;
   db.prepare('DELETE FROM sightings WHERE last_seen < ?').run(cutoff);
   db.prepare('DELETE FROM alerts WHERE ts < ?').run(cutoff);
+}
+
+// --- replay (position time-series) ------------------------------------------
+
+const insertTrackStmt = () =>
+  db.prepare('INSERT INTO tracks (ts, hex, lat, lon, alt, gs, trk, callsign, src) VALUES (?,?,?,?,?,?,?,?,?)');
+
+export function insertTracks(rows) {
+  if (!rows.length) return 0;
+  const stmt = insertTrackStmt();
+  db.exec('BEGIN');
+  try {
+    for (const r of rows) {
+      stmt.run(r.ts, r.hex, r.lat, r.lon, r.alt ?? null, r.gs ?? null, r.trk ?? null, r.callsign ?? null, r.src ?? null);
+    }
+    db.exec('COMMIT');
+  } catch (e) {
+    db.exec('ROLLBACK');
+    throw e;
+  }
+  return rows.length;
+}
+
+export function replayBounds() {
+  const r = db.prepare('SELECT MIN(ts) AS min, MAX(ts) AS max, COUNT(*) AS count FROM tracks').get();
+  return { min: r.min || null, max: r.max || null, count: r.count || 0 };
+}
+
+// Latest known position per aircraft within (at-windowMs, at].
+export function replayFrame(at, windowMs, limit = 800) {
+  return db
+    .prepare(
+      `SELECT t.hex, t.lat, t.lon, t.alt, t.gs, t.trk, t.callsign, t.src, t.ts
+       FROM tracks t
+       JOIN (SELECT hex, MAX(ts) AS mts FROM tracks WHERE ts > ? AND ts <= ? GROUP BY hex) m
+         ON t.hex = m.hex AND t.ts = m.mts
+       LIMIT ?`
+    )
+    .all(at - windowMs, at, limit);
+}
+
+export function pruneTracks(retentionDays) {
+  const cutoff = Date.now() - retentionDays * 86400000;
+  db.prepare('DELETE FROM tracks WHERE ts < ?').run(cutoff);
+}
+
+export function tracksCount() {
+  return db.prepare('SELECT COUNT(*) AS c FROM tracks').get().c;
 }

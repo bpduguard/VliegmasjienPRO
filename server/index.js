@@ -12,9 +12,8 @@ import {
   startTracker, snapshot, aircraftDetail, trackerStatus, setTrackerBroadcast
 } from './tracker.js';
 import { setBroadcast, notify } from './notify.js';
-import { streamAircraftFacts, aiAvailable } from './ai.js';
 import { refreshFrequencies, frequenciesMeta } from './freq.js';
-import { airportFreqsInBounds } from './db.js';
+import { airportFreqsInBounds, replayBounds, replayFrame } from './db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 8390;
@@ -72,21 +71,6 @@ app.get('/api/aircraft/:hex/history', (req, res) => {
   res.json({ history: aircraftHistory(req.params.hex) });
 });
 
-app.get('/api/aircraft/:hex/ai', async (req, res) => {
-  res.writeHead(200, {
-    'content-type': 'text/event-stream',
-    'cache-control': 'no-cache',
-    connection: 'keep-alive',
-    'x-accel-buffering': 'no'
-  });
-  const detail = await aircraftDetail(req.params.hex);
-  if (!detail) {
-    res.write(`data: ${JSON.stringify({ error: 'Aircraft no longer tracked.' })}\n\n`);
-    return res.end();
-  }
-  await streamAircraftFacts(detail, res);
-});
-
 // ------------------------------------------------------------------ stats & alerts
 app.get('/api/stats', (req, res) => {
   const days = Math.min(365, Math.max(1, parseInt(req.query.days, 10) || 7));
@@ -100,7 +84,6 @@ app.get('/api/status', (req, res) =>
     ...trackerStatus(),
     planeDb: planeDbMeta(),
     aircraftDb: { count: aircraftDbCount(), error: aircraftDbError() },
-    ai: aiAvailable(),
     version: '1.0.0'
   })
 );
@@ -186,7 +169,6 @@ app.post('/api/config', (req, res) => {
       }
     }
   }
-  if (patch.anthropic?.apiKey && patch.anthropic.apiKey.includes('••')) delete patch.anthropic.apiKey;
   saveConfig(patch);
   res.json(publicConfig());
 });
@@ -337,6 +319,16 @@ app.get('/api/weather/owm/:layer/:z/:x/:y', async (req, res) => {
   } catch {
     res.status(502).end();
   }
+});
+
+// ------------------------------------------------------------------ replay
+app.get('/api/replay/bounds', (req, res) => res.json(replayBounds()));
+
+app.get('/api/replay/frame', (req, res) => {
+  const at = parseInt(req.query.at, 10);
+  if (!Number.isFinite(at)) return res.status(400).json({ error: 'at (ms) required' });
+  const window = Math.min(600000, Math.max(1000, parseInt(req.query.window, 10) || 60000));
+  res.json({ at, aircraft: replayFrame(at, window) });
 });
 
 // ------------------------------------------------------------------ frequencies

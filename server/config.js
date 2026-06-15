@@ -23,6 +23,9 @@ const DEFAULTS = {
   receiver: { lat: null, lon: null },
   // History / statistics retention in days (sightings + daily stats).
   retentionDays: 30,
+  // Replay track-point retention in days. The tracks table is high-volume, so
+  // it gets its own (shorter) retention than the sightings/stats.
+  replayRetentionDays: 3,
   // Trail length per aircraft (number of recorded positions kept in memory).
   trailLength: 120,
   // Notifications
@@ -46,11 +49,6 @@ const DEFAULTS = {
   weather: {
     // RainViewer radar needs no key. OpenWeatherMap layers need a free API key.
     openWeatherMapKey: process.env.OWM_API_KEY || ''
-  },
-  // Anthropic (Claude) — for the AI aircraft lookup.
-  anthropic: {
-    apiKey: process.env.ANTHROPIC_API_KEY || '',
-    model: 'claude-opus-4-8'
   },
   // UI defaults
   ui: { darkMode: true, units: 'metric' }
@@ -80,13 +78,18 @@ export function loadConfig() {
     /* first run */
   }
   config = deepMerge(DEFAULTS, fileCfg);
-  // Env vars always win for secrets/endpoints so docker-compose stays authoritative.
-  if (process.env.DUMP1090_URL) config.dump1090Url = process.env.DUMP1090_URL;
-  if (process.env.SOURCE_MODE) config.source.mode = process.env.SOURCE_MODE;
-  if (process.env.SBS_HOST) config.source.sbsHost = process.env.SBS_HOST;
-  if (process.env.SBS_PORT) config.source.sbsPort = parseInt(process.env.SBS_PORT, 10);
-  if (process.env.ANTHROPIC_API_KEY) config.anthropic.apiKey = process.env.ANTHROPIC_API_KEY;
-  if (process.env.OWM_API_KEY) config.weather.openWeatherMapKey = process.env.OWM_API_KEY;
+  // Environment variables seed the *initial* defaults (see DEFAULTS above, which
+  // read process.env). They must only apply on first run — once a value has been
+  // saved through the UI it lives in config.json and the saved value wins. Applying
+  // env on every load is what made the app "forget" a URL set in the UI after a
+  // restart, because docker-compose always sets DUMP1090_URL (to its default).
+  if (fileCfg.dump1090Url === undefined && process.env.DUMP1090_URL) config.dump1090Url = process.env.DUMP1090_URL;
+  if (fileCfg.source?.mode === undefined && process.env.SOURCE_MODE) config.source.mode = process.env.SOURCE_MODE;
+  if (fileCfg.source?.sbsHost === undefined && process.env.SBS_HOST) config.source.sbsHost = process.env.SBS_HOST;
+  if (fileCfg.source?.sbsPort === undefined && process.env.SBS_PORT) config.source.sbsPort = parseInt(process.env.SBS_PORT, 10);
+  if (fileCfg.weather?.openWeatherMapKey === undefined && process.env.OWM_API_KEY) {
+    config.weather.openWeatherMapKey = process.env.OWM_API_KEY;
+  }
   return config;
 }
 
@@ -108,7 +111,6 @@ export function publicConfig() {
     ...c,
     pushover: { ...c.pushover, token: c.pushover.token ? '••••' : '', user: c.pushover.user ? '••••' : '' },
     discord: { ...c.discord, webhookUrl: c.discord.webhookUrl ? '••••' : '' },
-    anthropic: { model: c.anthropic.model, hasKey: !!c.anthropic.apiKey },
     weather: { hasOwmKey: !!c.weather.openWeatherMapKey }
   };
 }

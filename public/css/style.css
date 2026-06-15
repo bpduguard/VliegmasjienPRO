@@ -185,6 +185,24 @@ button.big { padding: 11px 22px; font-size: 1rem; }
 .leaflet-popup-content-wrapper { border: 1px solid var(--border); }
 .leaflet-popup-content a.leaflet-popup-close-button { color: var(--muted); }
 
+.leg-cap { font-size: 0.72rem; margin: 2px 0 4px; }
+
+/* replay bar */
+#replay-bar {
+  position: absolute; left: 50%; transform: translateX(-50%); bottom: 12px;
+  width: min(820px, calc(100% - 24px)); z-index: 1100;
+  background: var(--panel); border: 1px solid var(--accent); border-radius: 12px;
+  padding: 10px 14px; backdrop-filter: blur(8px); box-shadow: 0 8px 30px rgba(0,0,0,.5);
+}
+#replay-bar.hidden { display: none; }
+.rb-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.rb-badge { color: #06243a; background: var(--accent); font-weight: 700; font-size: 0.78rem; padding: 3px 9px; border-radius: 99px; }
+#rb-play { min-width: 38px; font-size: 1rem; }
+.rb-clock { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 1.02rem; color: var(--accent); }
+#rb-scrub { width: 100%; margin-top: 10px; accent-color: var(--accent); }
+.toolbtn { padding: 5px 11px; border-radius: 8px; font-size: 0.86rem; }
+#replay-open.active { background: var(--accent); color: #06243a; border-color: var(--accent); font-weight: 600; }
+
 /* legend */
 #legend { position: absolute; left: 50%; transform: translateX(-50%); bottom: 12px; z-index: 1000; text-align: center; }
 #legend-body { text-align: left; }
@@ -251,12 +269,6 @@ button.big { padding: 11px 22px; font-size: 1rem; }
 .zone-line { display: flex; justify-content: space-between; padding: 4px 0; font-size: 0.88rem; }
 .zone-line .in { color: var(--ok); font-weight: 600; }
 .zone-line .eta { color: var(--accent2); }
-
-.ai-output {
-  margin-top: 10px; background: rgba(255,255,255,0.04); border-radius: 10px;
-  padding: 12px; font-size: 0.9rem; line-height: 1.55; white-space: pre-wrap;
-}
-.ai-output.hidden { display: none; }
 
 .hist-line { font-size: 0.85rem; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
 

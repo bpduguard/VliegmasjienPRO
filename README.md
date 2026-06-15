@@ -23,8 +23,10 @@ Designed to run in Docker on a **Raspberry Pi 5** (arm64) next to your existing 
 - 📈 **Statistics** with a configurable retention period: aircraft per day, top types, top airlines,
   categories — and a per-aircraft **sighting history** ("seen before") when you click a plane
 - 📷 **Aircraft photos** via planespotters.net
-- 🤖 **Claude AI lookup**: select a plane and ask Claude for facts about the airframe, operator and the
-  current flight (uses the Anthropic API with web search)
+- 🎨 **Reception-source colours**: aircraft-list rows are tinted by how the position was received
+  (ADS-B, ADS-R, TIS-B, MLAT, Mode-S, ADS-C) — see the on-map Legend
+- ⏪ **Replay**: pick a day and replay the recorded traffic on the map at 1×–600× speed, with a
+  scrubber and play/pause
 - 📻 **Communication-frequencies layer**: a toggleable map overlay showing airport radio frequencies
   (tower, ground, approach, ATIS…) for airports near your view, from the public-domain
   [OurAirports](https://ourairports.com/data/) dataset — downloaded once, then served locally and offline
@@ -38,8 +40,6 @@ cd VliegmasjienPRO
 
 # point it at your dump1090 (adjust IP/port to your setup):
 export DUMP1090_URL=http://192.168.1.50:8080/data/aircraft.json
-# optional: enable the Claude AI lookup
-export ANTHROPIC_API_KEY=sk-ant-...
 
 docker compose up -d --build
 ```
@@ -102,18 +102,22 @@ survive updates and rebuilds.
 
 ## Configuration
 
-Everything can be configured in the web UI (*Settings* tab). Environment variables override the saved
-config for secrets and the receiver URL:
+Everything can be configured in the web UI (*Settings* tab). Environment variables only **seed the
+first run** — once you save a value in Settings it lives in the data volume and is what's used on every
+later start, so the app never "forgets" a URL you set in the UI:
 
 | Variable | Purpose |
 |---|---|
-| `DUMP1090_URL` | URL of `aircraft.json` (default source) |
+| `DUMP1090_URL` | Initial URL of `aircraft.json` (default source) |
 | `SOURCE_MODE` | `json` (default) or `sbs` for BaseStation TCP |
 | `SBS_HOST` / `SBS_PORT` | Beasthost address + SBS port (default 30003) when `SOURCE_MODE=sbs` |
-| `ANTHROPIC_API_KEY` | Enables the Claude AI aircraft lookup |
 | `OWM_API_KEY` | Optional OpenWeatherMap key for the cloud layer (rain radar needs no key) |
 | `PORT` | HTTP port (default 8390) |
 | `DATA_DIR` | Data directory (default `/data` in Docker) |
+
+> **Changing a URL later:** because the saved value wins, editing the env var after the first run has no
+> effect — change it in *Settings → Receiver* instead (or delete `config.json` from the data volume to
+> re-seed from the environment).
 
 ## External services used
 
@@ -125,7 +129,6 @@ config for secrets and the receiver URL:
 | [OurAirports](https://ourairports.com/data/) | airport communication frequencies (map layer) | no |
 | [RainViewer](https://www.rainviewer.com) | rain radar overlay | no |
 | [OpenWeatherMap](https://openweathermap.org) | extra cloud layer (optional) | free key |
-| [Anthropic](https://platform.claude.com) | Claude AI aircraft lookup (optional) | API key |
 
 Notes on route/ETA data: adsbdb provides the airports for a callsign, not the airline's schedule. The
 **ETA at destination** is computed live from position, ground speed and remaining great-circle
@@ -171,6 +174,20 @@ The **📻 Freqs** toggle on the map shows airport radio frequencies near your c
 time, download the data in *Settings → Communication frequencies → Download frequencies now* (a few MB
 from OurAirports); after that it's stored locally and works offline. Pan/zoom and the airports in view
 update automatically; click a 📻 pin to see that airport's tower/ground/approach/ATIS/etc. frequencies.
+
+### Reception-source colours
+
+Each aircraft-list row (and a badge in the detail panel) is coloured by **how its position was received**:
+ADS-B, ADS-R, TIS-B, MLAT, Mode-S or ADS-C — derived from the `type`/`mlat` fields dump1090/readsb
+report. The on-map **Legend** explains the colours.
+
+### Replay
+
+Click **⏮ Replay** on the map to scrub through a past day. The app continuously records a position
+point per aircraft (every ~8s) into the data volume; pick a **day**, hit play, and choose a **speed**
+(1×–600×). A scrubber lets you jump to any time, and **✕ Live** returns to the live map. Replay history
+is kept for `replayRetentionDays` (default **3 days**, configurable) since it's far higher-volume than
+the statistics log — bump it up if you have the disk for it.
 
 ### Units & icons
 

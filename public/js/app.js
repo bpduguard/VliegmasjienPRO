@@ -227,6 +227,21 @@ $('#freq-toggle').addEventListener('change', async (e) => {
 });
 map.on('moveend', () => { if (state.freqOn) loadFrequencies(); });
 
+// ----------------------------------------------------------------- reception source
+// How the position was picked up (colours roughly match tar1090's source legend).
+const SOURCE_INFO = {
+  adsb:  { label: 'ADS-B',  color: '#22c55e' },
+  uat:   { label: 'UAT',    color: '#10b981' },
+  adsr:  { label: 'ADS-R',  color: '#84cc16' },
+  tisb:  { label: 'TIS-B',  color: '#a855f7' },
+  mlat:  { label: 'MLAT',   color: '#eab308' },
+  modes: { label: 'Mode-S', color: '#38bdf8' },
+  adsc:  { label: 'ADS-C',  color: '#14b8a6' },
+  other: { label: 'Other',  color: '#64748b' }
+};
+const sourceColor = (s) => (SOURCE_INFO[s] || SOURCE_INFO.other).color;
+const sourceLabel = (s) => (SOURCE_INFO[s] || SOURCE_INFO.other).label;
+
 // ----------------------------------------------------------------- plane icons
 const CLASS_COLORS = {
   airline: '#38bdf8',
@@ -299,6 +314,9 @@ function classifiedVisible(ac) {
 }
 
 function renderAircraft() {
+  // During replay we freeze the live planes and show historical frames instead;
+  // keep the list updating with live data though.
+  if (state.replay && state.replay.active) { renderList(); return; }
   const live = new Set();
   let visibleCount = 0;
   for (const ac of state.aircraft.values()) {
@@ -372,7 +390,8 @@ const LIST_COLUMNS = [
   ['gs', () => unitLabels().spd, (ac) => fmt.spdN(ac.gs)],
   ['vr', () => unitLabels().vr, (ac) => fmt.vrN(ac.vr)],
   ['distKm', 'Dist km', (ac) => ac.distKm ?? '—'],
-  ['squawk', 'Squawk', (ac) => ac.squawk || '—']
+  ['squawk', 'Squawk', (ac) => ac.squawk || '—'],
+  ['source', 'Source', (ac) => `<span style="color:${sourceColor(ac.source)}">${sourceLabel(ac.source)}</span>`]
 ];
 
 function sortRows(rows) {
@@ -396,9 +415,10 @@ function rowClasses(ac, base) {
   ].join(' ');
 }
 
-function renderList(visibleCount) {
-  $('#ac-count').textContent = `${visibleCount} aircraft`;
-  const rows = sortRows([...state.aircraft.values()].filter(classifiedVisible)).slice(0, 250);
+function renderList() {
+  const all = [...state.aircraft.values()].filter(classifiedVisible);
+  $('#ac-count').textContent = `${all.length} aircraft`;
+  const rows = sortRows(all).slice(0, 250);
 
   if (state.listExpanded) {
     const { key, dir } = state.listSort;
@@ -410,7 +430,7 @@ function renderList(visibleCount) {
     ).join('');
     const body = rows
       .map(
-        (ac) => `<tr class="${rowClasses(ac, '')}" data-hex="${ac.hex}">
+        (ac) => `<tr class="${rowClasses(ac, '')}" data-hex="${ac.hex}" style="box-shadow: inset 4px 0 0 ${sourceColor(ac.source)}">
           ${LIST_COLUMNS.map(([, , render]) => `<td>${render(ac)}</td>`).join('')}
         </tr>`
       )
@@ -422,7 +442,7 @@ function renderList(visibleCount) {
   $('#ac-list').innerHTML = rows
     .slice(0, 150)
     .map(
-      (ac) => `<div class="${rowClasses(ac, 'ac-row')}" data-hex="${ac.hex}">
+      (ac) => `<div class="${rowClasses(ac, 'ac-row')}" data-hex="${ac.hex}" style="border-left:4px solid ${sourceColor(ac.source)}" title="Source: ${sourceLabel(ac.source)}">
         <div>
           <div class="cs">${ac.flight || ac.registration || ac.hex.toUpperCase()}</div>
           <div class="meta">${ac.type || ac.typeName || ''}</div>
@@ -454,6 +474,134 @@ $('#ac-list-expand').addEventListener('click', () => {
   renderAircraft();
 });
 
+// ----------------------------------------------------------------- replay
+const replayLayer = L.layerGroup();
+let replayRaf = null;
+state.replay = { active: false, playing: false, vt: 0, dayStart: 0, dayEnd: 0, speed: 30, lastWall: 0, lastFetch: 0, fetchToken: 0 };
+
+function clearLiveMarkers() {
+  for (const [, entry] of markers) {
+    map.removeLayer(entry.marker);
+    if (entry.trail) map.removeLayer(entry.trail);
+  }
+  markers.clear();
+}
+
+function ymdLocal(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+async function openReplay() {
+  const bounds = await (await fetch('/api/replay/bounds')).json();
+  if (!bounds.count) {
+    toast({ kind: 'test', title: 'No replay data yet', message: 'Track recording has just started — let it run a while, then try again.' });
+    return;
+  }
+  state.replay.active = true;
+  state.replay.bounds = bounds;
+  $('#replay-open').classList.add('active');
+  $('#replay-bar').classList.remove('hidden');
+  clearLiveMarkers();
+  replayLayer.addTo(map);
+  // default to the day of the most recent data (usually today)
+  const last = new Date(bounds.max);
+  $('#rb-date').value = ymdLocal(last);
+  $('#rb-date').max = ymdLocal(new Date());
+  setReplayDay($('#rb-date').value);
+}
+
+function closeReplay() {
+  pauseReplay();
+  state.replay.active = false;
+  $('#replay-open').classList.remove('active');
+  $('#replay-bar').classList.add('hidden');
+  map.removeLayer(replayLayer);
+  replayLayer.clearLayers();
+  renderAircraft(); // resume live
+}
+
+function setReplayDay(ymd) {
+  const [y, m, d] = ymd.split('-').map(Number);
+  const start = new Date(y, m - 1, d, 0, 0, 0, 0).getTime();
+  state.replay.dayStart = start;
+  state.replay.dayEnd = start + 86400000;
+  // start at the beginning of available data within the day
+  state.replay.vt = Math.min(state.replay.dayEnd, Math.max(start, state.replay.bounds.min));
+  updateScrub();
+  fetchReplayFrame();
+}
+
+function updateScrub() {
+  const { dayStart, dayEnd, vt } = state.replay;
+  const frac = (vt - dayStart) / (dayEnd - dayStart);
+  $('#rb-scrub').value = String(Math.round(Math.max(0, Math.min(1, frac)) * 1000));
+  $('#rb-clock').textContent = new Date(vt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+async function fetchReplayFrame() {
+  const token = ++state.replay.fetchToken;
+  state.replay.lastFetch = performance.now();
+  const at = Math.round(state.replay.vt);
+  try {
+    const { aircraft } = await (await fetch(`/api/replay/frame?at=${at}&window=60000`)).json();
+    if (token !== state.replay.fetchToken || !state.replay.active) return;
+    replayLayer.clearLayers();
+    for (const a of aircraft || []) {
+      const color = sourceColor(a.src);
+      const icon = L.divIcon({ className: 'plane-icon', html: planeSvg('airliner', color, a.trk, false), iconSize: [26, 26], iconAnchor: [13, 13] });
+      const m = L.marker([a.lat, a.lon], { icon }).addTo(replayLayer);
+      const label = a.callsign || a.hex.toUpperCase();
+      if (state.showLabels) m.bindTooltip(label, { permanent: true, direction: 'right', offset: [14, 0], className: 'plane-label' });
+      m.bindPopup(`<b>${label}</b><br>${fmt.alt(a.alt)} · ${fmt.spdN(a.gs)} ${unitLabels().spd.split(' ')[1] || ''}<br>${sourceLabel(a.src)}`);
+    }
+    $('#rb-count').textContent = `${(aircraft || []).length} aircraft`;
+  } catch { /* ignore */ }
+}
+
+function replayLoop() {
+  if (!state.replay.playing) return;
+  const wall = performance.now();
+  const dt = wall - state.replay.lastWall;
+  state.replay.lastWall = wall;
+  state.replay.vt += dt * state.replay.speed;
+  if (state.replay.vt >= state.replay.dayEnd) {
+    state.replay.vt = state.replay.dayEnd;
+    updateScrub();
+    fetchReplayFrame();
+    pauseReplay();
+    return;
+  }
+  updateScrub();
+  if (wall - state.replay.lastFetch > 350) fetchReplayFrame();
+  replayRaf = requestAnimationFrame(replayLoop);
+}
+
+function playReplay() {
+  if (state.replay.vt >= state.replay.dayEnd) setReplayDay($('#rb-date').value);
+  state.replay.playing = true;
+  state.replay.lastWall = performance.now();
+  $('#rb-play').textContent = '⏸';
+  replayLoop();
+}
+function pauseReplay() {
+  state.replay.playing = false;
+  if (replayRaf) cancelAnimationFrame(replayRaf);
+  $('#rb-play').textContent = '▶';
+}
+
+$('#replay-open').addEventListener('click', () => { state.replay.active ? closeReplay() : openReplay(); });
+$('#rb-close').addEventListener('click', closeReplay);
+$('#rb-play').addEventListener('click', () => { state.replay.playing ? pauseReplay() : playReplay(); });
+$('#rb-speed').addEventListener('change', (e) => { state.replay.speed = parseInt(e.target.value, 10) || 30; });
+$('#rb-date').addEventListener('change', (e) => { pauseReplay(); setReplayDay(e.target.value); });
+$('#rb-scrub').addEventListener('input', (e) => {
+  pauseReplay();
+  const frac = parseInt(e.target.value, 10) / 1000;
+  state.replay.vt = state.replay.dayStart + frac * (state.replay.dayEnd - state.replay.dayStart);
+  $('#rb-clock').textContent = new Date(state.replay.vt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  fetchReplayFrame();
+});
+
 // ----------------------------------------------------------------- filters
 $$('.filt').forEach((b) =>
   b.addEventListener('click', () => {
@@ -474,8 +622,6 @@ async function selectAircraft(hex, pan = false) {
   state.follow = false;
   $('#d-follow').classList.remove('active');
   $('#detail').classList.remove('hidden');
-  $('#d-ai').classList.add('hidden');
-  $('#d-ai').textContent = '';
   const ac = state.aircraft.get(hex);
   if (ac && pan && ac.lat != null) map.panTo([ac.lat, ac.lon]);
   renderAircraft();
@@ -493,6 +639,7 @@ function updateDetailLive(ac) {
 
   const badges = [];
   badges.push(`<span class="badge ${badgeClass(ac)}">${ac.classification}</span>`);
+  if (ac.source) badges.push(`<span class="badge" style="border-color:${sourceColor(ac.source)};color:${sourceColor(ac.source)}">${sourceLabel(ac.source)}</span>`);
   if (ac.emergency) badges.push(`<span class="badge emerg">EMERGENCY ${ac.squawk || ''}</span>`);
   if (ac.padbCategory) badges.push(`<span class="badge">${ac.padbCategory}</span>`);
   (ac.padbTags || []).forEach((t) => badges.push(`<span class="badge">${t}</span>`));
@@ -629,30 +776,6 @@ $('#d-watch-add').addEventListener('click', async () => {
     })
   });
   toast({ kind: 'watchlist', title: 'Added to watchlist', message: ac.flight || ac.hex.toUpperCase() });
-});
-
-// AI lookup (SSE stream)
-let aiSource = null;
-$('#d-ai-btn').addEventListener('click', () => {
-  const hex = state.selected;
-  if (!hex) return;
-  if (aiSource) aiSource.close();
-  const out = $('#d-ai');
-  out.classList.remove('hidden');
-  out.textContent = '🤖 Claude is looking up this aircraft…\n\n';
-  let started = false;
-  aiSource = new EventSource(`/api/aircraft/${hex}/ai`);
-  aiSource.onmessage = (e) => {
-    const data = JSON.parse(e.data);
-    if (data.text) {
-      if (!started) { out.textContent = ''; started = true; }
-      out.textContent += data.text;
-      out.scrollTop = out.scrollHeight;
-    }
-    if (data.error) { out.textContent = '⚠️ ' + data.error; aiSource.close(); }
-    if (data.done) aiSource.close();
-  };
-  aiSource.onerror = () => aiSource.close();
 });
 
 // ----------------------------------------------------------------- SSE live feed
@@ -898,9 +1021,6 @@ async function loadSettings() {
   $('#s-notify-emerg').checked = c.notifyEmergency;
   $('#s-owm').value = '';
   $('#s-owm').placeholder = c.weather.hasOwmKey ? 'key configured ✓ (enter to replace)' : '(optional)';
-  $('#s-anthropic').value = '';
-  $('#s-anthropic').placeholder = c.anthropic.hasKey ? 'key configured ✓ (enter to replace)' : 'sk-ant-…';
-  $('#s-anthropic-status').textContent = c.anthropic.hasKey ? `✓ AI enabled (${c.anthropic.model})` : 'AI disabled — no key';
   const meta = await (await fetch('/api/planedb/meta')).json();
   $('#s-padb-meta').textContent = meta.rows
     ? `${meta.rows.toLocaleString()} aircraft in DB, updated ${meta.updatedAt ? fmt.dateTime(meta.updatedAt) : '(bundled)'}`
@@ -976,7 +1096,6 @@ $('#s-save').addEventListener('click', async () => {
     ui: { units: $('#s-units').value }
   };
   if ($('#s-owm').value.trim()) patch.weather = { openWeatherMapKey: $('#s-owm').value.trim() };
-  if ($('#s-anthropic').value.trim()) patch.anthropic = { apiKey: $('#s-anthropic').value.trim() };
   await fetch('/api/config', {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch)
   });
