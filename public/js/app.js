@@ -131,6 +131,21 @@ $('#labels-toggle').addEventListener('change', (e) => {
   renderAircraft();
 });
 
+// layers dropdown (Weather / Frequencies / Labels)
+function refreshLayersBtn() {
+  const anyOn = $('#weather-toggle').checked || $('#freq-toggle').checked;
+  $('#layers-btn').classList.toggle('has-active', anyOn);
+}
+$('#layers-btn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  $('#layers-menu').classList.toggle('hidden');
+});
+// close the menu when clicking elsewhere
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.menu')) $('#layers-menu').classList.add('hidden');
+});
+['#weather-toggle', '#freq-toggle'].forEach((sel) => $(sel).addEventListener('change', refreshLayersBtn));
+
 // legend
 $('#legend-toggle').addEventListener('click', () => {
   const body = $('#legend-body');

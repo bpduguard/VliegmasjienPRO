@@ -27,18 +27,28 @@
     <div id="map"></div>
 
     <div id="filterbar">
-      <button class="filt active" data-filter="all">All</button>
-      <button class="filt" data-filter="airline">✈ Airlines</button>
-      <button class="filt" data-filter="military">🪖 Military</button>
-      <button class="filt" data-filter="private">🛩 Private</button>
-      <button class="filt" data-filter="business">💼 Business</button>
-      <button class="filt" data-filter="emergency">🚨 Emergency</button>
-      <input id="airline-filter" type="text" placeholder="Airline / callsign filter…" />
+      <div class="seg" id="filter-group">
+        <button class="filt active" data-filter="all">All</button>
+        <button class="filt" data-filter="airline" title="Airlines"><span class="fi">✈</span></button>
+        <button class="filt" data-filter="military" title="Military"><span class="fi">🪖</span></button>
+        <button class="filt" data-filter="private" title="Private / general aviation"><span class="fi">🛩</span></button>
+        <button class="filt" data-filter="business" title="Business jets"><span class="fi">💼</span></button>
+        <button class="filt" data-filter="emergency" title="Emergency"><span class="fi">🚨</span></button>
+      </div>
+      <div class="searchwrap">
+        <span class="si">🔍</span>
+        <input id="airline-filter" type="text" placeholder="Airline / callsign…" />
+      </div>
       <span class="spacer"></span>
       <button id="replay-open" class="toolbtn" title="Replay a past day on the map">⏮ Replay</button>
-      <label class="toggle"><input type="checkbox" id="weather-toggle" /> 🌦 Weather</label>
-      <label class="toggle"><input type="checkbox" id="freq-toggle" /> 📻 Freqs</label>
-      <label class="toggle"><input type="checkbox" id="labels-toggle" checked /> Labels</label>
+      <div class="menu">
+        <button id="layers-btn" class="toolbtn" title="Map layers">⧉ Layers ▾</button>
+        <div id="layers-menu" class="menu-pop hidden">
+          <label class="menu-item"><input type="checkbox" id="weather-toggle" /> <span>🌦 Weather radar</span></label>
+          <label class="menu-item"><input type="checkbox" id="freq-toggle" /> <span>📻 Frequencies</span></label>
+          <label class="menu-item"><input type="checkbox" id="labels-toggle" checked /> <span>🏷 Aircraft labels</span></label>
+        </div>
+      </div>
     </div>
 
     <div id="legend">

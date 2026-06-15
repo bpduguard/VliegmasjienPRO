@@ -99,20 +99,44 @@ button.big { padding: 11px 22px; font-size: 1rem; }
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  gap: 6px;
+  gap: 8px;
   align-items: center;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 7px 10px;
+  padding: 6px 8px;
   z-index: 1000;
   backdrop-filter: blur(8px);
   max-width: calc(100% - 24px);
   flex-wrap: wrap;
 }
-.filt { padding: 5px 11px; border-radius: 8px; font-size: 0.86rem; }
-.filt.active { background: var(--accent); color: #06243a; border-color: var(--accent); font-weight: 600; }
-#airline-filter { width: 170px; }
+
+/* segmented filter group */
+.seg { display: inline-flex; background: var(--bg2); border: 1px solid var(--border); border-radius: 9px; padding: 2px; gap: 2px; }
+.seg .filt { border: none; background: transparent; padding: 5px 9px; border-radius: 7px; font-size: 0.86rem; line-height: 1.1; }
+.seg .filt:hover { background: rgba(255,255,255,0.07); border: none; }
+.seg .filt.active { background: var(--accent); color: #06243a; font-weight: 600; }
+.seg .filt .fi { font-size: 0.98rem; }
+
+/* search field with icon */
+.searchwrap { display: inline-flex; align-items: center; gap: 5px; background: var(--bg2); border: 1px solid var(--border); border-radius: 9px; padding: 0 8px; }
+.searchwrap .si { color: var(--muted); font-size: 0.85rem; }
+#airline-filter { width: 160px; border: none; background: transparent; padding: 6px 2px; }
+#airline-filter:focus { outline: none; }
+
+/* layers dropdown */
+.menu { position: relative; }
+.menu-pop {
+  position: absolute; top: calc(100% + 6px); right: 0; min-width: 180px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+  padding: 6px; display: flex; flex-direction: column; gap: 2px;
+  box-shadow: 0 8px 30px rgba(0,0,0,.5); backdrop-filter: blur(8px); z-index: 1200;
+}
+.menu-pop.hidden { display: none; }
+.menu-item { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 7px; cursor: pointer; white-space: nowrap; color: var(--text); }
+.menu-item:hover { background: rgba(255,255,255,0.06); }
+.menu-item input { accent-color: var(--accent); }
+#layers-btn.has-active { border-color: var(--accent); color: var(--accent); }
 
 #ac-list-panel {
   position: absolute;
