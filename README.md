@@ -27,6 +27,9 @@ Designed to run in Docker on a **Raspberry Pi 5** (arm64) next to your existing 
   (ADS-B, ADS-R, TIS-B, MLAT, Mode-S, ADS-C) — see the on-map Legend
 - ⏪ **Replay**: pick a day and replay the recorded traffic on the map at 1×–600× speed, with a
   scrubber and play/pause
+- ⊚ **Distance rings** overlay (10/25/50/100/200/400 km around the receiver) and 🏳 **country flags**
+  per aircraft in the list (from the ICAO address). The app **version** is shown in Settings
+  (see [CHANGELOG.md](CHANGELOG.md))
 - 📻 **Communication-frequencies layer**: a toggleable map overlay showing airport radio frequencies
   (tower, ground, approach, ATIS…) for airports near your view, from the public-domain
   [OurAirports](https://ourairports.com/data/) dataset — downloaded once, then served locally and offline

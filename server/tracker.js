@@ -10,6 +10,7 @@ import {
 import { upsertSighting, pruneOldData, insertTracks, pruneTracks } from './db.js';
 import { notify } from './notify.js';
 import { ensureSbs, stopSbs, sbsSnapshot, sbsStatus } from './sbs.js';
+import { icaoToCountry } from './country.js';
 
 // hex -> live aircraft object
 const aircraft = new Map();
@@ -418,6 +419,7 @@ export function snapshot() {
       operator: ac.operator || null,
       airline: ac.airline || null,
       airlineCallsign: ac.airlineCallsign || null,
+      country: icaoToCountry(ac.hex),
       classification: ac.classification,
       source: ac.source || null,
       padbCategory: ac.padbCategory || null,

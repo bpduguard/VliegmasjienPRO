@@ -133,7 +133,7 @@ $('#labels-toggle').addEventListener('change', (e) => {
 
 // layers dropdown (Weather / Frequencies / Labels)
 function refreshLayersBtn() {
-  const anyOn = $('#weather-toggle').checked || $('#freq-toggle').checked;
+  const anyOn = $('#weather-toggle').checked || $('#freq-toggle').checked || $('#rings-toggle').checked;
   $('#layers-btn').classList.toggle('has-active', anyOn);
 }
 $('#layers-btn').addEventListener('click', (e) => {
@@ -176,6 +176,49 @@ function drawZones() {
       .addTo(map)
   );
 }
+
+// ----------------------------------------------------------------- distance rings
+const RING_KM = [10, 25, 50, 100, 200, 400];
+const ringsLayer = L.layerGroup();
+
+function drawRings() {
+  ringsLayer.clearLayers();
+  const r = state.receiver;
+  if (!r || r.lat == null) return;
+  for (const km of RING_KM) {
+    L.circle([r.lat, r.lon], {
+      radius: km * 1000,
+      color: '#64748b',
+      weight: 1,
+      opacity: 0.55,
+      fill: false,
+      dashArray: '3 5',
+      interactive: false
+    }).addTo(ringsLayer);
+    // km label at the top of each ring
+    const labelLat = r.lat + km / 111.32;
+    L.marker([labelLat, r.lon], {
+      interactive: false,
+      icon: L.divIcon({ className: 'ring-label', html: `${km} km`, iconSize: [40, 14], iconAnchor: [20, 7] })
+    }).addTo(ringsLayer);
+  }
+}
+
+$('#rings-toggle').addEventListener('change', (e) => {
+  state.ringsOn = e.target.checked;
+  if (state.ringsOn) {
+    if (state.receiver?.lat == null) {
+      e.target.checked = false; state.ringsOn = false;
+      toast({ kind: 'test', title: 'No receiver location', message: 'Set the receiver lat/lon in Settings to use distance rings.' });
+      return;
+    }
+    drawRings();
+    ringsLayer.addTo(map);
+  } else {
+    map.removeLayer(ringsLayer);
+  }
+  refreshLayersBtn();
+});
 
 // ----------------------------------------------------------------- frequencies layer
 const freqLayer = L.layerGroup();
@@ -256,6 +299,13 @@ const SOURCE_INFO = {
 };
 const sourceColor = (s) => (SOURCE_INFO[s] || SOURCE_INFO.other).color;
 const sourceLabel = (s) => (SOURCE_INFO[s] || SOURCE_INFO.other).label;
+
+// ISO 3166-1 alpha-2 country code -> flag emoji (regional indicators).
+function flagEmoji(code) {
+  if (!code || code.length !== 2) return '';
+  const base = 0x1f1e6;
+  return String.fromCodePoint(base + code.charCodeAt(0) - 65, base + code.charCodeAt(1) - 65);
+}
 
 // Reception-source filter: which sources are shown (default: all).
 state.sourceEnabled = new Set(Object.keys(SOURCE_INFO));
@@ -436,7 +486,7 @@ state.listSort = { key: 'distKm', dir: 1 };
 
 // label can be a string or a function (for unit-dependent headers).
 const LIST_COLUMNS = [
-  ['flight', 'Callsign', (ac) => ac.flight || ac.registration || ac.hex.toUpperCase()],
+  ['flight', 'Callsign', (ac) => `${ac.country ? `<span class="flag" title="${ac.country}">${flagEmoji(ac.country)}</span> ` : ''}${ac.flight || ac.registration || ac.hex.toUpperCase()}`],
   ['registration', 'Reg', (ac) => ac.registration || '—'],
   ['type', 'Type', (ac) => ac.type || '—'],
   ['airline', 'Airline / operator', (ac) => ac.airline || ac.operator || '—'],
@@ -498,7 +548,7 @@ function renderList() {
     .map(
       (ac) => `<div class="${rowClasses(ac, 'ac-row')}" data-hex="${ac.hex}" style="border-left:4px solid ${sourceColor(ac.source)}" title="Source: ${sourceLabel(ac.source)}">
         <div>
-          <div class="cs">${ac.flight || ac.registration || ac.hex.toUpperCase()}</div>
+          <div class="cs">${ac.country ? `<span class="flag" title="${ac.country}">${flagEmoji(ac.country)}</span> ` : ''}${ac.flight || ac.registration || ac.hex.toUpperCase()}</div>
           <div class="meta">${ac.type || ac.typeName || ''}</div>
         </div>
         <div class="meta">${fmt.alt(ac.alt)}<br>${ac.distKm != null ? ac.distKm + ' km' : ''}</div>
@@ -849,6 +899,7 @@ function connectStream() {
       receiverMarker = L.circleMarker([snap.receiver.lat, snap.receiver.lon], {
         radius: 6, color: '#38bdf8', fillOpacity: 0.9
       }).bindTooltip('Receiver').addTo(map);
+      if (state.ringsOn) drawRings(); // receiver now known
     }
     renderAircraft();
   });
@@ -1080,6 +1131,7 @@ async function loadSettings() {
     ? `${meta.rows.toLocaleString()} aircraft in DB, updated ${meta.updatedAt ? fmt.dateTime(meta.updatedAt) : '(bundled)'}`
     : 'Database not downloaded yet';
   const status = await (await fetch('/api/status')).json();
+  $('#s-version').textContent = 'v' + (status.version || '?');
   const acdb = status.aircraftDb || {};
   $('#s-acdb-meta').innerHTML = `${(acdb.count || 0).toLocaleString()} aircraft cached locally`
     + (acdb.error ? ` · <span style="color:var(--danger)">lookup problem: ${acdb.error}</span>` : ' · auto-filling as aircraft are seen');

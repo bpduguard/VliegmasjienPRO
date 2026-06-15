@@ -14,6 +14,7 @@ import {
 import { setBroadcast, notify } from './notify.js';
 import { refreshFrequencies, frequenciesMeta } from './freq.js';
 import { airportFreqsInBounds, replayBounds, replayFrame } from './db.js';
+import { VERSION } from './version.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 8390;
@@ -84,7 +85,7 @@ app.get('/api/status', (req, res) =>
     ...trackerStatus(),
     planeDb: planeDbMeta(),
     aircraftDb: { count: aircraftDbCount(), error: aircraftDbError() },
-    version: '1.0.0'
+    version: VERSION
   })
 );
 
