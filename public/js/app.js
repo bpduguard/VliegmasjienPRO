@@ -142,7 +142,7 @@ $('#layers-btn').addEventListener('click', (e) => {
 });
 // close the menu when clicking elsewhere
 document.addEventListener('click', (e) => {
-  if (!e.target.closest('.menu')) $('#layers-menu').classList.add('hidden');
+  if (!e.target.closest('.menu')) $$('.menu-pop').forEach((m) => m.classList.add('hidden'));
 });
 ['#weather-toggle', '#freq-toggle'].forEach((sel) => $(sel).addEventListener('change', refreshLayersBtn));
 
@@ -257,6 +257,44 @@ const SOURCE_INFO = {
 const sourceColor = (s) => (SOURCE_INFO[s] || SOURCE_INFO.other).color;
 const sourceLabel = (s) => (SOURCE_INFO[s] || SOURCE_INFO.other).label;
 
+// Reception-source filter: which sources are shown (default: all).
+state.sourceEnabled = new Set(Object.keys(SOURCE_INFO));
+
+(function buildSourceMenu() {
+  const menu = $('#source-menu');
+  menu.innerHTML =
+    Object.entries(SOURCE_INFO)
+      .map(
+        ([k, v]) =>
+          `<label class="menu-item"><input type="checkbox" data-src="${k}" checked>
+             <span><span class="leg-dot" style="background:${v.color}"></span> ${v.label}</span></label>`
+      )
+      .join('') +
+    `<div class="menu-actions"><button id="src-all">All</button><button id="src-none">None</button></div>`;
+
+  function syncFromMenu() {
+    state.sourceEnabled = new Set(
+      [...menu.querySelectorAll('input[data-src]')].filter((c) => c.checked).map((c) => c.dataset.src)
+    );
+    $('#source-btn').classList.toggle('has-active', state.sourceEnabled.size < Object.keys(SOURCE_INFO).length);
+    renderAircraft();
+  }
+  menu.querySelectorAll('input[data-src]').forEach((c) => c.addEventListener('change', syncFromMenu));
+  $('#src-all').addEventListener('click', () => {
+    menu.querySelectorAll('input[data-src]').forEach((c) => (c.checked = true));
+    syncFromMenu();
+  });
+  $('#src-none').addEventListener('click', () => {
+    menu.querySelectorAll('input[data-src]').forEach((c) => (c.checked = false));
+    syncFromMenu();
+  });
+})();
+
+$('#source-btn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  $('#source-menu').classList.toggle('hidden');
+});
+
 // ----------------------------------------------------------------- plane icons
 const CLASS_COLORS = {
   airline: '#38bdf8',
@@ -320,6 +358,7 @@ function classifiedVisible(ac) {
     if (state.filter === 'emergency' && !ac.emergency) return false;
     if (state.filter !== 'emergency' && ac.classification !== state.filter) return false;
   }
+  if (state.sourceEnabled && !state.sourceEnabled.has(ac.source || 'other')) return false;
   if (state.airlineQuery) {
     const q = state.airlineQuery.toLowerCase();
     const hay = `${ac.airline || ''} ${ac.airlineCallsign || ''} ${ac.flight || ''} ${ac.operator || ''}`.toLowerCase();

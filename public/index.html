@@ -39,7 +39,11 @@
         <span class="si">🔍</span>
         <input id="airline-filter" type="text" placeholder="Airline / callsign…" />
       </div>
-      <span class="spacer"></span>
+      <div class="bar-sep"></div>
+      <div class="menu">
+        <button id="source-btn" class="toolbtn" title="Filter by reception source (ADS-B, MLAT, …)">📡 Source ▾</button>
+        <div id="source-menu" class="menu-pop hidden"></div>
+      </div>
       <button id="replay-open" class="toolbtn" title="Replay a past day on the map">⏮ Replay</button>
       <div class="menu">
         <button id="layers-btn" class="toolbtn" title="Map layers">⧉ Layers ▾</button>

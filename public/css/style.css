@@ -107,6 +107,7 @@ button.big { padding: 11px 22px; font-size: 1rem; }
   padding: 6px 8px;
   z-index: 1000;
   backdrop-filter: blur(8px);
+  width: max-content;
   max-width: calc(100% - 24px);
   flex-wrap: wrap;
 }
@@ -124,6 +125,9 @@ button.big { padding: 11px 22px; font-size: 1rem; }
 #airline-filter { width: 160px; border: none; background: transparent; padding: 6px 2px; }
 #airline-filter:focus { outline: none; }
 
+/* thin divider between the filter/search cluster and the menu buttons */
+.bar-sep { width: 1px; align-self: stretch; background: var(--border); margin: 2px 2px; }
+
 /* layers dropdown */
 .menu { position: relative; }
 .menu-pop {
@@ -136,7 +140,9 @@ button.big { padding: 11px 22px; font-size: 1rem; }
 .menu-item { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 7px; cursor: pointer; white-space: nowrap; color: var(--text); }
 .menu-item:hover { background: rgba(255,255,255,0.06); }
 .menu-item input { accent-color: var(--accent); }
-#layers-btn.has-active { border-color: var(--accent); color: var(--accent); }
+#layers-btn.has-active, #source-btn.has-active { border-color: var(--accent); color: var(--accent); }
+.menu-actions { display: flex; gap: 6px; padding: 6px 4px 2px; border-top: 1px solid var(--border); margin-top: 4px; }
+.menu-actions button { flex: 1; padding: 4px; font-size: 0.8rem; }
 
 #ac-list-panel {
   position: absolute;

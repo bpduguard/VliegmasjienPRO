@@ -175,11 +175,14 @@ time, download the data in *Settings → Communication frequencies → Download 
 from OurAirports); after that it's stored locally and works offline. Pan/zoom and the airports in view
 update automatically; click a 📻 pin to see that airport's tower/ground/approach/ATIS/etc. frequencies.
 
-### Reception-source colours
+### Reception-source colours & filter (incl. MLAT)
 
 Each aircraft-list row (and a badge in the detail panel) is coloured by **how its position was received**:
 ADS-B, ADS-R, TIS-B, MLAT, Mode-S or ADS-C — derived from the `type`/`mlat` fields dump1090/readsb
-report. The on-map **Legend** explains the colours.
+report. The on-map **Legend** explains the colours, and the **📡 Source ▾** menu lets you show/hide each
+source (e.g. show only MLAT). MLAT traffic appears automatically when your feed provides it (readsb,
+tar1090 or PiAware merge MLAT results into `aircraft.json`); the app can't compute MLAT itself, since
+multilateration needs several time-synced receivers feeding an MLAT server.
 
 ### Replay
 
