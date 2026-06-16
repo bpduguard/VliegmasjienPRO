@@ -2,6 +2,10 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.1.1
+- Switch the list **country flags** from emoji to bundled **SVG images** (`flag-icons`, served
+  locally) so they render correctly on every OS, including Windows.
+
 ## 1.1.0
 - Add a **distance-rings** map layer (10 / 25 / 50 / 100 / 200 / 400 km around the receiver), toggled
   from the Layers menu.

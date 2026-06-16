@@ -28,6 +28,8 @@ app.use(express.json({ limit: '2mb' }));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 // Leaflet is served locally so the app works without internet/CDN access.
 app.use('/vendor/leaflet', express.static(path.join(__dirname, '..', 'node_modules', 'leaflet', 'dist')));
+// Bundled SVG country flags (served locally so they render everywhere incl. Windows).
+app.use('/vendor/flag-icons', express.static(path.join(__dirname, '..', 'node_modules', 'flag-icons')));
 
 // ------------------------------------------------------------------ SSE stream
 const sseClients = new Set();

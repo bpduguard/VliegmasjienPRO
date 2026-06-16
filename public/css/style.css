@@ -117,7 +117,7 @@ button.big { padding: 11px 22px; font-size: 1rem; }
 .seg .filt { border: none; background: transparent; padding: 5px 9px; border-radius: 7px; font-size: 0.86rem; line-height: 1.1; }
 .seg .filt:hover { background: rgba(255,255,255,0.07); border: none; }
 .seg .filt.active { background: var(--accent); color: #06243a; font-weight: 600; }
-.seg .filt .fi { font-size: 0.98rem; }
+.seg .filt .ficon { font-size: 0.98rem; }
 
 /* search field with icon */
 .searchwrap { display: inline-flex; align-items: center; gap: 5px; background: var(--bg2); border: 1px solid var(--border); border-radius: 9px; padding: 0 8px; }
@@ -204,8 +204,11 @@ button.big { padding: 11px 22px; font-size: 1rem; }
   color: #94a3b8; font-size: 10px; font-weight: 600; text-align: center;
   text-shadow: 0 0 3px #0a0f1c, 0 0 3px #0a0f1c; white-space: nowrap; background: none; border: none;
 }
-/* country flag in list */
-.flag { font-size: 0.95em; }
+/* country flag (bundled SVG) in list */
+.acflag {
+  width: 1.25em; height: 0.92em; vertical-align: -1px;
+  border-radius: 2px; box-shadow: 0 0 0 1px rgba(0,0,0,0.35);
+}
 
 /* frequency markers + popup */
 .freq-pin {

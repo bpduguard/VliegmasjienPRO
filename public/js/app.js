@@ -300,11 +300,12 @@ const SOURCE_INFO = {
 const sourceColor = (s) => (SOURCE_INFO[s] || SOURCE_INFO.other).color;
 const sourceLabel = (s) => (SOURCE_INFO[s] || SOURCE_INFO.other).label;
 
-// ISO 3166-1 alpha-2 country code -> flag emoji (regional indicators).
-function flagEmoji(code) {
+// ISO 3166-1 alpha-2 country code -> bundled SVG flag (renders everywhere,
+// including Windows, unlike flag emoji).
+function flagHtml(code) {
   if (!code || code.length !== 2) return '';
-  const base = 0x1f1e6;
-  return String.fromCodePoint(base + code.charCodeAt(0) - 65, base + code.charCodeAt(1) - 65);
+  const c = code.toLowerCase();
+  return `<span class="fi fi-${c} acflag" title="${code}"></span> `;
 }
 
 // Reception-source filter: which sources are shown (default: all).
@@ -486,7 +487,7 @@ state.listSort = { key: 'distKm', dir: 1 };
 
 // label can be a string or a function (for unit-dependent headers).
 const LIST_COLUMNS = [
-  ['flight', 'Callsign', (ac) => `${ac.country ? `<span class="flag" title="${ac.country}">${flagEmoji(ac.country)}</span> ` : ''}${ac.flight || ac.registration || ac.hex.toUpperCase()}`],
+  ['flight', 'Callsign', (ac) => `${flagHtml(ac.country)}${ac.flight || ac.registration || ac.hex.toUpperCase()}`],
   ['registration', 'Reg', (ac) => ac.registration || '—'],
   ['type', 'Type', (ac) => ac.type || '—'],
   ['airline', 'Airline / operator', (ac) => ac.airline || ac.operator || '—'],
@@ -548,7 +549,7 @@ function renderList() {
     .map(
       (ac) => `<div class="${rowClasses(ac, 'ac-row')}" data-hex="${ac.hex}" style="border-left:4px solid ${sourceColor(ac.source)}" title="Source: ${sourceLabel(ac.source)}">
         <div>
-          <div class="cs">${ac.country ? `<span class="flag" title="${ac.country}">${flagEmoji(ac.country)}</span> ` : ''}${ac.flight || ac.registration || ac.hex.toUpperCase()}</div>
+          <div class="cs">${flagHtml(ac.country)}${ac.flight || ac.registration || ac.hex.toUpperCase()}</div>
           <div class="meta">${ac.type || ac.typeName || ''}</div>
         </div>
         <div class="meta">${fmt.alt(ac.alt)}<br>${ac.distKm != null ? ac.distKm + ' km' : ''}</div>
