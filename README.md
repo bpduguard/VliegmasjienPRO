@@ -24,6 +24,8 @@ Designed to run in Docker on a **Raspberry Pi 5** (arm64) next to your existing 
 - 🧮 **Filters**: airlines / military / private / business / emergency, plus a free-text airline filter
 - 📈 **Statistics** with a configurable retention period: aircraft per day, top types, top airlines,
   categories — and a per-aircraft **sighting history** ("seen before") when you click a plane
+- 🌡 **Current-weather widget** in the top bar (temperature, wind, humidity, rain) for the receiver's
+  location, via Open-Meteo — no API key
 - 📷 **Aircraft photos** via planespotters.net
 - 🎨 **Reception-source colours**: aircraft-list rows are tinted by how the position was received
   (ADS-B, ADS-R, TIS-B, MLAT, Mode-S, ADS-C) — see the on-map Legend
@@ -132,6 +134,7 @@ later start, so the app never "forgets" a URL you set in the UI:
 | [adsbdb.com](https://www.adsbdb.com) | callsign → route (origin/destination, airline) | no |
 | [planespotters.net](https://www.planespotters.net) | aircraft photos | no |
 | [OurAirports](https://ourairports.com/data/) | airport communication frequencies (map layer) | no |
+| [Open-Meteo](https://open-meteo.com) | current weather at the receiver (top-bar widget) | no |
 | [RainViewer](https://www.rainviewer.com) | rain radar overlay | no |
 | [OpenWeatherMap](https://openweathermap.org) | extra cloud layer (optional) | free key |
 

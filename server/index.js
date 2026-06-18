@@ -358,6 +358,44 @@ app.get('/api/planedb/search', (req, res) => res.json({ results: planeDbSearch(r
 app.get('/api/planedb/:hex', (req, res) => res.json({ entry: planeDbLookup(req.params.hex) }));
 
 // ------------------------------------------------------------------ weather
+// Current conditions at the receiver (Open-Meteo — free, no API key). Cached
+// for 10 minutes so we don't poll it on every page.
+let currentWxCache = { ts: 0, key: '', data: null };
+app.get('/api/weather/current', async (req, res) => {
+  const r = getConfig().receiver;
+  if (r.lat == null || r.lon == null) return res.status(400).json({ error: 'no receiver location set' });
+  const key = `${r.lat.toFixed(3)},${r.lon.toFixed(3)}`;
+  if (currentWxCache.data && currentWxCache.key === key && Date.now() - currentWxCache.ts < 600000) {
+    return res.json(currentWxCache.data);
+  }
+  try {
+    const base = process.env.OPEN_METEO_BASE || 'https://api.open-meteo.com/v1/forecast';
+    const url =
+      `${base}?latitude=${r.lat}&longitude=${r.lon}` +
+      '&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_direction_10m,is_day' +
+      '&wind_speed_unit=kmh&timezone=auto';
+    const resp = await extFetch(url, { signal: AbortSignal.timeout(10000) });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const j = await resp.json();
+    const c = j.current || {};
+    const data = {
+      temp: c.temperature_2m ?? null,
+      feels: c.apparent_temperature ?? null,
+      humidity: c.relative_humidity_2m ?? null,
+      windKmh: c.wind_speed_10m ?? null,
+      windDir: c.wind_direction_10m ?? null,
+      precipMm: c.precipitation ?? null,
+      code: c.weather_code ?? null,
+      isDay: c.is_day ?? 1,
+      ts: Date.now()
+    };
+    currentWxCache = { ts: Date.now(), key, data };
+    res.json(data);
+  } catch (e) {
+    res.status(502).json({ error: e.message });
+  }
+});
+
 // RainViewer frame metadata proxy (avoids CORS surprises and centralizes caching).
 let rainviewerCache = { ts: 0, data: null };
 app.get('/api/weather/rainviewer', async (req, res) => {

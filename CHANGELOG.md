@@ -2,6 +2,12 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.3.0
+- New **current-weather widget** in the top bar (next to the status light): condition icon,
+  temperature, wind speed + direction, humidity and precipitation for the receiver's location, via
+  **Open-Meteo** (free, no API key). Refreshes every 10 minutes; wind respects the metric/aviation
+  unit setting.
+
 ## 1.2.2
 - Fix unreliable aircraft photos. The app now sends a descriptive **User-Agent**, **throttles**
   planespotters requests and honours **HTTP 429 / Retry-After**, **persists** every result in SQLite

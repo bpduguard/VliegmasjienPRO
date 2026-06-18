@@ -53,6 +53,15 @@ code { background: var(--bg2); padding: 1px 5px; border-radius: 4px; }
 .conn { color: var(--danger); font-size: 1.1rem; }
 .conn.ok { color: var(--ok); }
 
+/* top-bar weather widget */
+.wx { display: flex; align-items: center; gap: 12px; font-size: 0.88rem; color: var(--text); }
+.wx.hidden { display: none; }
+.wx-cond { font-size: 1.15rem; line-height: 1; }
+.wx-item { display: inline-flex; align-items: center; gap: 3px; color: var(--muted); white-space: nowrap; }
+.wx-item #wx-temp, .wx-item span { color: var(--text); }
+#wx-temp { font-weight: 600; color: var(--text); }
+@media (max-width: 720px) { .wx-item[title="Humidity"], .wx-item[title="Precipitation"] { display: none; } }
+
 /* ------------------------------------------------------------- tabs */
 .tab { display: none; flex: 1; position: relative; overflow: auto; }
 .tab.active { display: block; }

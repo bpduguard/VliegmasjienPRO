@@ -902,6 +902,7 @@ function connectStream() {
         radius: 6, color: '#38bdf8', fillOpacity: 0.9
       }).bindTooltip('Receiver').addTo(map);
       if (state.ringsOn) drawRings(); // receiver now known
+      loadWeather(); // location available -> fetch local weather
     }
     renderAircraft();
   });
@@ -1362,6 +1363,7 @@ $('#s-save').addEventListener('click', async () => {
 function applyUnits() {
   renderAircraft();
   if (state.selected) updateDetailLive(state.aircraft.get(state.selected));
+  if (typeof loadWeather === 'function') loadWeather(); // wind unit may change
 }
 $('#s-browser-perm').addEventListener('click', async () => {
   const perm = await Notification.requestPermission();
@@ -1378,6 +1380,51 @@ $('#s-padb-refresh').addEventListener('click', async () => {
 });
 
 // ----------------------------------------------------------------- boot
+// ----------------------------------------------------------------- weather widget
+// WMO weather code -> { icon (day/night), label }
+function wxCondition(code, isDay) {
+  const sun = isDay ? '☀️' : '🌙';
+  const partly = isDay ? '⛅' : '☁️';
+  const map = {
+    0: [sun, 'Clear'], 1: [partly, 'Mainly clear'], 2: [partly, 'Partly cloudy'], 3: ['☁️', 'Overcast'],
+    45: ['🌫️', 'Fog'], 48: ['🌫️', 'Rime fog'],
+    51: ['🌦️', 'Light drizzle'], 53: ['🌦️', 'Drizzle'], 55: ['🌦️', 'Dense drizzle'],
+    56: ['🌧️', 'Freezing drizzle'], 57: ['🌧️', 'Freezing drizzle'],
+    61: ['🌧️', 'Light rain'], 63: ['🌧️', 'Rain'], 65: ['🌧️', 'Heavy rain'],
+    66: ['🌧️', 'Freezing rain'], 67: ['🌧️', 'Freezing rain'],
+    71: ['🌨️', 'Light snow'], 73: ['🌨️', 'Snow'], 75: ['🌨️', 'Heavy snow'], 77: ['🌨️', 'Snow grains'],
+    80: ['🌦️', 'Light showers'], 81: ['🌦️', 'Showers'], 82: ['⛈️', 'Violent showers'],
+    85: ['🌨️', 'Snow showers'], 86: ['🌨️', 'Snow showers'],
+    95: ['⛈️', 'Thunderstorm'], 96: ['⛈️', 'Thunderstorm w/ hail'], 99: ['⛈️', 'Thunderstorm w/ hail']
+  };
+  return map[code] || ['🌡️', 'Weather'];
+}
+const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+const compass = (deg) => (deg == null ? '' : COMPASS[Math.round(deg / 45) % 8]);
+
+async function loadWeather() {
+  const wx = $('#wx');
+  try {
+    const res = await fetch('/api/weather/current');
+    if (!res.ok) { wx.classList.add('hidden'); return; }
+    const w = await res.json();
+    const [icon, label] = wxCondition(w.code, w.isDay);
+    $('#wx-cond').textContent = icon;
+    $('#wx-temp').textContent = w.temp != null ? `${Math.round(w.temp)}°C` : '—';
+    if (w.windKmh != null) {
+      const aviation = state.units === 'aviation';
+      const v = aviation ? Math.round(w.windKmh / 1.852) : Math.round(w.windKmh);
+      $('#wx-wind').textContent = `${v} ${aviation ? 'kt' : 'km/h'}${w.windDir != null ? ' ' + compass(w.windDir) : ''}`;
+    } else $('#wx-wind').textContent = '—';
+    $('#wx-hum').textContent = w.humidity != null ? `${Math.round(w.humidity)}%` : '—';
+    $('#wx-rain').textContent = w.precipMm != null ? `${w.precipMm.toFixed(1)} mm` : '—';
+    wx.title = `${label} · feels ${w.feels != null ? Math.round(w.feels) + '°C' : '—'} · updated ${fmt.time(w.ts)}`;
+    wx.classList.remove('hidden');
+  } catch {
+    wx.classList.add('hidden');
+  }
+}
+
 (async function boot() {
   try {
     state.config = await (await fetch('/api/config')).json();
@@ -1385,6 +1432,8 @@ $('#s-padb-refresh').addEventListener('click', async () => {
   } catch { /* server starting */ }
   loadZones();
   connectStream();
+  loadWeather();
+  setInterval(loadWeather, 600000); // refresh every 10 min
   if (Notification.permission === 'default') {
     // unobtrusive: ask once after a short delay
     setTimeout(() => Notification.requestPermission(), 4000);
