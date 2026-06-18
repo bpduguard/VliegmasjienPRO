@@ -1110,19 +1110,75 @@ function spottedSinceMs(range) {
   return Date.now() - 7 * 86400000; // week
 }
 
+state.spotted = [];
+state.spottedSort = { key: 'lastSeen', dir: -1 }; // default: most recent first
+const spottedPhoto = new Map(); // hex -> photo | null (cached across re-sorts)
+const spottedRoute = new Map(); // callsign -> route | null
+
+// small concurrency-limited runner so we don't hammer planespotters / adsbdb
+async function runPool(items, worker, concurrency = 4) {
+  const queue = [...items];
+  const runners = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
+    while (queue.length) await worker(queue.shift());
+  });
+  await Promise.all(runners);
+}
+
 async function loadSpotted() {
   const range = $('#spotted-range').value;
   const since = spottedSinceMs(range);
   $('#spotted-count').textContent = 'Loading…';
-  let data;
   try {
-    data = await (await fetch(`/api/spotted?since=${since}`)).json();
+    const data = await (await fetch(`/api/spotted?since=${since}`)).json();
+    state.spotted = data.spotted || [];
   } catch {
     $('#spotted-count').textContent = 'Failed to load.';
     return;
   }
-  const rows = data.spotted || [];
-  $('#spotted-count').textContent = `${rows.length} aircraft`;
+  $('#spotted-count').textContent = `${state.spotted.length} aircraft`;
+  renderSpotted();
+  hydrateSpotted();
+}
+
+function sortSpotted(rows) {
+  const { key, dir } = state.spottedSort;
+  return [...rows].sort((a, b) => {
+    let va = key === 'callsign' ? (a.callsign || a.registration || a.hex) : a[key];
+    let vb = key === 'callsign' ? (b.callsign || b.registration || b.hex) : b[key];
+    if (va == null) return 1;
+    if (vb == null) return -1;
+    if (typeof va === 'string') return va.localeCompare(vb) * dir;
+    return (va - vb) * dir;
+  });
+}
+
+function spottedRouteHtml(cs) {
+  if (!cs) return '<span class="muted">—</span>';
+  if (!spottedRoute.has(cs)) return '<span class="muted">…</span>';
+  const route = spottedRoute.get(cs);
+  if (route && (route.origin || route.destination)) {
+    const o = route.origin, d = route.destination;
+    return `<span title="${o ? o.name + ', ' + o.country : '?'} → ${d ? d.name + ', ' + d.country : '?'}">${o?.iata || o?.icao || '?'} → ${d?.iata || d?.icao || '?'}</span>`;
+  }
+  return '<span class="muted">no route</span>';
+}
+
+function spottedPhotoHtml(s) {
+  if (!spottedPhoto.has(s.hex)) return '<span class="ph-skel"></span>';
+  const p = spottedPhoto.get(s.hex);
+  if (!p?.thumb) return '<span class="ph-skel ph-none">✈</span>';
+  return `<a href="${p.link}" target="_blank" rel="noopener" title="© ${p.photographer} / planespotters.net"><img class="spotted-thumb" src="${p.thumb}" loading="lazy" alt=""></a>`;
+}
+
+function renderSpotted() {
+  // header sort indicators
+  $$('#spotted-table th[data-sort]').forEach((th) => {
+    const k = th.dataset.sort;
+    th.classList.toggle('sorted', k === state.spottedSort.key);
+    th.dataset.arrow = k === state.spottedSort.key ? (state.spottedSort.dir > 0 ? ' ▲' : ' ▼') : '';
+  });
+
+  const rows = sortSpotted(state.spotted);
   $('#spotted-table tbody').innerHTML = rows.length
     ? rows
         .map((s) => {
@@ -1130,6 +1186,7 @@ async function loadSpotted() {
           const label = s.callsign || s.registration || s.hex.toUpperCase();
           const closest = s.minDistKm != null ? `${s.minDistKm.toFixed(1)} km` : '—';
           return `<tr data-hex="${s.hex}" data-cs="${s.callsign || ''}">
+            <td class="spotted-photo" data-hex="${s.hex}">${spottedPhotoHtml(s)}</td>
             <td>${flagHtml(s.country)}<b>${label}</b>${s.registration && s.registration !== label ? ` <span class="muted">${s.registration}</span>` : ''}
               ${s.link ? ` <a href="${s.link}" target="_blank" rel="noopener" title="plane-alert-db link">↗</a>` : ''}</td>
             <td>${s.operator || '—'}</td>
@@ -1140,34 +1197,16 @@ async function loadSpotted() {
             <td>${fmt.dateTime(s.firstSeen)}</td>
             <td>${fmt.dateTime(s.lastSeen)}</td>
             <td>${closest}</td>
-            <td class="spotted-route">${s.callsign ? `<button class="route-btn" data-cs="${s.callsign}">route ▾</button>` : '—'}</td>
+            <td class="spotted-route" data-cs="${s.callsign || ''}">${spottedRouteHtml(s.callsign)}</td>
           </tr>`;
         })
         .join('')
-    : `<tr><td colspan="10" class="muted">No plane-alert-db aircraft seen in this period.</td></tr>`;
+    : `<tr><td colspan="11" class="muted">No plane-alert-db aircraft seen in this period.</td></tr>`;
 
-  $$('#spotted-table .route-btn').forEach((btn) =>
-    btn.addEventListener('click', async () => {
-      const cell = btn.closest('.spotted-route');
-      cell.innerHTML = 'looking up…';
-      try {
-        const { route, error } = await (await fetch(`/api/route/${encodeURIComponent(btn.dataset.cs)}`)).json();
-        if (route && (route.origin || route.destination)) {
-          const o = route.origin, d = route.destination;
-          cell.innerHTML = `<span title="${o ? o.name + ', ' + o.country : ''} → ${d ? d.name + ', ' + d.country : ''}">
-            ${o?.iata || o?.icao || '?'} → ${d?.iata || d?.icao || '?'}</span>`;
-        } else {
-          cell.innerHTML = `<span class="muted">${error ? 'unavailable' : 'no route'}</span>`;
-        }
-      } catch {
-        cell.innerHTML = '<span class="muted">error</span>';
-      }
-    })
-  );
-  // clicking a row (not the route button/link) selects the plane if it's live
+  // clicking a row (not a link) selects the plane if it's live
   $$('#spotted-table tbody tr[data-hex]').forEach((tr) =>
     tr.addEventListener('click', (e) => {
-      if (e.target.closest('button') || e.target.closest('a')) return;
+      if (e.target.closest('a')) return;
       const hex = tr.dataset.hex;
       if (state.aircraft.has(hex)) {
         $$('#tabs button').forEach((b) => b.classList.remove('active'));
@@ -1179,7 +1218,36 @@ async function loadSpotted() {
     })
   );
 }
+
+// Fetch photos + routes in the background and fill the cells in (so they show
+// automatically, and survive re-sorts via the caches).
+function hydrateSpotted() {
+  const needPhoto = state.spotted.filter((s) => !spottedPhoto.has(s.hex));
+  const needRoute = state.spotted.filter((s) => s.callsign && !spottedRoute.has(s.callsign));
+  runPool(needPhoto, async (s) => {
+    let photo = null;
+    try { photo = (await (await fetch(`/api/aircraft/${s.hex}/photo`)).json()).photo; } catch { /* ignore */ }
+    spottedPhoto.set(s.hex, photo);
+    const cell = $(`#spotted-table td.spotted-photo[data-hex="${s.hex}"]`);
+    if (cell) cell.innerHTML = spottedPhotoHtml(s);
+  });
+  runPool(needRoute, async (s) => {
+    let route = null;
+    try { route = (await (await fetch(`/api/route/${encodeURIComponent(s.callsign)}`)).json()).route; } catch { /* ignore */ }
+    spottedRoute.set(s.callsign, route);
+    $$(`#spotted-table td.spotted-route[data-cs="${s.callsign}"]`).forEach((c) => (c.innerHTML = spottedRouteHtml(s.callsign)));
+  });
+}
+
 $('#spotted-range').addEventListener('change', loadSpotted);
+$$('#spotted-table th[data-sort]').forEach((th) =>
+  th.addEventListener('click', () => {
+    const k = th.dataset.sort;
+    if (state.spottedSort.key === k) state.spottedSort.dir *= -1;
+    else state.spottedSort = { key: k, dir: k === 'lastSeen' || k === 'firstSeen' || k === 'sessions' ? -1 : 1 };
+    renderSpotted();
+  })
+);
 
 // ----------------------------------------------------------------- settings
 async function loadSettings() {

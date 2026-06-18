@@ -1,7 +1,7 @@
 {
   "name": "vliegmasjien-pro",
-  "version": "1.2.0",
-  "description": "Fancy self-hosted ADS-B flight tracker for dump1090 — live map, zones, notifications, stats, weather overlay and Claude-powered aircraft facts.",
+  "version": "1.2.1",
+  "description": "Fancy self-hosted ADS-B flight tracker for dump1090 — live map, zones, notifications, stats, weather + frequency overlays, replay and a plane-alert-db spotted log.",
   "type": "module",
   "main": "server/index.js",
   "scripts": {

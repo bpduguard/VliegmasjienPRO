@@ -2,6 +2,11 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.2.1
+- Spotted tab: **sortable** columns (default = most recent spots first), an inline **plane photo**
+  per row, and the **route shown automatically** (no more per-row lookup button). Photos/routes are
+  fetched in the background and cached so re-sorting is instant.
+
 ## 1.2.0
 - New **Spotted** tab: lists plane-alert-db aircraft your receiver has actually seen, with their
   details (operator, type, category, tags, registration), how often/when they were seen, closest
