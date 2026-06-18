@@ -1,13 +1,14 @@
 import express from 'express';
 import path from 'node:path';
+import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
-import { loadConfig, getConfig, saveConfig, publicConfig } from './config.js';
+import { loadConfig, getConfig, saveConfig, publicConfig, DATA_DIR } from './config.js';
 import { initDb, aircraftHistory, recentAlerts, statsSummary, aircraftDbCount, bulkImportAircraftDb } from './db.js';
 import {
   loadPlaneDbFromDisk, refreshPlaneDb, planeDbMeta, planeDbLookup, planeDbSearch, aircraftDbError, lookupRoute
 } from './enrich.js';
-import { lookupPhoto } from './enrich.js';
+import { lookupPhoto, extFetch, photoServiceError } from './enrich.js';
 import {
   startTracker, snapshot, aircraftDetail, trackerStatus, setTrackerBroadcast
 } from './tracker.js';
@@ -71,6 +72,32 @@ app.get('/api/aircraft/:hex/photo', async (req, res) => {
   res.json({ photo: await lookupPhoto(req.params.hex) });
 });
 
+// Image proxy: serves the thumbnail bytes from a local disk cache so images
+// always load (and only ever fetch each one once). 404 when there's no photo.
+const PHOTO_DIR = path.join(DATA_DIR, 'photos');
+app.get('/api/photo/:hex', async (req, res) => {
+  const hex = (req.params.hex || '').toLowerCase().replace(/[^0-9a-f]/g, '').slice(0, 6);
+  if (hex.length !== 6) return res.status(400).end();
+  const file = path.join(PHOTO_DIR, `${hex}.jpg`);
+  if (fs.existsSync(file)) {
+    res.setHeader('cache-control', 'public, max-age=604800');
+    return res.type('image/jpeg').sendFile(file);
+  }
+  const photo = await lookupPhoto(hex);
+  if (!photo?.thumb) return res.status(404).end();
+  try {
+    const r = await extFetch(photo.thumb, { signal: AbortSignal.timeout(10000) });
+    if (!r.ok) return res.status(502).end();
+    const buf = Buffer.from(await r.arrayBuffer());
+    fs.mkdirSync(PHOTO_DIR, { recursive: true });
+    fs.writeFileSync(file, buf);
+    res.setHeader('cache-control', 'public, max-age=604800');
+    res.type(r.headers.get('content-type') || 'image/jpeg').end(buf);
+  } catch {
+    res.status(502).end();
+  }
+});
+
 app.get('/api/aircraft/:hex/history', (req, res) => {
   res.json({ history: aircraftHistory(req.params.hex) });
 });
@@ -88,6 +115,7 @@ app.get('/api/status', (req, res) =>
     ...trackerStatus(),
     planeDb: planeDbMeta(),
     aircraftDb: { count: aircraftDbCount(), error: aircraftDbError() },
+    photos: { error: photoServiceError() },
     version: VERSION
   })
 );

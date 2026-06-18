@@ -148,6 +148,14 @@ live map, zones, statistics and "seen before" history all keep working offline �
 that calls external APIs needs internet. (The "seen before" history is stored locally in SQLite and is
 independent of any external service.)
 
+**Photos loading only sometimes?** The app uses planespotters' public photo *API* (not the website,
+which has a separate human-check), but that API rate-limits. VliegmasjienPRO sends a descriptive
+User-Agent, throttles requests, honours `429 Retry-After`, **caches every result** (so each aircraft is
+fetched once), and serves images through an on-disk proxy — so once an aircraft has been seen, its photo
+loads instantly and reliably. The first sighting of many new aircraft at once may fill in gradually as
+the throttle works through them. If the API rate-limits, the app backs off automatically and retries —
+just give it a few minutes (`/api/status` reports a photo "rate limited" note while it's cooling down).
+
 ### Registration & aircraft type (empty Reg/Type columns)
 
 Plain **dump1090-fa** (and the SBS feed) only broadcast position, callsign and altitude — they do **not**

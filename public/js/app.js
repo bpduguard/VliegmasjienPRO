@@ -788,7 +788,7 @@ function badgeClass(ac) {
 }
 
 async function loadDetailExtras(hex) {
-  // photo
+  // photo (image via the cached proxy; metadata for the credit/link)
   $('#d-photo').innerHTML = '';
   fetch(`/api/aircraft/${hex}/photo`)
     .then((r) => r.json())
@@ -796,7 +796,7 @@ async function loadDetailExtras(hex) {
       if (state.selected !== hex) return;
       if (photo?.thumb) {
         $('#d-photo').innerHTML = `<a href="${photo.link}" target="_blank" rel="noopener">
-          <img src="${photo.thumb}" alt="aircraft photo" /></a>
+          <img src="/api/photo/${hex}" alt="aircraft photo" /></a>
           <div class="credit">© ${photo.photographer} / planespotters.net</div>`;
       }
     })
@@ -1112,7 +1112,6 @@ function spottedSinceMs(range) {
 
 state.spotted = [];
 state.spottedSort = { key: 'lastSeen', dir: -1 }; // default: most recent first
-const spottedPhoto = new Map(); // hex -> photo | null (cached across re-sorts)
 const spottedRoute = new Map(); // callsign -> route | null
 
 // small concurrency-limited runner so we don't hammer planespotters / adsbdb
@@ -1164,10 +1163,10 @@ function spottedRouteHtml(cs) {
 }
 
 function spottedPhotoHtml(s) {
-  if (!spottedPhoto.has(s.hex)) return '<span class="ph-skel"></span>';
-  const p = spottedPhoto.get(s.hex);
-  if (!p?.thumb) return '<span class="ph-skel ph-none">✈</span>';
-  return `<a href="${p.link}" target="_blank" rel="noopener" title="© ${p.photographer} / planespotters.net"><img class="spotted-thumb" src="${p.thumb}" loading="lazy" alt=""></a>`;
+  // Load straight from the server-side image proxy (cached on disk, reliable).
+  // onerror swaps in a ✈ placeholder when there's no photo.
+  return `<a href="https://www.planespotters.net/hex/${s.hex.toUpperCase()}" target="_blank" rel="noopener" title="photos on planespotters.net">
+    <img class="spotted-thumb" src="/api/photo/${s.hex}" loading="lazy" alt="" onerror="imgFallback(this)"></a>`;
 }
 
 function renderSpotted() {
@@ -1219,18 +1218,10 @@ function renderSpotted() {
   );
 }
 
-// Fetch photos + routes in the background and fill the cells in (so they show
-// automatically, and survive re-sorts via the caches).
+// Photos load directly from the cached image proxy (<img src>), so only the
+// routes need background fetching here.
 function hydrateSpotted() {
-  const needPhoto = state.spotted.filter((s) => !spottedPhoto.has(s.hex));
   const needRoute = state.spotted.filter((s) => s.callsign && !spottedRoute.has(s.callsign));
-  runPool(needPhoto, async (s) => {
-    let photo = null;
-    try { photo = (await (await fetch(`/api/aircraft/${s.hex}/photo`)).json()).photo; } catch { /* ignore */ }
-    spottedPhoto.set(s.hex, photo);
-    const cell = $(`#spotted-table td.spotted-photo[data-hex="${s.hex}"]`);
-    if (cell) cell.innerHTML = spottedPhotoHtml(s);
-  });
   runPool(needRoute, async (s) => {
     let route = null;
     try { route = (await (await fetch(`/api/route/${encodeURIComponent(s.callsign)}`)).json()).route; } catch { /* ignore */ }
@@ -1238,6 +1229,12 @@ function hydrateSpotted() {
     $$(`#spotted-table td.spotted-route[data-cs="${s.callsign}"]`).forEach((c) => (c.innerHTML = spottedRouteHtml(s.callsign)));
   });
 }
+
+// Global onerror handler: replace a broken/absent photo with a ✈ placeholder.
+window.imgFallback = (img) => {
+  const cell = img.closest('.spotted-photo') || img.parentElement;
+  if (cell) cell.innerHTML = '<span class="ph-skel ph-none">✈</span>';
+};
 
 $('#spotted-range').addEventListener('change', loadSpotted);
 $$('#spotted-table th[data-sort]').forEach((th) =>

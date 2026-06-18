@@ -2,6 +2,13 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.2.2
+- Fix unreliable aircraft photos. The app now sends a descriptive **User-Agent**, **throttles**
+  planespotters requests and honours **HTTP 429 / Retry-After**, **persists** every result in SQLite
+  (so each aircraft is looked up at most once per TTL), and serves images through a **caching image
+  proxy** (`/api/photo/:hex`) that stores thumbnails on disk — so photos load consistently instead of
+  sporadically. The same User-Agent now goes on the adsbdb and plane-alert-db requests too.
+
 ## 1.2.1
 - Spotted tab: **sortable** columns (default = most recent spots first), an inline **plane photo**
   per row, and the **route shown automatically** (no more per-row lookup button). Photos/routes are

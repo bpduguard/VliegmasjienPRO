@@ -45,6 +45,16 @@ export function initDb() {
       operator TEXT,
       updated INTEGER NOT NULL
     );
+    -- Cached aircraft photo metadata (planespotters). Persisted so each hex is
+    -- looked up at most once per TTL — survives restarts, keeps API volume low.
+    -- An empty thumb means "checked, no photo" (negative cache).
+    CREATE TABLE IF NOT EXISTS photos (
+      hex TEXT PRIMARY KEY,
+      thumb TEXT,
+      link TEXT,
+      photographer TEXT,
+      ts INTEGER NOT NULL
+    );
     -- Airport communication frequencies (OurAirports). One row per airport that
     -- has at least one frequency; freqs is a JSON array of {type,description,mhz}.
     CREATE TABLE IF NOT EXISTS airport_freqs (
@@ -128,6 +138,22 @@ export function bulkImportAircraftDb(rows) {
 
 export function aircraftDbCount() {
   return db.prepare('SELECT COUNT(*) AS c FROM aircraft_db').get().c;
+}
+
+// --- aircraft photos --------------------------------------------------------
+
+export function getPhoto(hex) {
+  return db.prepare('SELECT * FROM photos WHERE hex = ?').get((hex || '').toLowerCase()) || null;
+}
+
+export function putPhoto(hex, photo) {
+  db.prepare('INSERT OR REPLACE INTO photos (hex, thumb, link, photographer, ts) VALUES (?,?,?,?,?)').run(
+    (hex || '').toLowerCase(),
+    photo?.thumb || '',
+    photo?.link || '',
+    photo?.photographer || '',
+    Date.now()
+  );
 }
 
 // --- airport frequencies ----------------------------------------------------

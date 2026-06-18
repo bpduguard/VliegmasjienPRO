@@ -5,7 +5,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { DATA_DIR, getConfig } from './config.js';
-import { getAircraftDb, putAircraftDb } from './db.js';
+import { getAircraftDb, putAircraftDb, getPhoto, putPhoto } from './db.js';
+import { VERSION } from './version.js';
+
+// Identify ourselves on outbound API calls. Public APIs (planespotters, adsbdb)
+// ask for a descriptive User-Agent and may throttle/deny anonymous requests —
+// the missing UA is a common cause of "photos only load sometimes".
+export const USER_AGENT = `VliegmasjienPRO/${VERSION} (+https://github.com/bpduguard/vliegmasjienpro; self-hosted ADS-B tracker)`;
+export const extFetch = (url, opts = {}) =>
+  fetch(url, { ...opts, headers: { 'user-agent': USER_AGENT, ...(opts.headers || {}) } });
 
 // ---------------------------------------------------------------- plane-alert-db
 
@@ -68,7 +76,7 @@ export function loadPlaneDbFromDisk() {
 
 export async function refreshPlaneDb() {
   const url = getConfig().planeAlertDbUrl;
-  const res = await fetch(url, { signal: AbortSignal.timeout(60000) });
+  const res = await extFetch(url, { signal: AbortSignal.timeout(60000) });
   if (!res.ok) throw new Error(`plane-alert-db download failed: HTTP ${res.status}`);
   const text = await res.text();
   const parsed = parsePlaneAlertCsv(text);
@@ -141,7 +149,7 @@ export async function lookupRoute(callsign) {
   let route = null;
   let error = null;
   try {
-    const res = await fetch(`https://api.adsbdb.com/v0/callsign/${encodeURIComponent(cs)}`, {
+    const res = await extFetch(`https://api.adsbdb.com/v0/callsign/${encodeURIComponent(cs)}`, {
       signal: AbortSignal.timeout(10000)
     });
     if (res.ok) {
@@ -238,7 +246,7 @@ export async function lookupAircraft(hex) {
     for (const k of acAttempted.keys()) { acAttempted.delete(k); if (acAttempted.size <= 6000) break; }
   }
   try {
-    const res = await fetch(`https://api.adsbdb.com/v0/aircraft/${hex}`, { signal: AbortSignal.timeout(10000) });
+    const res = await extFetch(`https://api.adsbdb.com/v0/aircraft/${hex}`, { signal: AbortSignal.timeout(10000) });
     if (res.ok) {
       const data = await res.json();
       const a = data?.response?.aircraft;
@@ -266,33 +274,78 @@ export async function lookupAircraft(hex) {
 
 // ---------------------------------------------------------------- photos
 
-const photoCache = new Map(); // hex -> { ts, photo }
-const PHOTO_TTL = 24 * 3600000;
+// planespotters' public photo API is the legitimate source (tar1090 et al. use
+// it) but it rate-limits. We: (1) send a descriptive User-Agent, (2) serialize
+// requests with a minimum interval and honour 429/Retry-After, and (3) persist
+// every result to SQLite so each hex is fetched at most once per TTL. Together
+// these stop the "photos only load sporadically" behaviour.
+const PHOTO_API = process.env.PLANESPOTTERS_BASE || 'https://api.planespotters.net/pub/photos/hex';
+const PHOTO_TTL = 30 * 86400000; // remember a found photo for 30 days
+const PHOTO_NEG_TTL = 7 * 86400000; // re-check "no photo" weekly
+
+// Serialized request queue with a min interval + cooldown after a 429.
+const PHOTO_MIN_INTERVAL = 700;
+let photoChain = Promise.resolve();
+let photoNextAt = 0;
+let photoCooldownUntil = 0;
+let photoError = null;
+
+export function photoServiceError() {
+  return photoCooldownUntil > Date.now() ? (photoError || 'rate limited') : null;
+}
+
+function schedulePhoto(task) {
+  photoChain = photoChain.then(async () => {
+    const wait = Math.max(photoNextAt - Date.now(), photoCooldownUntil - Date.now(), 0);
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    photoNextAt = Date.now() + PHOTO_MIN_INTERVAL;
+    return task();
+  });
+  return photoChain;
+}
+
+function photoFromRow(row) {
+  return row && row.thumb ? { thumb: row.thumb, link: row.link, photographer: row.photographer } : null;
+}
 
 export async function lookupPhoto(hex) {
   hex = (hex || '').toLowerCase();
-  const cached = photoCache.get(hex);
-  if (cached && Date.now() - cached.ts < PHOTO_TTL) return cached.photo;
-  let photo = null;
-  try {
-    const res = await fetch(`https://api.planespotters.net/pub/photos/hex/${hex}`, {
-      signal: AbortSignal.timeout(10000)
-    });
-    if (res.ok) {
-      const data = await res.json();
-      const p = data?.photos?.[0];
-      if (p) {
-        photo = {
-          thumb: p.thumbnail_large?.src || p.thumbnail?.src,
-          link: p.link,
-          photographer: p.photographer
-        };
-      }
-    }
-  } catch { /* ignore */ }
-  photoCache.set(hex, { ts: Date.now(), photo });
-  if (photoCache.size > 2000) {
-    for (const k of photoCache.keys()) { photoCache.delete(k); if (photoCache.size <= 1500) break; }
+  if (!/^[0-9a-f]{6}$/.test(hex)) return null;
+  const row = getPhoto(hex);
+  if (row) {
+    const ttl = row.thumb ? PHOTO_TTL : PHOTO_NEG_TTL;
+    if (Date.now() - row.ts < ttl) return photoFromRow(row);
   }
-  return photo;
+  return schedulePhoto(async () => {
+    // a concurrent call may have filled the cache while we were queued
+    const fresh = getPhoto(hex);
+    if (fresh) {
+      const ttl = fresh.thumb ? PHOTO_TTL : PHOTO_NEG_TTL;
+      if (Date.now() - fresh.ts < ttl) return photoFromRow(fresh);
+    }
+    try {
+      const res = await extFetch(`${PHOTO_API}/${hex}`, {
+        signal: AbortSignal.timeout(10000),
+        headers: { accept: 'application/json' }
+      });
+      if (res.status === 429) {
+        const ra = parseInt(res.headers.get('retry-after') || '60', 10);
+        photoCooldownUntil = Date.now() + Math.min(Math.max(ra, 5), 600) * 1000;
+        photoError = `rate limited (HTTP 429, retry in ${ra}s)`;
+        return photoFromRow(row); // keep any prior value; don't poison the cache
+      }
+      if (res.ok) {
+        const data = await res.json();
+        const p = data?.photos?.[0];
+        const photo = p ? { thumb: p.thumbnail_large?.src || p.thumbnail?.src, link: p.link, photographer: p.photographer } : null;
+        putPhoto(hex, photo); // persists negatives too
+        photoError = null;
+        return photo;
+      }
+      photoError = `photo service HTTP ${res.status}`;
+    } catch (e) {
+      photoError = e.name === 'TimeoutError' ? 'photo service timed out' : `photo service unreachable (${e.code || e.message})`;
+    }
+    return photoFromRow(row);
+  });
 }
