@@ -298,6 +298,34 @@ export function statsSummary(days = 7) {
   return { days, perDay, topTypes, topAirlines, categories, totals };
 }
 
+// Distinct aircraft seen since `since`, aggregated per hex (latest callsign,
+// session count, first/last seen, max alt/speed, closest distance). Used by the
+// "Spotted" tab after filtering to plane-alert-db members.
+export function spottedSince(since, limit = 1000) {
+  return db
+    .prepare(
+      `SELECT s.hex,
+              COUNT(*) AS sessions,
+              MIN(s.first_seen) AS first_seen,
+              MAX(s.last_seen) AS last_seen,
+              MAX(s.max_alt) AS max_alt,
+              MAX(s.max_speed) AS max_speed,
+              MIN(s.min_dist_km) AS min_dist_km,
+              (SELECT callsign FROM sightings x
+                 WHERE x.hex = s.hex AND x.callsign IS NOT NULL AND x.callsign != ''
+                 ORDER BY x.last_seen DESC LIMIT 1) AS callsign,
+              (SELECT registration FROM sightings x
+                 WHERE x.hex = s.hex AND x.registration IS NOT NULL AND x.registration != ''
+                 ORDER BY x.last_seen DESC LIMIT 1) AS registration
+       FROM sightings s
+       WHERE s.last_seen >= ?
+       GROUP BY s.hex
+       ORDER BY MAX(s.last_seen) DESC
+       LIMIT ?`
+    )
+    .all(since, limit);
+}
+
 export function pruneOldData(retentionDays) {
   const cutoff = Date.now() - retentionDays * 86400000;
   db.prepare('DELETE FROM sightings WHERE last_seen < ?').run(cutoff);

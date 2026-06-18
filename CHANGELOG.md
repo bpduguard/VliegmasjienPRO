@@ -2,6 +2,11 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.2.0
+- New **Spotted** tab: lists plane-alert-db aircraft your receiver has actually seen, with their
+  details (operator, type, category, tags, registration), how often/when they were seen, closest
+  approach, and an on-demand route lookup. Filter by Today / Past week / Past month.
+
 ## 1.1.1
 - Switch the list **country flags** from emoji to bundled **SVG images** (`flag-icons`, served
   locally) so they render correctly on every OS, including Windows.

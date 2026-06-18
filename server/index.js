@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import { loadConfig, getConfig, saveConfig, publicConfig } from './config.js';
 import { initDb, aircraftHistory, recentAlerts, statsSummary, aircraftDbCount, bulkImportAircraftDb } from './db.js';
 import {
-  loadPlaneDbFromDisk, refreshPlaneDb, planeDbMeta, planeDbLookup, planeDbSearch, aircraftDbError
+  loadPlaneDbFromDisk, refreshPlaneDb, planeDbMeta, planeDbLookup, planeDbSearch, aircraftDbError, lookupRoute
 } from './enrich.js';
 import { lookupPhoto } from './enrich.js';
 import {
@@ -13,7 +13,8 @@ import {
 } from './tracker.js';
 import { setBroadcast, notify } from './notify.js';
 import { refreshFrequencies, frequenciesMeta } from './freq.js';
-import { airportFreqsInBounds, replayBounds, replayFrame } from './db.js';
+import { airportFreqsInBounds, replayBounds, replayFrame, spottedSince } from './db.js';
+import { icaoToCountry } from './country.js';
 import { VERSION } from './version.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -90,6 +91,49 @@ app.get('/api/status', (req, res) =>
     version: VERSION
   })
 );
+
+// --------------------------------------------------- spotted (plane-alert-db ∩ seen)
+// Aircraft seen on the radar since `since` (ms) that are also in plane-alert-db,
+// with their plane-alert-db details merged in.
+app.get('/api/spotted', (req, res) => {
+  const since = parseInt(req.query.since, 10);
+  if (!Number.isFinite(since)) return res.status(400).json({ error: 'since (ms) required' });
+  const rows = spottedSince(since, 2000);
+  const spotted = [];
+  for (const r of rows) {
+    const padb = planeDbLookup(r.hex);
+    if (!padb) continue; // only plane-alert-db members
+    spotted.push({
+      hex: r.hex,
+      country: icaoToCountry(r.hex),
+      callsign: r.callsign || null,
+      registration: r.registration || padb.registration || null,
+      operator: padb.operator || null,
+      type: padb.type || padb.icaoType || null,
+      icaoType: padb.icaoType || null,
+      category: padb.category || null,
+      tags: padb.tags || [],
+      link: padb.link || null,
+      sessions: r.sessions,
+      firstSeen: r.first_seen,
+      lastSeen: r.last_seen,
+      maxAlt: r.max_alt,
+      maxSpeed: r.max_speed,
+      minDistKm: r.min_dist_km
+    });
+  }
+  res.json({ spotted, total: spotted.length });
+});
+
+// Lazy route lookup by callsign (used by the Spotted tab rows).
+app.get('/api/route/:callsign', async (req, res) => {
+  try {
+    const { route, error } = await lookupRoute(req.params.callsign);
+    res.json({ route, error });
+  } catch (e) {
+    res.status(502).json({ error: e.message });
+  }
+});
 
 // ------------------------------------------------------------------ aircraft DB
 // Bulk import a hex→registration/type[/operator] dataset (CSV or NDJSON) for

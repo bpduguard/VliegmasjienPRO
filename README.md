@@ -14,6 +14,8 @@ Designed to run in Docker on a **Raspberry Pi 5** (arm64) next to your existing 
   **estimated time of entry** for approaching aircraft
 - 🔔 **Notifications**: **Pushover**, **Discord webhooks** and **browser notifications** — with a
   configurable cooldown so you don't get spammed
+- 🛰 **Spotted** tab: a log of plane-alert-db aircraft your receiver has actually seen (operator, type,
+  category, tags, route, how often/when, closest approach) — filterable by today / past week / past month
 - ⭐ **Watchlist** based on the same resource **planefence / plane-alert** uses
   ([plane-alert-db](https://github.com/sdr-enthusiasts/plane-alert-db)): search the database, add
   aircraft by ICAO hex / registration / callsign, or import any plane-alert-db–format CSV

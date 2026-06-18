@@ -16,6 +16,7 @@
       <button data-tab="map" class="active">Map</button>
       <button data-tab="stats">Statistics</button>
       <button data-tab="watchlist">Watchlist</button>
+      <button data-tab="spotted">Spotted</button>
       <button data-tab="zones">Zones</button>
       <button data-tab="alerts">Alerts</button>
       <button data-tab="settings">Settings</button>
@@ -200,6 +201,33 @@
       <div id="padb-results"></div>
       <table class="table" id="wl-table">
         <thead><tr><th>ICAO</th><th>Reg</th><th>Callsign</th><th>Operator</th><th>Type</th><th>Category</th><th>Notify</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </main>
+
+  <!-- ============================== SPOTTED TAB ============================== -->
+  <main id="tab-spotted" class="tab">
+    <div class="page">
+      <h2>Spotted <span class="muted">(plane-alert-db aircraft your receiver has seen)</span></h2>
+      <p class="muted">Interesting aircraft from
+        <a href="https://github.com/sdr-enthusiasts/plane-alert-db" target="_blank" rel="noopener">plane-alert-db</a>
+        that actually appeared on your radar in the selected period.</p>
+      <div class="row wrap">
+        <label>Period:
+          <select id="spotted-range">
+            <option value="today">Today</option>
+            <option value="week" selected>Past week</option>
+            <option value="month">Past month</option>
+          </select>
+        </label>
+        <span id="spotted-count" class="muted"></span>
+      </div>
+      <table class="table" id="spotted-table">
+        <thead><tr>
+          <th>Aircraft</th><th>Operator</th><th>Type</th><th>Category</th><th>Tags</th>
+          <th>Times</th><th>First seen</th><th>Last seen</th><th>Closest</th><th>Route</th>
+        </tr></thead>
         <tbody></tbody>
       </table>
     </div>

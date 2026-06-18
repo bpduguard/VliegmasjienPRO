@@ -75,6 +75,7 @@ $$('#tabs button').forEach((btn) =>
     if (btn.dataset.tab === 'map') setTimeout(() => map.invalidateSize(), 50);
     if (btn.dataset.tab === 'stats') loadStats();
     if (btn.dataset.tab === 'watchlist') loadWatchlist();
+    if (btn.dataset.tab === 'spotted') loadSpotted();
     if (btn.dataset.tab === 'zones') loadZones();
     if (btn.dataset.tab === 'alerts') loadAlerts();
     if (btn.dataset.tab === 'settings') loadSettings();
@@ -1101,6 +1102,84 @@ async function loadAlerts() {
     )
     .join('') || '<tr><td colspan="4" class="muted">No alerts yet</td></tr>';
 }
+
+// ----------------------------------------------------------------- spotted
+function spottedSinceMs(range) {
+  if (range === 'today') { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); }
+  if (range === 'month') return Date.now() - 30 * 86400000;
+  return Date.now() - 7 * 86400000; // week
+}
+
+async function loadSpotted() {
+  const range = $('#spotted-range').value;
+  const since = spottedSinceMs(range);
+  $('#spotted-count').textContent = 'Loading…';
+  let data;
+  try {
+    data = await (await fetch(`/api/spotted?since=${since}`)).json();
+  } catch {
+    $('#spotted-count').textContent = 'Failed to load.';
+    return;
+  }
+  const rows = data.spotted || [];
+  $('#spotted-count').textContent = `${rows.length} aircraft`;
+  $('#spotted-table tbody').innerHTML = rows.length
+    ? rows
+        .map((s) => {
+          const tags = (s.tags || []).filter(Boolean).map((t) => `<span class="badge">${t}</span>`).join(' ');
+          const label = s.callsign || s.registration || s.hex.toUpperCase();
+          const closest = s.minDistKm != null ? `${s.minDistKm.toFixed(1)} km` : '—';
+          return `<tr data-hex="${s.hex}" data-cs="${s.callsign || ''}">
+            <td>${flagHtml(s.country)}<b>${label}</b>${s.registration && s.registration !== label ? ` <span class="muted">${s.registration}</span>` : ''}
+              ${s.link ? ` <a href="${s.link}" target="_blank" rel="noopener" title="plane-alert-db link">↗</a>` : ''}</td>
+            <td>${s.operator || '—'}</td>
+            <td>${s.type || s.icaoType || '—'}</td>
+            <td>${s.category || '—'}</td>
+            <td>${tags || '—'}</td>
+            <td>${s.sessions}×</td>
+            <td>${fmt.dateTime(s.firstSeen)}</td>
+            <td>${fmt.dateTime(s.lastSeen)}</td>
+            <td>${closest}</td>
+            <td class="spotted-route">${s.callsign ? `<button class="route-btn" data-cs="${s.callsign}">route ▾</button>` : '—'}</td>
+          </tr>`;
+        })
+        .join('')
+    : `<tr><td colspan="10" class="muted">No plane-alert-db aircraft seen in this period.</td></tr>`;
+
+  $$('#spotted-table .route-btn').forEach((btn) =>
+    btn.addEventListener('click', async () => {
+      const cell = btn.closest('.spotted-route');
+      cell.innerHTML = 'looking up…';
+      try {
+        const { route, error } = await (await fetch(`/api/route/${encodeURIComponent(btn.dataset.cs)}`)).json();
+        if (route && (route.origin || route.destination)) {
+          const o = route.origin, d = route.destination;
+          cell.innerHTML = `<span title="${o ? o.name + ', ' + o.country : ''} → ${d ? d.name + ', ' + d.country : ''}">
+            ${o?.iata || o?.icao || '?'} → ${d?.iata || d?.icao || '?'}</span>`;
+        } else {
+          cell.innerHTML = `<span class="muted">${error ? 'unavailable' : 'no route'}</span>`;
+        }
+      } catch {
+        cell.innerHTML = '<span class="muted">error</span>';
+      }
+    })
+  );
+  // clicking a row (not the route button/link) selects the plane if it's live
+  $$('#spotted-table tbody tr[data-hex]').forEach((tr) =>
+    tr.addEventListener('click', (e) => {
+      if (e.target.closest('button') || e.target.closest('a')) return;
+      const hex = tr.dataset.hex;
+      if (state.aircraft.has(hex)) {
+        $$('#tabs button').forEach((b) => b.classList.remove('active'));
+        $('#tabs button[data-tab="map"]').classList.add('active');
+        $$('.tab').forEach((t) => t.classList.remove('active'));
+        $('#tab-map').classList.add('active');
+        setTimeout(() => { map.invalidateSize(); selectAircraft(hex, true); }, 60);
+      }
+    })
+  );
+}
+$('#spotted-range').addEventListener('change', loadSpotted);
 
 // ----------------------------------------------------------------- settings
 async function loadSettings() {
