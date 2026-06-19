@@ -30,15 +30,18 @@ code { background: var(--bg2); padding: 1px 5px; border-radius: 4px; }
 #topbar {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 14px;
+  row-gap: 6px;
   padding: 8px 16px;
   background: linear-gradient(90deg, #0c1428, #14213d);
   border-bottom: 1px solid var(--border);
   z-index: 1200;
+  flex-wrap: wrap; /* never clip tabs / weather on narrow screens */
 }
-.brand { font-size: 1.15rem; letter-spacing: 0.5px; }
+.brand { font-size: 1.15rem; letter-spacing: 0.5px; white-space: nowrap; }
 .brand strong { color: var(--accent); }
-#tabs { display: flex; gap: 4px; flex: 1; }
+/* tabs scroll horizontally if they still don't fit, instead of being cut off */
+#tabs { display: flex; gap: 4px; flex: 1 1 auto; min-width: 0; flex-wrap: wrap; }
 #tabs button {
   background: transparent;
   border: none;

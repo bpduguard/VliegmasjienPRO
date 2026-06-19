@@ -2,6 +2,11 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.4.1
+- Fix tabs (e.g. **Spotted**) disappearing on narrower windows. The top bar had no wrap/scroll, so the
+  weather widget plus seven tabs could overflow and clip tabs off the right edge. The bar now wraps
+  cleanly to extra rows instead of hiding anything.
+
 ## 1.4.0
 - More trustworthy routes via a **second source**: routes are now cross-checked between **adsbdb** and
   **hexdb.io** (both free, no key). When both agree (and the geometry fits), the route is marked
