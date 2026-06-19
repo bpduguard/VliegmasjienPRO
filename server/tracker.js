@@ -452,7 +452,8 @@ export function snapshot() {
 export async function aircraftDetail(hex) {
   const ac = getAircraft(hex);
   if (!ac) return null;
-  const { route, error: routeError } = ac.flight ? await lookupRoute(ac.flight) : { route: null, error: null };
+  const { route, error: routeError, agreement, sources } =
+    ac.flight ? await lookupRoute(ac.flight) : { route: null, error: null, agreement: null, sources: [] };
   let etaDest = null;
   let distToDestKm = null;
   let distFromOriginKm = null;
@@ -468,13 +469,28 @@ export async function aircraftDetail(hex) {
   // flight. Sanity-check the route against where the plane really is and where
   // it's heading, so an implausible route is flagged rather than trusted.
   const routeCheck = checkRouteGeometry(ac, route, distToDestKm);
+  // Combine the geometry check with cross-source agreement (adsbdb vs hexdb):
+  //  - geometry says off-route -> low (physical evidence wins)
+  //  - sources disagree -> low
+  //  - both sources agree and geometry is fine -> confirmed
+  let confidence = routeCheck.confidence;
+  let issue = routeCheck.issue;
+  if (confidence !== 'low') {
+    if (agreement === 'conflict') {
+      confidence = 'low';
+      issue = 'the two route databases (adsbdb and hexdb) disagree on this flight';
+    } else if (agreement === 'confirmed') {
+      confidence = 'confirmed';
+    }
+  }
   return {
     ...snapshotOne(ac),
     route,
     routeError,
-    routeConfidence: routeCheck.confidence,
-    routeIssue: routeCheck.issue,
-    etaDestSec: routeCheck.confidence === 'low' ? null : etaDest,
+    routeConfidence: confidence,
+    routeIssue: issue,
+    routeSources: sources,
+    etaDestSec: confidence === 'low' ? null : etaDest,
     distToDestKm,
     distFromOriginKm,
     // "departed" approximation: when we (or the route) first saw this flight

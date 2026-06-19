@@ -132,6 +132,7 @@ later start, so the app never "forgets" a URL you set in the UI:
 |---|---|---|
 | [plane-alert-db](https://github.com/sdr-enthusiasts/plane-alert-db) | watchlist data, categories, operator/type enrichment | no |
 | [adsbdb.com](https://www.adsbdb.com) | callsign → route (origin/destination, airline) | no |
+| [hexdb.io](https://hexdb.io) | second callsign → route source (cross-checked with adsbdb) | no |
 | [planespotters.net](https://www.planespotters.net) | aircraft photos | no |
 | [OurAirports](https://ourairports.com/data/) | airport communication frequencies (map layer) | no |
 | [Open-Meteo](https://open-meteo.com) | current weather at the receiver (top-bar widget) | no |
@@ -159,15 +160,22 @@ loads instantly and reliably. The first sighting of many new aircraft at once ma
 the throttle works through them. If the API rate-limits, the app backs off automatically and retries —
 just give it a few minutes (`/api/status` reports a photo "rate limited" note while it's cooling down).
 
-### Why is a route flagged with a ⚠?
+### How trustworthy is a route? (✓ confirmed / ⚠ flagged)
 
-Routes come from adsbdb, which maps a **callsign** to its *usual* origin/destination. Airlines reuse the
-same callsign for different city pairs, so the database route can be stale or simply not the flight
-happening right now. VliegmasjienPRO cross-checks the route against the aircraft's **actual position and
-heading** — if the plane is well off the direct corridor between the two listed airports, or clearly not
-heading toward the listed destination, the route is shown with a warning (and no ETA) rather than
-presented as fact. There's no free, no-key API for the true live route, so this geometric check is the
-most reliable way to keep routes honest.
+Routes come from callsign databases ([adsbdb](https://www.adsbdb.com) and [hexdb.io](https://hexdb.io),
+both free, no key), which map a **callsign** to its *usual* origin/destination. Airlines reuse the same
+callsign for different city pairs, so a single database can be stale or simply not the flight happening
+right now. VliegmasjienPRO improves trust two ways:
+
+- **Two sources** — it cross-checks adsbdb against hexdb. When both agree the route is marked
+  **✓ confirmed**; when they disagree it's flagged ⚠ and the ETA is withheld. hexdb can also fill in
+  routes adsbdb is missing.
+- **Geometry** — it checks the route against the aircraft's **actual position and heading**. If the
+  plane is well off the direct corridor between the two airports, or clearly not heading toward the
+  listed destination, the route is flagged regardless of what the databases say.
+
+There's no free, no-key API for the *true* live route (FR24/RadarBox APIs are paid), so cross-checking +
+geometry is the most reliable way to keep routes honest without a subscription.
 
 ### Registration & aircraft type (empty Reg/Type columns)
 

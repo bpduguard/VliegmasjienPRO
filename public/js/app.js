@@ -827,9 +827,12 @@ async function loadDetailExtras(hex) {
         <div class="route-airport" style="text-align:right"><div class="code">${dst?.iata || dst?.icao || '?'}</div>
           <div class="name">${dst ? `${dst.municipality || dst.name}, ${dst.country}` : 'Unknown'}</div></div>
       </div>`;
+      const srcLabel = (d.routeSources || []).join(' + ') || 'database';
       if (low) {
-        html += `<div class="route-warn">⚠ This route is from a callsign database and looks inaccurate for this flight —
-          ${d.routeIssue || 'the geometry does not match'}. Callsigns are reused across routes, so treat it with caution.</div>`;
+        html += `<div class="route-warn">⚠ This route looks inaccurate for this flight —
+          ${d.routeIssue || 'the geometry does not match'}. Treat it with caution.</div>`;
+      } else if (d.routeConfidence === 'confirmed') {
+        html += `<div class="route-ok">✓ Confirmed by two sources (adsbdb + hexdb) and consistent with the aircraft's position.</div>`;
       }
       const etas = [];
       if (!low) {
@@ -841,6 +844,7 @@ async function loadDetailExtras(hex) {
         }
       }
       etas.push(`tracked since ${fmt.time(d.firstSeen)}`);
+      etas.push(`source: ${srcLabel}`);
       html += `<div class="route-eta muted">${etas.join(' · ')}</div>`;
       $('#d-route').innerHTML = html;
     })
@@ -1162,10 +1166,16 @@ function sortSpotted(rows) {
 function spottedRouteHtml(cs) {
   if (!cs) return '<span class="muted">—</span>';
   if (!spottedRoute.has(cs)) return '<span class="muted">…</span>';
-  const route = spottedRoute.get(cs);
+  const entry = spottedRoute.get(cs);
+  const route = entry?.route;
   if (route && (route.origin || route.destination)) {
     const o = route.origin, d = route.destination;
-    return `<span title="${o ? o.name + ', ' + o.country : '?'} → ${d ? d.name + ', ' + d.country : '?'}">${o?.iata || o?.icao || '?'} → ${d?.iata || d?.icao || '?'}</span>`;
+    const badge = entry.agreement === 'confirmed'
+      ? ' <span class="rt-ok" title="confirmed by adsbdb + hexdb">✓</span>'
+      : entry.agreement === 'conflict'
+        ? ' <span class="rt-warn" title="route databases disagree — treat with caution">⚠</span>'
+        : '';
+    return `<span title="${o ? o.name + ', ' + o.country : '?'} → ${d ? d.name + ', ' + d.country : '?'}">${o?.iata || o?.icao || '?'} → ${d?.iata || d?.icao || '?'}</span>${badge}`;
   }
   return '<span class="muted">no route</span>';
 }
@@ -1231,9 +1241,12 @@ function renderSpotted() {
 function hydrateSpotted() {
   const needRoute = state.spotted.filter((s) => s.callsign && !spottedRoute.has(s.callsign));
   runPool(needRoute, async (s) => {
-    let route = null;
-    try { route = (await (await fetch(`/api/route/${encodeURIComponent(s.callsign)}`)).json()).route; } catch { /* ignore */ }
-    spottedRoute.set(s.callsign, route);
+    let entry = { route: null, agreement: null };
+    try {
+      const r = await (await fetch(`/api/route/${encodeURIComponent(s.callsign)}`)).json();
+      entry = { route: r.route, agreement: r.agreement };
+    } catch { /* ignore */ }
+    spottedRoute.set(s.callsign, entry);
     $$(`#spotted-table td.spotted-route[data-cs="${s.callsign}"]`).forEach((c) => (c.innerHTML = spottedRouteHtml(s.callsign)));
   });
 }

@@ -156,8 +156,8 @@ app.get('/api/spotted', (req, res) => {
 // Lazy route lookup by callsign (used by the Spotted tab rows).
 app.get('/api/route/:callsign', async (req, res) => {
   try {
-    const { route, error } = await lookupRoute(req.params.callsign);
-    res.json({ route, error });
+    const { route, error, agreement, sources } = await lookupRoute(req.params.callsign);
+    res.json({ route, error, agreement, sources });
   } catch (e) {
     res.status(502).json({ error: e.message });
   }

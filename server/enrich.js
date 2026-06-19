@@ -127,61 +127,143 @@ export function maybeAutoRefreshPlaneDb() {
   }
 }
 
-// ---------------------------------------------------------------- routes (adsbdb)
+// ---------------------------------------------------------------- routes
 
 const ADSBDB_BASE = process.env.ADSBDB_BASE || 'https://api.adsbdb.com/v0';
-// callsign -> { ts, route, error } ; route = { airline, origin, destination } or null
+const HEXDB_BASE = process.env.HEXDB_BASE || 'https://hexdb.io/api/v1';
+// callsign -> { ts, route, error, agreement, sources }
 const routeCache = new Map();
 const ROUTE_TTL = 6 * 3600000; // remember a found route for 6h
 const ROUTE_NOTFOUND_TTL = 30 * 60000; // genuine "unknown callsign" — back off 30m
 const ROUTE_ERROR_TTL = 20000; // network/egress failure — retry soon
 
-// Returns { route, error }. `error` is set when the lookup service could not be
-// reached (DNS/egress/timeout) so the UI can explain *why* there's no route,
-// instead of showing the same "no route" as a genuinely unknown callsign.
-export async function lookupRoute(callsign) {
-  const cs = (callsign || '').trim().toUpperCase();
-  if (!cs) return { route: null, error: null };
-  const cached = routeCache.get(cs);
-  if (cached) {
-    const ttl = cached.route ? ROUTE_TTL : cached.error ? ROUTE_ERROR_TTL : ROUTE_NOTFOUND_TTL;
-    if (Date.now() - cached.ts < ttl) return { route: cached.route, error: cached.error };
-  }
-  let route = null;
-  let error = null;
+// adsbdb: callsign -> { route, error }
+async function fetchAdsbdbRoute(cs) {
   try {
-    const res = await extFetch(`${ADSBDB_BASE}/callsign/${encodeURIComponent(cs)}`, {
-      signal: AbortSignal.timeout(10000)
-    });
+    const res = await extFetch(`${ADSBDB_BASE}/callsign/${encodeURIComponent(cs)}`, { signal: AbortSignal.timeout(10000) });
     if (res.ok) {
       const data = await res.json();
       const fr = data?.response?.flightroute;
       if (fr) {
-        route = {
-          callsign: cs,
-          airline: fr.airline
-            ? { name: fr.airline.name, icao: fr.airline.icao, iata: fr.airline.iata, country: fr.airline.country }
-            : null,
-          origin: airportInfo(fr.origin),
-          destination: airportInfo(fr.destination)
+        return {
+          route: {
+            callsign: cs,
+            airline: fr.airline
+              ? { name: fr.airline.name, icao: fr.airline.icao, iata: fr.airline.iata, country: fr.airline.country }
+              : null,
+            origin: airportInfo(fr.origin),
+            destination: airportInfo(fr.destination)
+          },
+          error: null
         };
       }
-      // res.ok with no flightroute === genuinely unknown callsign (not an error)
-    } else if (res.status === 404) {
-      // adsbdb returns 404 for unknown callsigns — treat as "not found", not an error
-    } else {
-      error = `route service HTTP ${res.status}`;
+      return { route: null, error: null }; // ok, but unknown callsign
     }
+    if (res.status === 404) return { route: null, error: null };
+    return { route: null, error: `route service HTTP ${res.status}` };
   } catch (e) {
-    // DNS / no egress / timeout — the most common real-world cause on a
-    // firewalled Raspberry Pi. Surface it instead of swallowing it.
-    error = e.name === 'TimeoutError' ? 'route service timed out' : `route service unreachable (${e.code || e.message})`;
+    return { route: null, error: e.name === 'TimeoutError' ? 'route service timed out' : `route service unreachable (${e.code || e.message})` };
   }
-  routeCache.set(cs, { ts: Date.now(), route, error });
+}
+
+// hexdb: callsign -> array of ICAO airport codes along the route (or null)
+async function fetchHexdbRoute(cs) {
+  try {
+    const res = await extFetch(`${HEXDB_BASE}/route/icao/${encodeURIComponent(cs)}`, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const icaoList = String(data?.route || '')
+      .toUpperCase()
+      .split('-')
+      .map((s) => s.trim())
+      .filter((s) => /^[A-Z0-9]{3,4}$/.test(s));
+    return icaoList.length ? icaoList : null;
+  } catch {
+    return null;
+  }
+}
+
+// hexdb airport details (cached) — used to build a route when only hexdb has one.
+const hexAirportCache = new Map();
+async function lookupHexdbAirport(icao) {
+  icao = (icao || '').toUpperCase();
+  if (!icao) return null;
+  if (hexAirportCache.has(icao)) return hexAirportCache.get(icao);
+  let info = null;
+  try {
+    const res = await extFetch(`${HEXDB_BASE}/airport/icao/${icao}`, { signal: AbortSignal.timeout(8000) });
+    if (res.ok) {
+      const a = await res.json();
+      if (a && (a.icao || a.airport) && Number.isFinite(a.latitude)) {
+        info = {
+          name: a.airport || icao,
+          icao: a.icao || icao,
+          iata: a.iata || null,
+          municipality: a.region_name || null,
+          country: a.country_code || null,
+          lat: a.latitude,
+          lon: a.longitude
+        };
+      }
+    }
+  } catch { /* ignore */ }
+  hexAirportCache.set(icao, info);
+  if (hexAirportCache.size > 4000) hexAirportCache.clear();
+  return info;
+}
+
+// Cross-checked route lookup. Returns { route, error, agreement, sources }.
+//  agreement: 'confirmed' (adsbdb & hexdb agree) | 'conflict' (they disagree) |
+//             'single' (only one source) | null (no route)
+export async function lookupRoute(callsign) {
+  const cs = (callsign || '').trim().toUpperCase();
+  if (!cs) return { route: null, error: null, agreement: null, sources: [] };
+  const cached = routeCache.get(cs);
+  if (cached) {
+    const ttl = cached.route ? ROUTE_TTL : cached.error ? ROUTE_ERROR_TTL : ROUTE_NOTFOUND_TTL;
+    if (Date.now() - cached.ts < ttl) {
+      return { route: cached.route, error: cached.error, agreement: cached.agreement, sources: cached.sources };
+    }
+  }
+
+  const [adsb, hexList] = await Promise.all([fetchAdsbdbRoute(cs), fetchHexdbRoute(cs)]);
+
+  let route = null;
+  let agreement = null;
+  const sources = [];
+  const error = adsb.error;
+
+  if (adsb.route) {
+    route = adsb.route;
+    sources.push('adsbdb');
+    if (hexList?.length) {
+      const oIcao = adsb.route.origin?.icao;
+      const dIcao = adsb.route.destination?.icao;
+      if (oIcao && dIcao) {
+        sources.push('hexdb');
+        agreement = hexList.includes(oIcao) && hexList.includes(dIcao) ? 'confirmed' : 'conflict';
+      } else {
+        agreement = 'single'; // can't compare reliably
+      }
+    } else {
+      agreement = 'single';
+    }
+  } else if (hexList && hexList.length >= 2) {
+    // only hexdb has a route — build one from its first/last airport
+    const [o, d] = await Promise.all([lookupHexdbAirport(hexList[0]), lookupHexdbAirport(hexList[hexList.length - 1])]);
+    if (o || d) {
+      route = { callsign: cs, airline: null, origin: o, destination: d };
+      sources.push('hexdb');
+      agreement = 'single';
+    }
+  }
+
+  const value = { route, error, agreement, sources };
+  routeCache.set(cs, { ts: Date.now(), ...value });
   if (routeCache.size > 2000) {
     for (const k of routeCache.keys()) { routeCache.delete(k); if (routeCache.size <= 1500) break; }
   }
-  return { route, error };
+  return value;
 }
 
 function airportInfo(a) {

@@ -2,6 +2,12 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.4.0
+- More trustworthy routes via a **second source**: routes are now cross-checked between **adsbdb** and
+  **hexdb.io** (both free, no key). When both agree (and the geometry fits), the route is marked
+  **✓ confirmed**; when they disagree it's flagged as inaccurate (no ETA); hexdb can also supply routes
+  adsbdb is missing. The Spotted tab's route column shows the same ✓/⚠ markers.
+
 ## 1.3.1
 - More trustworthy routes. Database routes (from adsbdb) are keyed by callsign and can be stale/wrong
   for the actual flight, so the route is now **sanity-checked against the aircraft's real position and
