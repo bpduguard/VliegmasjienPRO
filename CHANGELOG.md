@@ -2,6 +2,13 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.3.1
+- More trustworthy routes. Database routes (from adsbdb) are keyed by callsign and can be stale/wrong
+  for the actual flight, so the route is now **sanity-checked against the aircraft's real position and
+  heading**: if the plane is well off the direct corridor between the listed airports, or clearly not
+  heading toward the listed destination, the route is shown with a **⚠ warning** (and its ETA is
+  suppressed) instead of being presented as fact.
+
 ## 1.3.0
 - New **current-weather widget** in the top bar (next to the status light): condition icon,
   temperature, wind speed + direction, humidity and precipitation for the receiver's location, via

@@ -817,21 +817,28 @@ async function loadDetailExtras(hex) {
         return;
       }
       const o = d.route.origin, dst = d.route.destination;
+      const low = d.routeConfidence === 'low';
       let html = '';
       if (d.route.airline?.name) html += `<div class="muted" style="margin-bottom:6px">${d.route.airline.name}</div>`;
-      html += `<div class="route-box">
+      html += `<div class="route-box${low ? ' route-suspect' : ''}">
         <div class="route-airport"><div class="code">${o?.iata || o?.icao || '?'}</div>
           <div class="name">${o ? `${o.municipality || o.name}, ${o.country}` : 'Unknown'}</div></div>
         <div class="route-arrow">→</div>
         <div class="route-airport" style="text-align:right"><div class="code">${dst?.iata || dst?.icao || '?'}</div>
           <div class="name">${dst ? `${dst.municipality || dst.name}, ${dst.country}` : 'Unknown'}</div></div>
       </div>`;
+      if (low) {
+        html += `<div class="route-warn">⚠ This route is from a callsign database and looks inaccurate for this flight —
+          ${d.routeIssue || 'the geometry does not match'}. Callsigns are reused across routes, so treat it with caution.</div>`;
+      }
       const etas = [];
-      if (d.distFromOriginKm != null) etas.push(`${d.distFromOriginKm} km flown from origin`);
-      if (d.distToDestKm != null) etas.push(`${d.distToDestKm} km to go`);
-      if (d.etaDestSec != null) {
-        const eta = new Date(Date.now() + d.etaDestSec * 1000);
-        etas.push(`<b>ETA ${eta.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</b> (~${fmt.dur(d.etaDestSec)})`);
+      if (!low) {
+        if (d.distFromOriginKm != null) etas.push(`${d.distFromOriginKm} km flown from origin`);
+        if (d.distToDestKm != null) etas.push(`${d.distToDestKm} km to go`);
+        if (d.etaDestSec != null) {
+          const eta = new Date(Date.now() + d.etaDestSec * 1000);
+          etas.push(`<b>ETA ${eta.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</b> (~${fmt.dur(d.etaDestSec)})`);
+        }
       }
       etas.push(`tracked since ${fmt.time(d.firstSeen)}`);
       html += `<div class="route-eta muted">${etas.join(' · ')}</div>`;

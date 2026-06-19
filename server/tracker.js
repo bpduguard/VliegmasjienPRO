@@ -2,7 +2,7 @@
 // classifies aircraft, checks zones + watchlist, fires notifications and
 // records sightings into the database.
 import { getConfig, saveConfig } from './config.js';
-import { haversineKm, secondsToZoneEntry, etaSeconds } from './geo.js';
+import { haversineKm, secondsToZoneEntry, etaSeconds, bearingDeg, crossTrackKm, alongTrackKm, angleDiff } from './geo.js';
 import {
   planeDbLookup, lookupRoute, cachedAirlineName, maybeAutoRefreshPlaneDb,
   aircraftDbLocal, lookupAircraft
@@ -464,16 +464,47 @@ export async function aircraftDetail(hex) {
   if (route?.origin?.lat != null && ac.lat != null) {
     distFromOriginKm = +haversineKm(ac.lat, ac.lon, route.origin.lat, route.origin.lon).toFixed(0);
   }
+  // Database routes are keyed by callsign and can be stale/wrong for the actual
+  // flight. Sanity-check the route against where the plane really is and where
+  // it's heading, so an implausible route is flagged rather than trusted.
+  const routeCheck = checkRouteGeometry(ac, route, distToDestKm);
   return {
     ...snapshotOne(ac),
     route,
     routeError,
-    etaDestSec: etaDest,
+    routeConfidence: routeCheck.confidence,
+    routeIssue: routeCheck.issue,
+    etaDestSec: routeCheck.confidence === 'low' ? null : etaDest,
     distToDestKm,
     distFromOriginKm,
     // "departed" approximation: when we (or the route) first saw this flight
     firstSeen: ac.firstSeen
   };
+}
+
+// Returns { confidence: 'ok'|'low'|null, issue }. `null` when we can't judge
+// (no route, or aircraft has no position). 'low' means the route is
+// geometrically implausible for this aircraft right now.
+function checkRouteGeometry(ac, route, distToDestKm) {
+  const o = route?.origin, d = route?.destination;
+  if (!route || ac.lat == null || o?.lat == null || d?.lat == null) return { confidence: null, issue: null };
+  const routeLen = haversineKm(o.lat, o.lon, d.lat, d.lon);
+  if (routeLen < 30) return { confidence: null, issue: null }; // origin≈dest, can't judge
+
+  // 1) Is the plane anywhere near the direct corridor between the two airports?
+  const xtk = Math.abs(crossTrackKm(ac.lat, ac.lon, o.lat, o.lon, d.lat, d.lon));
+  const atk = alongTrackKm(ac.lat, ac.lon, o.lat, o.lon, d.lat, d.lon);
+  const corridor = Math.max(150, 0.35 * routeLen); // airways wander; be generous
+  const offCorridor = xtk > corridor || atk < -200 || atk > routeLen + 200;
+
+  // 2) En-route (well clear of both airports), is it actually heading to the dest?
+  const enRoute = (distToDestKm ?? 0) > 80 && haversineKm(ac.lat, ac.lon, o.lat, o.lon) > 80;
+  const flyingAway =
+    enRoute && ac.track != null && angleDiff(ac.track, bearingDeg(ac.lat, ac.lon, d.lat, d.lon)) > 90;
+
+  if (offCorridor) return { confidence: 'low', issue: 'aircraft is well off the direct corridor between the listed airports' };
+  if (flyingAway) return { confidence: 'low', issue: 'aircraft is not heading toward the listed destination' };
+  return { confidence: 'ok', issue: null };
 }
 
 function snapshotOne(ac) {

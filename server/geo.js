@@ -12,6 +12,30 @@ export function haversineKm(lat1, lon1, lat2, lon2) {
   return 2 * R * Math.asin(Math.sqrt(a));
 }
 
+// Smallest absolute difference between two bearings (degrees), 0..180.
+export function angleDiff(a, b) {
+  const d = Math.abs(a - b) % 360;
+  return d > 180 ? 360 - d : d;
+}
+
+// Signed cross-track distance (km) of a point from the great circle through
+// p1→p2 — i.e. how far the point sits off the direct route corridor.
+export function crossTrackKm(lat, lon, lat1, lon1, lat2, lon2) {
+  const d13 = haversineKm(lat1, lon1, lat, lon) / R; // angular distance p1→p3
+  const t13 = (bearingDeg(lat1, lon1, lat, lon) * Math.PI) / 180;
+  const t12 = (bearingDeg(lat1, lon1, lat2, lon2) * Math.PI) / 180;
+  return Math.asin(Math.max(-1, Math.min(1, Math.sin(d13) * Math.sin(t13 - t12)))) * R;
+}
+
+// Along-track distance (km) from p1 to the point's projection onto p1→p2.
+// Negative = projection lies "behind" p1; > route length = beyond p2.
+export function alongTrackKm(lat, lon, lat1, lon1, lat2, lon2) {
+  const d13 = haversineKm(lat1, lon1, lat, lon) / R;
+  const xt = crossTrackKm(lat, lon, lat1, lon1, lat2, lon2) / R;
+  const sign = angleDiff(bearingDeg(lat1, lon1, lat, lon), bearingDeg(lat1, lon1, lat2, lon2)) > 90 ? -1 : 1;
+  return sign * Math.acos(Math.max(-1, Math.min(1, Math.cos(d13) / Math.cos(xt)))) * R;
+}
+
 export function bearingDeg(lat1, lon1, lat2, lon2) {
   const f1 = (lat1 * Math.PI) / 180;
   const f2 = (lat2 * Math.PI) / 180;

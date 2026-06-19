@@ -129,6 +129,7 @@ export function maybeAutoRefreshPlaneDb() {
 
 // ---------------------------------------------------------------- routes (adsbdb)
 
+const ADSBDB_BASE = process.env.ADSBDB_BASE || 'https://api.adsbdb.com/v0';
 // callsign -> { ts, route, error } ; route = { airline, origin, destination } or null
 const routeCache = new Map();
 const ROUTE_TTL = 6 * 3600000; // remember a found route for 6h
@@ -149,7 +150,7 @@ export async function lookupRoute(callsign) {
   let route = null;
   let error = null;
   try {
-    const res = await extFetch(`https://api.adsbdb.com/v0/callsign/${encodeURIComponent(cs)}`, {
+    const res = await extFetch(`${ADSBDB_BASE}/callsign/${encodeURIComponent(cs)}`, {
       signal: AbortSignal.timeout(10000)
     });
     if (res.ok) {
@@ -246,7 +247,7 @@ export async function lookupAircraft(hex) {
     for (const k of acAttempted.keys()) { acAttempted.delete(k); if (acAttempted.size <= 6000) break; }
   }
   try {
-    const res = await extFetch(`https://api.adsbdb.com/v0/aircraft/${hex}`, { signal: AbortSignal.timeout(10000) });
+    const res = await extFetch(`${ADSBDB_BASE}/aircraft/${hex}`, { signal: AbortSignal.timeout(10000) });
     if (res.ok) {
       const data = await res.json();
       const a = data?.response?.aircraft;

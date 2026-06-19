@@ -159,6 +159,16 @@ loads instantly and reliably. The first sighting of many new aircraft at once ma
 the throttle works through them. If the API rate-limits, the app backs off automatically and retries —
 just give it a few minutes (`/api/status` reports a photo "rate limited" note while it's cooling down).
 
+### Why is a route flagged with a ⚠?
+
+Routes come from adsbdb, which maps a **callsign** to its *usual* origin/destination. Airlines reuse the
+same callsign for different city pairs, so the database route can be stale or simply not the flight
+happening right now. VliegmasjienPRO cross-checks the route against the aircraft's **actual position and
+heading** — if the plane is well off the direct corridor between the two listed airports, or clearly not
+heading toward the listed destination, the route is shown with a warning (and no ETA) rather than
+presented as fact. There's no free, no-key API for the true live route, so this geometric check is the
+most reliable way to keep routes honest.
+
 ### Registration & aircraft type (empty Reg/Type columns)
 
 Plain **dump1090-fa** (and the SBS feed) only broadcast position, callsign and altitude — they do **not**
