@@ -11,6 +11,7 @@ import { upsertSighting, pruneOldData, insertTracks, pruneTracks } from './db.js
 import { notify } from './notify.js';
 import { ensureSbs, stopSbs, sbsSnapshot, sbsStatus } from './sbs.js';
 import { icaoToCountry } from './country.js';
+import { initRange, updateRangePoint, saveRange } from './range.js';
 
 // hex -> live aircraft object
 const aircraft = new Map();
@@ -222,6 +223,8 @@ async function pollOnce() {
     const rcv = cfg.receiver;
     if (rcv.lat != null && ac.lat != null) {
       ac.distKm = +haversineKm(rcv.lat, rcv.lon, ac.lat, ac.lon).toFixed(1);
+      // accumulate the actual reception-range outline
+      if (!ac.onGround) updateRangePoint(rcv, ac.lat, ac.lon, ac.alt_baro, ac.distKm, now);
     }
 
     // trail
@@ -549,6 +552,7 @@ async function detectReceiver() {
 let pollTimer = null;
 export function startTracker() {
   detectReceiver();
+  initRange();
   maybeAutoRefreshPlaneDb();
   const loop = async () => {
     try {
@@ -559,6 +563,10 @@ export function startTracker() {
     pollTimer = setTimeout(loop, getConfig().pollIntervalMs);
   };
   loop();
+  // persist the accumulating range outline periodically (and on the way out)
+  setInterval(() => saveRange(), 60000);
+  process.once('SIGTERM', () => saveRange(true));
+  process.once('SIGINT', () => saveRange(true));
   // housekeeping every 6h: prune DB + maybe refresh plane-alert-db
   setInterval(() => {
     try { pruneOldData(getConfig().retentionDays); } catch (e) { console.warn('[db] prune failed:', e.message); }

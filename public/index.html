@@ -60,6 +60,7 @@
           <label class="menu-item"><input type="checkbox" id="weather-toggle" /> <span>🌦 Weather radar</span></label>
           <label class="menu-item"><input type="checkbox" id="freq-toggle" /> <span>📻 Frequencies</span></label>
           <label class="menu-item"><input type="checkbox" id="rings-toggle" /> <span>⊚ Distance rings</span></label>
+          <label class="menu-item"><input type="checkbox" id="range-toggle" /> <span>📡 Range outline</span></label>
           <label class="menu-item"><input type="checkbox" id="labels-toggle" checked /> <span>🏷 Aircraft labels</span></label>
         </div>
       </div>
@@ -381,6 +382,17 @@
         <div class="row wrap">
           <span id="s-freq-meta" class="muted">—</span>
           <button id="s-freq-refresh">Download frequencies now</button>
+        </div>
+      </section>
+
+      <section class="settings-block">
+        <h3>Range outline <span class="muted">(map layer)</span></h3>
+        <p class="muted">Your receiver's actual coverage shape, built from the farthest aircraft seen in
+          each direction. It grows and refines the longer the app runs. Toggle it from the map's
+          <strong>Layers ▸ Range outline</strong>.</p>
+        <div class="row wrap">
+          <span id="s-range-meta" class="muted">—</span>
+          <button id="s-range-clear">Reset range outline</button>
         </div>
       </section>
 

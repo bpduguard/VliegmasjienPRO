@@ -2,6 +2,12 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.5.0
+- New **Range outline** map layer: your receiver's *actual* coverage shape, drawn as a polygon from the
+  farthest aircraft seen in each 1° bearing sector. It accumulates over time, persists across restarts,
+  and can be reset from Settings. Toggle it from Layers ▸ Range outline (distinct from the perfect
+  Distance rings).
+
 ## 1.4.1
 - Fix tabs (e.g. **Spotted**) disappearing on narrower windows. The top bar had no wrap/scroll, so the
   weather widget plus seven tabs could overflow and clip tabs off the right edge. The bar now wraps

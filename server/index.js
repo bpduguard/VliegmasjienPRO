@@ -16,6 +16,7 @@ import { setBroadcast, notify } from './notify.js';
 import { refreshFrequencies, frequenciesMeta } from './freq.js';
 import { airportFreqsInBounds, replayBounds, replayFrame, spottedSince } from './db.js';
 import { icaoToCountry } from './country.js';
+import { rangeOutline, clearRange } from './range.js';
 import { VERSION } from './version.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -395,6 +396,10 @@ app.get('/api/weather/current', async (req, res) => {
     res.status(502).json({ error: e.message });
   }
 });
+
+// ------------------------------------------------------------------ range outline
+app.get('/api/range', (req, res) => res.json(rangeOutline()));
+app.post('/api/range/clear', (req, res) => res.json(clearRange()));
 
 // RainViewer frame metadata proxy (avoids CORS surprises and centralizes caching).
 let rainviewerCache = { ts: 0, data: null };

@@ -134,7 +134,7 @@ $('#labels-toggle').addEventListener('change', (e) => {
 
 // layers dropdown (Weather / Frequencies / Labels)
 function refreshLayersBtn() {
-  const anyOn = $('#weather-toggle').checked || $('#freq-toggle').checked || $('#rings-toggle').checked;
+  const anyOn = $('#weather-toggle').checked || $('#freq-toggle').checked || $('#rings-toggle').checked || $('#range-toggle').checked;
   $('#layers-btn').classList.toggle('has-active', anyOn);
 }
 $('#layers-btn').addEventListener('click', (e) => {
@@ -220,6 +220,41 @@ $('#rings-toggle').addEventListener('change', (e) => {
   }
   refreshLayersBtn();
 });
+
+// ----------------------------------------------------------------- range outline
+// The actual reception coverage (farthest aircraft seen per bearing).
+const rangeLayer = L.layerGroup();
+let rangePoly = null;
+
+async function drawRange() {
+  try {
+    const data = await (await fetch('/api/range')).json();
+    const pts = (data.points || []).map((p) => [p.lat, p.lon]);
+    rangeLayer.clearLayers();
+    rangePoly = null;
+    if (pts.length < 3) {
+      if (state.rangeOn) toast({ kind: 'test', title: 'Range outline still building', message: 'Not enough coverage recorded yet — let the receiver run a while.' });
+      return;
+    }
+    rangePoly = L.polygon(pts, {
+      color: '#22d3ee', weight: 2, opacity: 0.9, fillColor: '#22d3ee', fillOpacity: 0.05, interactive: true
+    }).bindTooltip(`Reception range · max ${data.meta?.maxKm ?? '?'} km · ${data.meta?.sectors ?? 0} sectors`, { sticky: true });
+    rangePoly.addTo(rangeLayer);
+  } catch { /* ignore */ }
+}
+
+$('#range-toggle').addEventListener('change', (e) => {
+  state.rangeOn = e.target.checked;
+  if (state.rangeOn) {
+    rangeLayer.addTo(map);
+    drawRange();
+  } else {
+    map.removeLayer(rangeLayer);
+  }
+  refreshLayersBtn();
+});
+// refresh the outline periodically while shown (it grows over time)
+setInterval(() => { if (state.rangeOn) drawRange(); }, 60000);
 
 // ----------------------------------------------------------------- frequencies layer
 const freqLayer = L.layerGroup();
@@ -1305,7 +1340,18 @@ async function loadSettings() {
   $('#s-freq-meta').textContent = fmeta.count
     ? `${fmeta.count.toLocaleString()} airports with frequencies${fmeta.updatedAt ? ', updated ' + fmt.dateTime(fmeta.updatedAt) : ''}`
     : 'Not downloaded yet';
+  const rng = await (await fetch('/api/range')).json();
+  $('#s-range-meta').textContent = rng.meta?.sectors
+    ? `${rng.meta.sectors}/360 sectors covered · max range ${rng.meta.maxKm} km`
+    : 'No coverage recorded yet';
 }
+
+$('#s-range-clear').addEventListener('click', async () => {
+  if (!confirm('Reset the recorded range outline? It will rebuild as aircraft are seen.')) return;
+  await fetch('/api/range/clear', { method: 'POST' });
+  $('#s-range-meta').textContent = 'Reset — rebuilding as aircraft are seen';
+  if (state.rangeOn) drawRange();
+});
 
 $('#s-freq-refresh').addEventListener('click', async () => {
   $('#s-freq-meta').textContent = 'Downloading OurAirports data… (a few MB)';
