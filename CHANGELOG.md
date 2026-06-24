@@ -2,6 +2,14 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.6.0
+- Settings now shows the **on-disk size of the log data** — the retention-governed history
+  (sightings powering Spotted/Statistics), the alert log, and the replay trail — along with row
+  counts and the total database file size, measured with SQLite's `dbstat`.
+- New **Purge log now** button to clear all that log data on demand and **reclaim the disk space**
+  (runs `VACUUM` + truncates the WAL so the file actually shrinks). Reference/cache tables (aircraft
+  DB, photos, frequencies) are kept. The readout refreshes immediately after purging.
+
 ## 1.5.3
 - **Alerts** tab: pagination, matching the Spotted tab. Pick a page size (10 / 25 / 50 / 100 / All)
   and step through with **‹ Prev / Next ›** plus windowed page numbers. The pager is now a shared

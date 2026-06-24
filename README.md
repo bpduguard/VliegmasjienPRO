@@ -24,7 +24,9 @@ Designed to run in Docker on a **Raspberry Pi 5** (arm64) next to your existing 
   computed **ETA at destination**; "tracked since" shows when you first picked up the flight
 - 🧮 **Filters**: airlines / military / private / business / emergency, plus a free-text airline filter
 - 📈 **Statistics** with a configurable retention period: aircraft per day, top types, top airlines,
-  categories — and a per-aircraft **sighting history** ("seen before") when you click a plane
+  categories — and a per-aircraft **sighting history** ("seen before") when you click a plane.
+  Settings shows the **on-disk size of the retained log** and a **Purge log now** button to clear it
+  and reclaim the space
 - 🌡 **Current-weather widget** in the top bar (temperature, wind, humidity, rain) for the receiver's
   location, via Open-Meteo — no API key
 - 📷 **Aircraft photos** via planespotters.net

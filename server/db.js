@@ -1,6 +1,7 @@
 // SQLite persistence using node:sqlite (built into Node >= 22.13, no native build
 // step — keeps the Docker image simple on arm64 / Raspberry Pi 5).
 import { DatabaseSync } from 'node:sqlite';
+import fs from 'node:fs';
 import path from 'node:path';
 import { DATA_DIR } from './config.js';
 
@@ -356,6 +357,51 @@ export function pruneOldData(retentionDays) {
   const cutoff = Date.now() - retentionDays * 86400000;
   db.prepare('DELETE FROM sightings WHERE last_seen < ?').run(cutoff);
   db.prepare('DELETE FROM alerts WHERE ts < ?').run(cutoff);
+}
+
+// The retention-governed "log" data: the spotted/stats history (sightings),
+// the alert log, and the replay position trail. Reference/cache tables
+// (aircraft_db, photos, airport_freqs) are deliberately excluded — they're not
+// time-based logs and are expensive to rebuild.
+const LOG_TABLES = ['sightings', 'alerts', 'tracks'];
+
+// On-disk footprint of the log data plus the whole database file. Uses SQLite's
+// dbstat virtual table to attribute pages (incl. indexes) to the log tables.
+export function logStorageInfo() {
+  const file = path.join(DATA_DIR, 'vliegmasjien.db');
+  let fileBytes = 0;
+  for (const suffix of ['', '-wal', '-shm']) {
+    try { fileBytes += fs.statSync(file + suffix).size; } catch { /* missing is fine */ }
+  }
+  // every DB object (the log tables themselves + their indexes) that counts as log
+  const logNames = new Set(LOG_TABLES);
+  for (const r of db.prepare("SELECT name, tbl_name FROM sqlite_master WHERE type = 'index'").all()) {
+    if (LOG_TABLES.includes(r.tbl_name)) logNames.add(r.name);
+  }
+  let logBytes = null;
+  try {
+    db.exec('PRAGMA wal_checkpoint(PASSIVE)'); // fold WAL pages in so dbstat is current
+    logBytes = 0;
+    for (const r of db.prepare('SELECT name, SUM(pgsize) AS bytes FROM dbstat GROUP BY name').all()) {
+      if (logNames.has(r.name)) logBytes += r.bytes || 0;
+    }
+  } catch { logBytes = null; }
+  const count = (t) => db.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get().n;
+  return {
+    fileBytes,
+    logBytes,
+    sightings: count('sightings'),
+    alerts: count('alerts'),
+    tracks: count('tracks')
+  };
+}
+
+// Manually clear all retention-governed log data and reclaim the disk space.
+export function purgeLogs() {
+  for (const t of LOG_TABLES) db.prepare(`DELETE FROM ${t}`).run();
+  db.exec('VACUUM'); // rebuild the db file compactly, handing freed pages back to the OS
+  db.exec('PRAGMA wal_checkpoint(TRUNCATE)'); // and shrink the -wal file back to 0 on disk
+  return logStorageInfo();
 }
 
 // --- replay (position time-series) ------------------------------------------

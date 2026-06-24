@@ -1458,6 +1458,28 @@ async function loadSettings() {
   $('#s-range-meta').textContent = rng.meta?.sectors
     ? `${rng.meta.sectors}/360 sectors covered · max range ${rng.meta.maxKm} km`
     : 'No coverage recorded yet';
+  loadStorage();
+}
+
+function fmtMb(bytes) {
+  if (bytes == null) return '?';
+  return (bytes / 1048576).toFixed(bytes < 10485760 ? 2 : 1) + ' MB';
+}
+
+function renderStorage(s) {
+  const size = s.logBytes != null ? fmtMb(s.logBytes) : fmtMb(s.fileBytes);
+  $('#s-storage-meta').innerHTML =
+    `Log size: <b>${size}</b> · ${s.sightings.toLocaleString()} sightings, `
+    + `${s.alerts.toLocaleString()} alerts, ${s.tracks.toLocaleString()} replay points`
+    + ` · database file ${fmtMb(s.fileBytes)}`;
+}
+
+async function loadStorage() {
+  try {
+    renderStorage(await (await fetch('/api/storage')).json());
+  } catch {
+    $('#s-storage-meta').textContent = 'Could not read storage size.';
+  }
 }
 
 $('#s-range-clear').addEventListener('click', async () => {
@@ -1465,6 +1487,17 @@ $('#s-range-clear').addEventListener('click', async () => {
   await fetch('/api/range/clear', { method: 'POST' });
   $('#s-range-meta').textContent = 'Reset — rebuilding as aircraft are seen';
   if (state.rangeOn) drawRange();
+});
+
+$('#s-storage-purge').addEventListener('click', async () => {
+  if (!confirm('Purge ALL log data now? This deletes the entire sighting history (Spotted/Statistics), the alert log, and the replay trail, then reclaims disk space. Reference data (aircraft DB, photos, frequencies) is kept. This cannot be undone.')) return;
+  $('#s-storage-meta').textContent = 'Purging…';
+  try {
+    const s = await (await fetch('/api/storage/purge', { method: 'POST' })).json();
+    renderStorage(s);
+  } catch {
+    $('#s-storage-meta').textContent = 'Purge failed.';
+  }
 });
 
 $('#s-freq-refresh').addEventListener('click', async () => {

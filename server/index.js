@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
 import { loadConfig, getConfig, saveConfig, publicConfig, DATA_DIR } from './config.js';
-import { initDb, aircraftHistory, recentAlerts, statsSummary, aircraftDbCount, bulkImportAircraftDb } from './db.js';
+import { initDb, aircraftHistory, recentAlerts, statsSummary, aircraftDbCount, bulkImportAircraftDb, logStorageInfo, purgeLogs } from './db.js';
 import {
   loadPlaneDbFromDisk, refreshPlaneDb, planeDbMeta, planeDbLookup, planeDbSearch, aircraftDbError, lookupRoute
 } from './enrich.js';
@@ -110,6 +110,17 @@ app.get('/api/stats', (req, res) => {
 });
 
 app.get('/api/alerts', (req, res) => res.json({ alerts: recentAlerts(150) }));
+
+// Storage usage of the retention-governed log data (history, alerts, replay).
+app.get('/api/storage', (req, res) => {
+  try { res.json(logStorageInfo()); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+// Manually purge all log data and reclaim disk space.
+app.post('/api/storage/purge', (req, res) => {
+  try { res.json(purgeLogs()); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 app.get('/api/status', (req, res) =>
   res.json({
