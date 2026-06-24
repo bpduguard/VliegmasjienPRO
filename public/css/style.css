@@ -229,6 +229,15 @@ button.big { padding: 11px 22px; font-size: 1rem; }
 .ph-skel { display: inline-block; width: 84px; height: 52px; border-radius: 5px; background: var(--bg2); }
 .ph-skel.ph-none { color: var(--muted); text-align: center; line-height: 52px; font-size: 1.1rem; }
 
+/* pager (Prev/Next + windowed page numbers) */
+.pager { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: center; margin: 14px 0 4px; }
+.pager:empty { display: none; }
+.pager-btn { min-width: 34px; padding: 5px 10px; font-size: 0.85rem; }
+.pager-btn.active { background: rgba(56,189,248,0.18); color: #fff; border-color: var(--accent); font-weight: 600; }
+.pager-btn:disabled { opacity: 0.4; cursor: default; }
+.pager-btn:disabled:hover { border-color: var(--border); }
+.pager-gap { color: var(--muted); padding: 0 2px; }
+
 /* country flag (bundled SVG) in list */
 .acflag {
   width: 1.25em; height: 0.92em; vertical-align: -1px;

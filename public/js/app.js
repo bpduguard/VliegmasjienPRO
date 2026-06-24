@@ -1159,7 +1159,13 @@ function spottedSinceMs(range) {
 
 state.spotted = [];
 state.spottedSort = { key: 'lastSeen', dir: -1 }; // default: most recent first
+state.spottedPage = 1;
 const spottedRoute = new Map(); // callsign -> route | null
+
+function spottedPageSize() {
+  const v = $('#spotted-pagesize').value;
+  return v === 'all' ? Infinity : parseInt(v, 10) || 25;
+}
 
 // small concurrency-limited runner so we don't hammer planespotters / adsbdb
 async function runPool(items, worker, concurrency = 4) {
@@ -1181,9 +1187,8 @@ async function loadSpotted() {
     $('#spotted-count').textContent = 'Failed to load.';
     return;
   }
-  $('#spotted-count').textContent = `${state.spotted.length} aircraft`;
+  state.spottedPage = 1;
   renderSpotted();
-  hydrateSpotted();
 }
 
 function sortSpotted(rows) {
@@ -1230,7 +1235,20 @@ function renderSpotted() {
     th.dataset.arrow = k === state.spottedSort.key ? (state.spottedSort.dir > 0 ? ' ▲' : ' ▼') : '';
   });
 
-  const rows = sortSpotted(state.spotted);
+  const sorted = sortSpotted(state.spotted);
+  const size = spottedPageSize();
+  const total = sorted.length;
+  const totalPages = size === Infinity ? 1 : Math.max(1, Math.ceil(total / size));
+  if (state.spottedPage > totalPages) state.spottedPage = totalPages;
+  if (state.spottedPage < 1) state.spottedPage = 1;
+  const start = size === Infinity ? 0 : (state.spottedPage - 1) * size;
+  const end = size === Infinity ? total : Math.min(total, start + size);
+  const rows = sorted.slice(start, end);
+
+  $('#spotted-count').textContent = total
+    ? `${total} aircraft${total > rows.length ? ` · showing ${start + 1}–${end}` : ''}`
+    : '0 aircraft';
+
   $('#spotted-table tbody').innerHTML = rows.length
     ? rows
         .map((s) => {
@@ -1269,12 +1287,53 @@ function renderSpotted() {
       }
     })
   );
+
+  renderSpottedPager(totalPages);
+  // only the rows actually on screen need their routes fetched
+  hydrateSpotted(rows);
+}
+
+// Build a windowed pager: « Prev  1 … 4 [5] 6 … 12  Next » — capped to a few
+// numbers around the current page.
+function renderSpottedPager(totalPages) {
+  const el = $('#spotted-pager');
+  if (!el) return;
+  if (totalPages <= 1) { el.innerHTML = ''; return; }
+  const cur = state.spottedPage;
+  const pages = [];
+  const window = 2; // pages either side of current
+  let lo = Math.max(1, cur - window);
+  let hi = Math.min(totalPages, cur + window);
+  if (lo > 1) { pages.push(1); if (lo > 2) pages.push('…'); }
+  for (let p = lo; p <= hi; p++) pages.push(p);
+  if (hi < totalPages) { if (hi < totalPages - 1) pages.push('…'); pages.push(totalPages); }
+
+  const btn = (label, page, opts = {}) => {
+    const { disabled = false, active = false } = opts;
+    if (page === '…') return '<span class="pager-gap">…</span>';
+    return `<button class="pager-btn${active ? ' active' : ''}"${disabled ? ' disabled' : ''} data-page="${page}">${label}</button>`;
+  };
+
+  el.innerHTML =
+    btn('‹ Prev', cur - 1, { disabled: cur <= 1 }) +
+    pages.map((p) => (p === '…' ? '<span class="pager-gap">…</span>' : btn(String(p), p, { active: p === cur }))).join('') +
+    btn('Next ›', cur + 1, { disabled: cur >= totalPages });
+
+  $$('#spotted-pager .pager-btn[data-page]').forEach((b) =>
+    b.addEventListener('click', () => {
+      const p = parseInt(b.dataset.page, 10);
+      if (!Number.isFinite(p) || p === state.spottedPage) return;
+      state.spottedPage = p;
+      renderSpotted();
+    })
+  );
 }
 
 // Photos load directly from the cached image proxy (<img src>), so only the
-// routes need background fetching here.
-function hydrateSpotted() {
-  const needRoute = state.spotted.filter((s) => s.callsign && !spottedRoute.has(s.callsign));
+// routes need background fetching here. Hydrates just the rows passed in (the
+// current page), so we don't fetch routes for aircraft that aren't visible.
+function hydrateSpotted(rows) {
+  const needRoute = (rows || []).filter((s) => s.callsign && !spottedRoute.has(s.callsign));
   runPool(needRoute, async (s) => {
     let entry = { route: null, agreement: null };
     try {
@@ -1293,11 +1352,16 @@ window.imgFallback = (img) => {
 };
 
 $('#spotted-range').addEventListener('change', loadSpotted);
+$('#spotted-pagesize').addEventListener('change', () => {
+  state.spottedPage = 1;
+  renderSpotted();
+});
 $$('#spotted-table th[data-sort]').forEach((th) =>
   th.addEventListener('click', () => {
     const k = th.dataset.sort;
     if (state.spottedSort.key === k) state.spottedSort.dir *= -1;
     else state.spottedSort = { key: k, dir: k === 'lastSeen' || k === 'firstSeen' || k === 'sessions' ? -1 : 1 };
+    state.spottedPage = 1;
     renderSpotted();
   })
 );

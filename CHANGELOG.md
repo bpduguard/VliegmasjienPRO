@@ -2,6 +2,13 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.5.1
+- Spotted tab: **pagination**. Pick how many aircraft to show per page (10 / 25 / 50 / 100 / All)
+  and step through them with **‹ Prev / Next ›** plus a windowed row of page numbers (a few either
+  side of the current page, with first/last shortcuts). Only the rows on the visible page fetch their
+  routes now, so large spotted lists stay snappy. Changing the period, page size, or sort resets to
+  page 1.
+
 ## 1.5.0
 - New **Range outline** map layer: your receiver's *actual* coverage shape, drawn as a polygon from the
   farthest aircraft seen in each 1° bearing sector. It accumulates over time, persists across restarts,
