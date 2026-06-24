@@ -1140,15 +1140,60 @@ $('#z-use-map').addEventListener('click', () => {
 });
 
 // ----------------------------------------------------------------- alerts
-async function loadAlerts() {
-  const { alerts } = await (await fetch('/api/alerts')).json();
-  $('#alerts-table tbody').innerHTML = alerts
-    .map(
-      (a) => `<tr><td>${fmt.dateTime(a.ts)}</td><td>${a.kind}</td>
-        <td>${a.callsign || a.hex || '—'}</td><td>${a.message}</td></tr>`
-    )
-    .join('') || '<tr><td colspan="4" class="muted">No alerts yet</td></tr>';
+state.alerts = [];
+state.alertsPage = 1;
+
+function alertsPageSize() {
+  const v = $('#alerts-pagesize').value;
+  return v === 'all' ? Infinity : parseInt(v, 10) || 25;
 }
+
+async function loadAlerts() {
+  $('#alerts-count').textContent = 'Loading…';
+  try {
+    const { alerts } = await (await fetch('/api/alerts')).json();
+    state.alerts = alerts || [];
+  } catch {
+    $('#alerts-count').textContent = 'Failed to load.';
+    return;
+  }
+  state.alertsPage = 1;
+  renderAlerts();
+}
+
+function renderAlerts() {
+  const size = alertsPageSize();
+  const total = state.alerts.length;
+  const totalPages = size === Infinity ? 1 : Math.max(1, Math.ceil(total / size));
+  if (state.alertsPage > totalPages) state.alertsPage = totalPages;
+  if (state.alertsPage < 1) state.alertsPage = 1;
+  const start = size === Infinity ? 0 : (state.alertsPage - 1) * size;
+  const end = size === Infinity ? total : Math.min(total, start + size);
+  const rows = state.alerts.slice(start, end);
+
+  $('#alerts-count').textContent = total
+    ? `${total} alert${total === 1 ? '' : 's'}${total > rows.length ? ` · showing ${start + 1}–${end}` : ''}`
+    : '0 alerts';
+
+  $('#alerts-table tbody').innerHTML = rows.length
+    ? rows
+        .map(
+          (a) => `<tr><td>${fmt.dateTime(a.ts)}</td><td>${a.kind}</td>
+        <td>${a.callsign || a.hex || '—'}</td><td>${a.message}</td></tr>`
+        )
+        .join('')
+    : '<tr><td colspan="4" class="muted">No alerts yet</td></tr>';
+
+  renderPager($('#alerts-pager'), totalPages, state.alertsPage, (p) => {
+    state.alertsPage = p;
+    renderAlerts();
+  });
+}
+
+$('#alerts-pagesize').addEventListener('change', () => {
+  state.alertsPage = 1;
+  renderAlerts();
+});
 
 // ----------------------------------------------------------------- spotted
 function spottedSinceMs(range) {
@@ -1294,24 +1339,22 @@ function renderSpotted() {
   hydrateSpotted(rows);
 }
 
-// Build a windowed pager: « Prev  1 … 4 [5] 6 … 12  Next » — capped to a few
-// numbers around the current page.
-function renderSpottedPager(totalPages) {
-  const el = $('#spotted-pager');
+// Reusable windowed pager: « Prev  1 … 4 [5] 6 … 12  Next » — capped to a few
+// numbers around the current page. Calls go(page) when a page button is clicked.
+function renderPager(el, totalPages, current, go) {
   if (!el) return;
   if (totalPages <= 1) { el.innerHTML = ''; return; }
-  const cur = state.spottedPage;
+  const cur = current;
   const pages = [];
   const window = 2; // pages either side of current
-  let lo = Math.max(1, cur - window);
-  let hi = Math.min(totalPages, cur + window);
+  const lo = Math.max(1, cur - window);
+  const hi = Math.min(totalPages, cur + window);
   if (lo > 1) { pages.push(1); if (lo > 2) pages.push('…'); }
   for (let p = lo; p <= hi; p++) pages.push(p);
   if (hi < totalPages) { if (hi < totalPages - 1) pages.push('…'); pages.push(totalPages); }
 
   const btn = (label, page, opts = {}) => {
     const { disabled = false, active = false } = opts;
-    if (page === '…') return '<span class="pager-gap">…</span>';
     return `<button class="pager-btn${active ? ' active' : ''}"${disabled ? ' disabled' : ''} data-page="${page}">${label}</button>`;
   };
 
@@ -1320,14 +1363,20 @@ function renderSpottedPager(totalPages) {
     pages.map((p) => (p === '…' ? '<span class="pager-gap">…</span>' : btn(String(p), p, { active: p === cur }))).join('') +
     btn('Next ›', cur + 1, { disabled: cur >= totalPages });
 
-  $$('#spotted-pager .pager-btn[data-page]').forEach((b) =>
+  el.querySelectorAll('.pager-btn[data-page]').forEach((b) =>
     b.addEventListener('click', () => {
       const p = parseInt(b.dataset.page, 10);
-      if (!Number.isFinite(p) || p === state.spottedPage) return;
-      state.spottedPage = p;
-      renderSpotted();
+      if (!Number.isFinite(p) || p === cur) return;
+      go(p);
     })
   );
+}
+
+function renderSpottedPager(totalPages) {
+  renderPager($('#spotted-pager'), totalPages, state.spottedPage, (p) => {
+    state.spottedPage = p;
+    renderSpotted();
+  });
 }
 
 // Photos load directly from the cached image proxy (<img src>), so only the

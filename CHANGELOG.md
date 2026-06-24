@@ -2,6 +2,11 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.5.3
+- **Alerts** tab: pagination, matching the Spotted tab. Pick a page size (10 / 25 / 50 / 100 / All)
+  and step through with **‹ Prev / Next ›** plus windowed page numbers. The pager is now a shared
+  helper used by both tabs.
+
 ## 1.5.2
 - Spotted tab: new **All (full history)** period option. The previous widest filter ("Past month")
   was hard-capped at 30 days, so it could never show more than that even with a longer history
