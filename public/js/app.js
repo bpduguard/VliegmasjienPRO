@@ -1154,6 +1154,7 @@ async function loadAlerts() {
 function spottedSinceMs(range) {
   if (range === 'today') { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); }
   if (range === 'month') return Date.now() - 30 * 86400000;
+  if (range === 'all') return 0; // everything still retained (matches the log/stats retention)
   return Date.now() - 7 * 86400000; // week
 }
 

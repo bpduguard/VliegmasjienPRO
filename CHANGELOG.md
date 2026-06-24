@@ -2,6 +2,14 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.5.2
+- Spotted tab: new **All (full history)** period option. The previous widest filter ("Past month")
+  was hard-capped at 30 days, so it could never show more than that even with a longer history
+  retention. "All" now shows every aircraft still retained, so the Spotted window always matches your
+  **log/stats retention** (`retentionDays` in Settings, default 30 days) — there was never a separate,
+  shorter retention for this list. Note: the same plane-alert-db aircraft tend to recur daily, so
+  today/week/month often show the same count; only their *Times* and *First seen* differ.
+
 ## 1.5.1
 - Spotted tab: **pagination**. Pick how many aircraft to show per page (10 / 25 / 50 / 100 / All)
   and step through them with **‹ Prev / Next ›** plus a windowed row of page numbers (a few either
