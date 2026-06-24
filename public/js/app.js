@@ -618,7 +618,7 @@ $('#ac-list-expand').addEventListener('click', () => {
 // ----------------------------------------------------------------- replay
 const replayLayer = L.layerGroup();
 let replayRaf = null;
-state.replay = { active: false, playing: false, vt: 0, dayStart: 0, dayEnd: 0, speed: 30, lastWall: 0, lastFetch: 0, fetchToken: 0 };
+state.replay = { active: false, playing: false, vt: 0, dayStart: 0, dayEnd: 0, speed: 30, lastWall: 0, lastFetch: 0, fetchToken: 0, fetching: false };
 
 function clearLiveMarkers() {
   for (const [, entry] of markers) {
@@ -681,10 +681,10 @@ function updateScrub() {
 
 async function fetchReplayFrame() {
   const token = ++state.replay.fetchToken;
-  state.replay.lastFetch = performance.now();
+  state.replay.fetching = true;
   const at = Math.round(state.replay.vt);
   try {
-    const { aircraft } = await (await fetch(`/api/replay/frame?at=${at}&window=60000`)).json();
+    const { aircraft } = await (await fetch(`/api/replay/frame?at=${at}&window=60000`, { signal: AbortSignal.timeout(8000) })).json();
     if (token !== state.replay.fetchToken || !state.replay.active) return;
     replayLayer.clearLayers();
     for (const a of aircraft || []) {
@@ -696,7 +696,15 @@ async function fetchReplayFrame() {
       m.bindPopup(`<b>${label}</b><br>${fmt.alt(a.alt)} · ${fmt.spdN(a.gs)} ${unitLabels().spd.split(' ')[1] || ''}<br>${sourceLabel(a.src)}`);
     }
     $('#rb-count').textContent = `${(aircraft || []).length} aircraft`;
-  } catch { /* ignore */ }
+  } catch { /* ignore */ } finally {
+    // Only the latest fetch clears the in-flight flag and (re)starts the throttle
+    // window — measured from completion, so a slow frame query can't cause the
+    // play loop to launch overlapping requests that pile up and starve rendering.
+    if (token === state.replay.fetchToken) {
+      state.replay.fetching = false;
+      state.replay.lastFetch = performance.now();
+    }
+  }
 }
 
 function replayLoop() {
@@ -713,7 +721,7 @@ function replayLoop() {
     return;
   }
   updateScrub();
-  if (wall - state.replay.lastFetch > 350) fetchReplayFrame();
+  if (!state.replay.fetching && wall - state.replay.lastFetch > 350) fetchReplayFrame();
   replayRaf = requestAnimationFrame(replayLoop);
 }
 

@@ -2,6 +2,15 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.6.1
+- Fix **map replay freezing** while the clock kept running (pausing and resuming temporarily
+  un-stuck it). The playback loop stamped its fetch throttle at the *start* of each frame request and
+  never waited for one to finish, so once a frame query took longer than the 350 ms throttle (more
+  likely as the track log grows), it launched overlapping requests that piled up on the server and
+  each invalidated the previous one — so no frame ever rendered. Replay now keeps only **one frame
+  request in flight** and measures the throttle from when it **completes**, with an 8 s safety timeout
+  so a stalled request can't wedge playback.
+
 ## 1.6.0
 - Settings now shows the **on-disk size of the log data** — the retention-governed history
   (sightings powering Spotted/Statistics), the alert log, and the replay trail — along with row
