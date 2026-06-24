@@ -15,6 +15,48 @@ export const USER_AGENT = `VliegmasjienPRO/${VERSION} (+https://github.com/bpdug
 export const extFetch = (url, opts = {}) =>
   fetch(url, { ...opts, headers: { 'user-agent': USER_AGENT, ...(opts.headers || {}) } });
 
+// ---------------------------------------------------------------- reverse geocode
+// Turn an aircraft's lat/lon into a human place name ("near Aarschot, Belgium")
+// for notifications, via OpenStreetMap Nominatim (free, no key). Results are
+// cached on a ~1 km grid so repeated alerts in the same area don't re-query, and
+// Nominatim's light-usage policy is respected (notifications are throttled/rare).
+const NOMINATIM_BASE = process.env.NOMINATIM_BASE || 'https://nominatim.openstreetmap.org';
+const placeCache = new Map(); // "lat,lon" (2 dp) -> { ts, name }
+const PLACE_TTL = 7 * 86400000;
+
+function formatPlace(data) {
+  const a = data?.address || {};
+  // most specific populated place first, falling back to broader admin areas
+  const local =
+    a.village || a.town || a.city || a.hamlet || a.suburb ||
+    a.municipality || a.city_district || a.county || a.state_district || a.state;
+  const region = a.country;
+  if (local && region && local !== region) return `near ${local}, ${region}`;
+  if (local) return `near ${local}`;
+  if (region) return `over ${region}`;
+  return null;
+}
+
+export async function reverseGeocode(lat, lon) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  const key = `${lat.toFixed(2)},${lon.toFixed(2)}`; // ~1.1 km grid
+  const hit = placeCache.get(key);
+  if (hit && Date.now() - hit.ts < PLACE_TTL) return hit.name;
+  try {
+    const url = `${NOMINATIM_BASE}/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=12&addressdetails=1&accept-language=en`;
+    const res = await extFetch(url, { signal: AbortSignal.timeout(5000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const name = formatPlace(await res.json());
+    placeCache.set(key, { ts: Date.now(), name });
+    if (placeCache.size > 5000) {
+      for (const k of placeCache.keys()) { placeCache.delete(k); if (placeCache.size <= 4000) break; }
+    }
+    return name;
+  } catch {
+    return null; // no network / over the sea / rate-limited — just omit the place
+  }
+}
+
 // ---------------------------------------------------------------- plane-alert-db
 
 // hex (lowercase) -> { icao, registration, operator, type, icaoType, group, tags, link }

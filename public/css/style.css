@@ -423,7 +423,7 @@ button.danger:hover { background: rgba(239,68,68,0.12); border-color: var(--dang
 .toast.emergency { border-left-color: var(--danger); }
 .toast.military { border-left-color: var(--ok); }
 .toast .t { font-weight: 600; margin-bottom: 2px; }
-.toast .m { font-size: 0.84rem; color: var(--muted); }
+.toast .m { font-size: 0.84rem; color: var(--muted); white-space: pre-line; }
 @keyframes slidein { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
 
 @media (max-width: 900px) {

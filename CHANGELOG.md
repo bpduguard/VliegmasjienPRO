@@ -2,6 +2,14 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.7.0
+- Notifications now include the aircraft's **estimated location** — e.g. `📍 near Aarschot, Belgium`
+  — reverse-geocoded from its position to the nearest village/town/city via OpenStreetMap Nominatim
+  (free, no key). Appears in Pushover, Discord (as a *Location* field), and browser/toast alerts.
+  The lookup only runs for alerts that actually fire (past the cooldown), is cached on a ~1 km grid,
+  and is skipped gracefully when there's no position or no internet. Override the endpoint with
+  `NOMINATIM_BASE` if you self-host one.
+
 ## 1.6.1
 - Fix **map replay freezing** while the clock kept running (pausing and resuming temporarily
   un-stuck it). The playback loop stamped its fetch throttle at the *start* of each frame request and

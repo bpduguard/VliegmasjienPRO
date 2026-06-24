@@ -13,7 +13,9 @@ Designed to run in Docker on a **Raspberry Pi 5** (arm64) next to your existing 
 - 📍 **Zones**: circles with a radius in km. Get notified when an aircraft *enters* a zone, and see an
   **estimated time of entry** for approaching aircraft
 - 🔔 **Notifications**: **Pushover**, **Discord webhooks** and **browser notifications** — with a
-  configurable cooldown so you don't get spammed
+  configurable cooldown so you don't get spammed. Each alert includes the aircraft's **estimated
+  location** (nearest village/town/city, e.g. *📍 near Aarschot, Belgium*, reverse-geocoded via
+  OpenStreetMap Nominatim — free, no key)
 - 🛰 **Spotted** tab: a log of plane-alert-db aircraft your receiver has actually seen (operator, type,
   category, tags, route, how often/when, closest approach) — filterable by today / past week / past month,
   sortable, and paginated (choose page size + step through pages)
