@@ -1790,6 +1790,7 @@ async function loadSettings() {
     : 'Database not downloaded yet';
   const status = await (await fetch('/api/status')).json();
   $('#s-version').textContent = 'v' + (status.version || '?');
+  $('#s-footer-version').textContent = 'v' + (status.version || '?');
   const acdb = status.aircraftDb || {};
   $('#s-acdb-meta').innerHTML = `${(acdb.count || 0).toLocaleString()} aircraft cached locally`
     + (acdb.error ? ` · <span style="color:var(--danger)">lookup problem: ${acdb.error}</span>` : ' · auto-filling as aircraft are seen');

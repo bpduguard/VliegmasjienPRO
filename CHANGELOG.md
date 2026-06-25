@@ -2,6 +2,11 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.12.1
+- Settings page now has a footer with the app version and a link to the GitHub repository
+  (github.com/bpduguard/VliegmasjienPRO). Brought the README up to date (removed the long-gone
+  "Claude lookup" mention; documented Aerospace, Arrivals, auto-follow, full trails and pass alerts).
+
 ## 1.12.0
 - New **visible-pass notifications** for the **ISS** and **Hubble** (Settings ▸ Notifications). When
   enabled, you get an alert **~1 hour before** the satellite makes a pass that is actually *visible*

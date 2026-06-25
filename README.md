@@ -1,8 +1,9 @@
 # ✈ VliegmasjienPRO
 
 A fancy, self-hosted flight tracker for your **dump1090 / readsb** receiver — like tar1090, but with
-zones, notifications, statistics, weather radar and a Claude-powered aircraft lookup.
-Designed to run in Docker on a **Raspberry Pi 5** (arm64) next to your existing dump1090 container.
+zones, notifications, statistics, weather radar, replay, arrivals-by-airport and live **ISS / Hubble**
+tracking. Designed to run in Docker on a **Raspberry Pi 5** (arm64) next to your existing dump1090
+container.
 
 ## Features
 
@@ -108,7 +109,8 @@ If dump1090 runs as a container on the same Docker network, uncomment the `netwo
 1. **Settings → plane-alert-db → Refresh database now** — downloads the same CSV planefence/plane-alert
    uses (~tens of thousands of interesting aircraft) for enrichment, categories and watchlist search.
 2. **Settings → Notifications** — add your Pushover token/user key and/or Discord webhook URL, then hit
-   *Send test notification*.
+   *Send test notification*. Optionally tick **"Notify ~1h before a visible ISS / Hubble pass"** to get
+   alerted before the station/telescope is overhead on a dark, clear evening.
 3. **Zones** — add a zone (use *Use map center* for coordinates), pick a radius in km.
 4. **Watchlist** — search the plane-alert-db ("police", "A400", a registration…) and click *+ watch*,
    or import a CSV in plane-alert-db format.
@@ -270,7 +272,12 @@ why the Docker build is fast and painless on arm64).
 ```
 dump1090 ──aircraft.json──► tracker (poll 2s) ──► SSE ──► browser (Leaflet map)
                                 │
-                                ├─► SQLite (/data) — sightings, history, stats, alert log
-                                ├─► zones + watchlist matching ──► Pushover / Discord / browser
-                                └─► enrichment: plane-alert-db, adsbdb routes, planespotters photos
+                                ├─► SQLite (/data) — sightings, history, stats, alert log, replay tracks
+                                ├─► zones + watchlist + military/emergency ─┐
+                                ├─► CelesTrak TLEs → SGP4 pass predictor ───┼─► Pushover / Discord / browser
+                                │   (visible ISS/Hubble passes)             │   (+ Nominatim place name)
+                                └─► enrichment: plane-alert-db, adsbdb/hexdb routes, planespotters photos
 ```
+
+The browser computes ISS/Hubble positions and ground tracks locally with **satellite.js** from the
+server-cached CelesTrak TLEs, and runs the live map, list, arrivals and trail rendering.
