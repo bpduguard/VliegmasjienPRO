@@ -334,8 +334,8 @@ $('#arrivals-toggle').addEventListener('change', (e) => {
 
 // ----------------------------------------------------------------- aerospace layer
 // ISS + Hubble, propagated from CelesTrak TLEs with satellite.js (SGP4) in the
-// browser: live markers + ~95-min ground tracks. JWST is at Sun–Earth L2 with no
-// ground track, so it's surfaced as an informational note, not a fake position.
+// browser: live markers + ~95-min ground tracks. (Only Earth-orbiting craft with
+// a meaningful ground track are tracked here.)
 const SPACE_DEFS = [
   { key: 'iss', name: 'ISS (ZARYA)', icon: '🛰', color: '#34d399' },
   { key: 'hst', name: 'Hubble Space Telescope', icon: '🔭', color: '#f472b6' }
@@ -347,7 +347,6 @@ const spaceMarkers = new Map();            // key -> L.marker
 let spaceTimer = null;
 let spaceTick = 0;
 let spaceMeta = null;                       // { fetchedAt, source }
-let jwstNoticeShown = false;
 
 function satGeo(satrec, date) {
   let pv;
@@ -440,10 +439,6 @@ async function enableSpace() {
   spaceTick = 0;
   updateSpace();
   spaceTimer = setInterval(updateSpace, 1000);
-  if (!jwstNoticeShown) {
-    jwstNoticeShown = true;
-    toast({ kind: 'test', title: '🔭 James Webb (JWST)', message: 'JWST orbits Sun–Earth L2, ~1.5 million km away — it has no ground track over Earth, so it can’t be plotted here. Follow it on NASA’s official “Where Is Webb” tracker.' });
-  }
 }
 
 function disableSpace() {

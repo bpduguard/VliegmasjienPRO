@@ -5,10 +5,9 @@
 // roughly daily) so the browser doesn't hit CelesTrak directly and it keeps
 // working across brief outages / restarts.
 //
-// Note on JWST: the James Webb Space Telescope is NOT here. It orbits the
-// Sun–Earth L2 point ~1.5 million km away, so it has no meaningful ground track
-// over the Earth's surface — SGP4/TLE propagation doesn't apply. The client
-// shows it as an informational entry instead, not a fake position.
+// Only Earth-orbiting craft with a meaningful ground track belong here. (The
+// JWST, for example, orbits Sun–Earth L2 ~1.5M km away and has no ground track,
+// so it isn't tracked.)
 import fs from 'node:fs';
 import path from 'node:path';
 import { DATA_DIR } from './config.js';

@@ -46,7 +46,7 @@ Designed to run in Docker on a **Raspberry Pi 5** (arm64) next to your existing 
 - 🛬 **Arrivals** overlay — groups tracked aircraft by their destination airport and shows, per airport,
   a table of inbound flights with arrival time, time-to-go, the flight, and its departure airport
 - 🛰 **Aerospace** overlay — live **ISS** and **Hubble** tracking with ground tracks, propagated with
-  satellite.js (SGP4) from **CelesTrak** TLEs (JWST is at L2 with no ground track, shown as an info note)
+  satellite.js (SGP4) from **CelesTrak** TLEs
 - ⊚ **Distance rings** overlay (10/25/50/100/200/400 km around the receiver) and 🏳 **country flags**
   per aircraft in the list (from the ICAO address). The app **version** is shown in Settings
   (see [CHANGELOG.md](CHANGELOG.md))

@@ -2,15 +2,17 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.11.1
+- Remove the **James Webb (JWST)** notice from the Aerospace layer. JWST orbits Sun–Earth L2
+  (~1.5 million km away) and has no ground track over Earth, so it isn't trackable on a map — the layer
+  now only includes the genuinely trackable ISS and Hubble.
+
 ## 1.11.0
 - New **🛰 Aerospace** map layer (Layers menu): live tracking of the **ISS** and the **Hubble Space
   Telescope** with their **ground tracks** (~95 min of orbit, past + ahead). Positions are propagated
   in the browser with **satellite.js (SGP4)** from **CelesTrak** Two-Line Element sets — the standard,
   free, trustworthy public source — which the server proxies and caches (refreshed ~every 6 h, kept on
   disk across restarts). Click a satellite for its latitude/longitude, altitude and speed.
-- **James Webb (JWST)** is handled honestly: it orbits Sun–Earth L2 (~1.5 million km away) and has **no
-  ground track** over Earth, so it can't be plotted on a map. The layer shows an informational note
-  pointing to NASA's official tracker rather than a fake position.
 
 ## 1.10.1
 - **Performance / resource optimizations** (no behaviour or feature changes):
