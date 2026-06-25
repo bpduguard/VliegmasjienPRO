@@ -228,6 +228,11 @@ async function pollOnce() {
       ? cachedAirlineName(ac.flight) || ac.airline || ac.airlineCallsign
       : null;
 
+    // Map pictogram only depends on category/type/callsign — memoize it so the
+    // regexes don't re-run for every aircraft on every snapshot.
+    const ikey = `${ac.emitterCategory || ''}|${ac.type || ''}|${ac.airlineCallsign || ''}`;
+    if (ac._iconKey !== ikey) { ac._iconKey = ikey; ac.iconKind = iconKind(ac); }
+
     // distance from receiver
     const rcv = cfg.receiver;
     if (rcv.lat != null && ac.lat != null) {
@@ -417,47 +422,52 @@ function backgroundAircraftLookup(ac, now) {
 }
 
 // Compact snapshot for the SSE stream / list endpoint.
+// Build the wire object for a single aircraft. `tail` bounds the trail length.
+function snapshotAircraft(ac, tail) {
+  return {
+    hex: ac.hex,
+    flight: ac.flight || null,
+    registration: ac.registration || null,
+    type: ac.type || null,
+    typeName: ac.typeName || null,
+    operator: ac.operator || null,
+    airline: ac.airline || null,
+    airlineCallsign: ac.airlineCallsign || null,
+    country: icaoToCountry(ac.hex),
+    classification: ac.classification,
+    source: ac.source || null,
+    padbCategory: ac.padbCategory || null,
+    category: ac.emitterCategory || null,
+    iconKind: ac.iconKind || iconKind(ac), // memoized in pollOnce; fallback for safety
+    lat: ac.lat ?? null,
+    lon: ac.lon ?? null,
+    alt: ac.alt_baro ?? null,
+    altGeom: ac.alt_geom ?? null,
+    gs: ac.gs ?? null,
+    ias: ac.ias ?? null,
+    track: ac.track ?? null,
+    vr: ac.baro_rate ?? null,
+    squawk: ac.squawk ?? null,
+    emergency: !!ac.emergency,
+    military: ac.classification === 'military',
+    onGround: !!ac.onGround,
+    rssi: ac.rssi ?? null,
+    messages: ac.messages ?? null,
+    seen: ac.seen ?? null,
+    distKm: ac.distKm ?? null,
+    firstSeen: ac.firstSeen,
+    zones: ac.zones || [],
+    trail: ac.trail.length > tail ? ac.trail.slice(-tail) : ac.trail
+  };
+}
+
 export function snapshot() {
   const tail = getConfig().trailLength || 120; // recent trail tail sent per aircraft
   return {
     ts: Date.now(),
     receiver: getConfig().receiver,
     status: { lastPollOk, lastPollError, messagesTotal },
-    aircraft: getAircraftList().map((ac) => ({
-      hex: ac.hex,
-      flight: ac.flight || null,
-      registration: ac.registration || null,
-      type: ac.type || null,
-      typeName: ac.typeName || null,
-      operator: ac.operator || null,
-      airline: ac.airline || null,
-      airlineCallsign: ac.airlineCallsign || null,
-      country: icaoToCountry(ac.hex),
-      classification: ac.classification,
-      source: ac.source || null,
-      padbCategory: ac.padbCategory || null,
-      category: ac.emitterCategory || null,
-      iconKind: iconKind(ac),
-      lat: ac.lat ?? null,
-      lon: ac.lon ?? null,
-      alt: ac.alt_baro ?? null,
-      altGeom: ac.alt_geom ?? null,
-      gs: ac.gs ?? null,
-      ias: ac.ias ?? null,
-      track: ac.track ?? null,
-      vr: ac.baro_rate ?? null,
-      squawk: ac.squawk ?? null,
-      emergency: !!ac.emergency,
-      military: ac.classification === 'military',
-      onGround: !!ac.onGround,
-      rssi: ac.rssi ?? null,
-      messages: ac.messages ?? null,
-      seen: ac.seen ?? null,
-      distKm: ac.distKm ?? null,
-      firstSeen: ac.firstSeen,
-      zones: ac.zones || [],
-      trail: ac.trail.length > tail ? ac.trail.slice(-tail) : ac.trail
-    }))
+    aircraft: getAircraftList().map((ac) => snapshotAircraft(ac, tail))
   };
 }
 
@@ -596,8 +606,9 @@ function checkRouteGeometry(ac, route, distToDestKm) {
 }
 
 function snapshotOne(ac) {
-  const s = snapshot();
-  return s.aircraft.find((a) => a.hex === ac.hex);
+  // Build just this aircraft's wire object instead of rebuilding the whole
+  // snapshot (which also re-slices every other aircraft's trail).
+  return snapshotAircraft(ac, getConfig().trailLength || 120);
 }
 
 async function detectReceiver() {

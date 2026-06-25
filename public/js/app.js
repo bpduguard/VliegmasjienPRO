@@ -75,7 +75,7 @@ $$('#tabs button').forEach((btn) =>
     btn.classList.add('active');
     $$('.tab').forEach((t) => t.classList.remove('active'));
     $(`#tab-${btn.dataset.tab}`).classList.add('active');
-    if (btn.dataset.tab === 'map') setTimeout(() => map.invalidateSize(), 50);
+    if (btn.dataset.tab === 'map') setTimeout(() => { map.invalidateSize(); renderAircraft(); }, 50);
     if (btn.dataset.tab === 'stats') loadStats();
     if (btn.dataset.tab === 'watchlist') loadWatchlist();
     if (btn.dataset.tab === 'spotted') loadSpotted();
@@ -84,6 +84,8 @@ $$('#tabs button').forEach((btn) =>
     if (btn.dataset.tab === 'settings') loadSettings();
   })
 );
+// Catch up the map view when the page becomes visible again after being hidden.
+document.addEventListener('visibilitychange', () => { if (mapVisible()) renderAircraft(); });
 
 // ----------------------------------------------------------------- map
 const darkTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
@@ -589,7 +591,16 @@ function classifiedVisible(ac) {
   return true;
 }
 
+// The map + list are only visible on the Map tab. Skip the (relatively costly)
+// marker/list DOM rebuild when the map isn't on screen — another tab is open or
+// the browser tab is backgrounded. Live state still updates from the SSE feed;
+// the view is refreshed on the way back (tab switch / visibilitychange).
+function mapVisible() {
+  return !document.hidden && $('#tab-map').classList.contains('active');
+}
+
 function renderAircraft() {
+  if (!mapVisible()) return;
   // During replay we freeze the live planes and show historical frames instead;
   // keep the list updating with live data though.
   if (state.replay && state.replay.active) { renderList(); return; }

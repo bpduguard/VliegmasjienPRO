@@ -2,6 +2,16 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.10.1
+- **Performance / resource optimizations** (no behaviour or feature changes):
+  - The browser no longer rebuilds the map markers and aircraft list (every ~2 s) while the **map isn't
+    on screen** — when another tab is open or the browser tab is backgrounded. Live data keeps flowing;
+    the view catches up instantly on return. Big CPU/battery saving, especially on phones.
+  - The detail-panel endpoint no longer rebuilds the *entire* aircraft snapshot (and re-slices every
+    aircraft's trail) just to read one aircraft — it builds only that one now.
+  - The map pictogram (`iconKind`) is memoized per aircraft, so its regexes don't re-run for every
+    aircraft on every snapshot — only when the type/category changes.
+
 ## 1.10.0
 - **Full selected-aircraft trail with visible gaps.** The trail of the clicked aircraft is no longer
   capped to a sliding window — it now shows the **complete path since the aircraft appeared** and keeps
