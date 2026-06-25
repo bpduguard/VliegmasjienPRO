@@ -5,7 +5,7 @@ import { getConfig, saveConfig } from './config.js';
 import { haversineKm, secondsToZoneEntry, etaSeconds, bearingDeg, crossTrackKm, alongTrackKm, angleDiff } from './geo.js';
 import {
   planeDbLookup, lookupRoute, cachedAirlineName, maybeAutoRefreshPlaneDb,
-  aircraftDbLocal, lookupAircraft
+  aircraftDbLocal, lookupAircraft, cachedRoute
 } from './enrich.js';
 import { upsertSighting, pruneOldData, insertTracks, pruneTracks } from './db.js';
 import { notify } from './notify.js';
@@ -503,6 +503,62 @@ export async function aircraftDetail(hex) {
     // "departed" approximation: when we (or the route) first saw this flight
     firstSeen: ac.firstSeen
   };
+}
+
+// Arrivals layer: every tracked aircraft with a (cached) route whose destination
+// has coordinates, grouped by destination airport, each with ETA + origin. Uses
+// only already-cached routes so it stays fast over many aircraft; the route cache
+// is filled lazily by backgroundRouteLookup() as airliners are tracked.
+export function arrivalsSnapshot() {
+  const now = Date.now();
+  const byAirport = new Map(); // key -> { airport, arrivals: [] }
+  for (const ac of aircraft.values()) {
+    if (ac.lat == null || ac.lon == null || ac.onGround || !ac.flight) continue;
+    const cr = cachedRoute(ac.flight);
+    const route = cr?.route;
+    const dest = route?.destination;
+    if (!dest || dest.lat == null) continue;
+
+    const distToDestKm = +haversineKm(ac.lat, ac.lon, dest.lat, dest.lon).toFixed(0);
+    const etaRaw = etaSeconds(ac.lat, ac.lon, ac.gs, dest.lat, dest.lon);
+    if (etaRaw == null) continue; // no/!positive groundspeed → can't estimate
+
+    // Drop implausible routes (off-corridor / flying away) and conflicting sources,
+    // and planes essentially already at the destination.
+    const check = checkRouteGeometry(ac, route, distToDestKm);
+    if (check.confidence === 'low' || cr.agreement === 'conflict') continue;
+    if (distToDestKm < 3) continue;
+
+    const key = dest.icao || dest.iata || dest.name || `${dest.lat},${dest.lon}`;
+    if (!byAirport.has(key)) {
+      byAirport.set(key, {
+        airport: {
+          icao: dest.icao || null, iata: dest.iata || null,
+          name: dest.name || null, country: dest.country || null,
+          lat: dest.lat, lon: dest.lon
+        },
+        arrivals: []
+      });
+    }
+    const o = route.origin;
+    byAirport.get(key).arrivals.push({
+      hex: ac.hex,
+      callsign: ac.flight,
+      registration: ac.registration || null,
+      type: ac.type || null,
+      operator: ac.airline || ac.operator || null,
+      origin: o ? { iata: o.iata || null, icao: o.icao || null, name: o.name || null, country: o.country || null } : null,
+      distKm: distToDestKm,
+      etaSec: Math.round(etaRaw),
+      arrivalMs: now + Math.round(etaRaw) * 1000,
+      alt: ac.alt_baro ?? null,
+      gs: ac.gs != null ? Math.round(ac.gs) : null
+    });
+  }
+  const airports = [...byAirport.values()];
+  for (const a of airports) a.arrivals.sort((x, y) => x.etaSec - y.etaSec);
+  airports.sort((a, b) => b.arrivals.length - a.arrivals.length);
+  return { generatedAt: now, airports };
 }
 
 // Returns { confidence: 'ok'|'low'|null, issue }. `null` when we can't judge

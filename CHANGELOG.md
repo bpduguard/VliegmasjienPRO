@@ -2,6 +2,15 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.9.0
+- New **🛬 Arrivals** map layer (Layers menu). Groups the aircraft currently on the map by their
+  **destination airport** and drops a marker at each airport; clicking it shows a table of inbound
+  flights with **arrival time**, **time until arrival**, the flight (callsign, operator, type) and
+  **where it departed from**. ETAs use ground speed toward the destination; routes come from the
+  cross-checked adsbdb/hexdb cache, and implausible routes (off-corridor / flying away / source
+  conflict) are filtered out so the list stays trustworthy. Refreshes every 15 s (without closing a
+  popup you're reading); clicking a row selects that aircraft on the map.
+
 ## 1.8.0
 - New **Auto-follow** mode (🎯 button on the map toolbar): automatically follows the **newest**
   aircraft — keeps it centred on the map and opens its detail panel. It holds each aircraft for at

@@ -137,7 +137,8 @@ $('#labels-toggle').addEventListener('change', (e) => {
 
 // layers dropdown (Weather / Frequencies / Labels)
 function refreshLayersBtn() {
-  const anyOn = $('#weather-toggle').checked || $('#freq-toggle').checked || $('#rings-toggle').checked || $('#range-toggle').checked;
+  const anyOn = $('#weather-toggle').checked || $('#freq-toggle').checked || $('#rings-toggle').checked
+    || $('#range-toggle').checked || $('#arrivals-toggle').checked;
   $('#layers-btn').classList.toggle('has-active', anyOn);
 }
 $('#layers-btn').addEventListener('click', (e) => {
@@ -258,6 +259,76 @@ $('#range-toggle').addEventListener('change', (e) => {
 });
 // refresh the outline periodically while shown (it grows over time)
 setInterval(() => { if (state.rangeOn) drawRange(); }, 60000);
+
+// ----------------------------------------------------------------- arrivals layer
+// Destination airports of currently-tracked aircraft, each marker carrying a
+// table of inbound flights (arrival time, time-to-go, origin, type/operator).
+const arrivalsLayer = L.layerGroup();
+let arrivalsTimer = null;
+
+function arrivalsPopupHtml(ap, arrivals) {
+  const rows = arrivals.map((a) => {
+    const op = [a.operator, a.type].filter(Boolean).join(' · ');
+    const from = a.origin ? (a.origin.iata || a.origin.icao || a.origin.name || '?') : '?';
+    const fromTitle = a.origin ? [a.origin.name, a.origin.country].filter(Boolean).join(', ') : 'unknown origin';
+    return `<tr data-hex="${a.hex}">
+      <td><b>${a.callsign}</b>${op ? `<br><span class="muted">${op}</span>` : ''}</td>
+      <td title="${fromTitle}">${from}</td>
+      <td>${fmt.time(a.arrivalMs)}</td>
+      <td>${a.etaSec != null ? fmt.dur(a.etaSec) : '—'}</td>
+    </tr>`;
+  }).join('');
+  const title = [ap.iata || ap.icao, ap.name].filter(Boolean).join(' · ') || 'Airport';
+  return `<div class="arr-popup">
+    <div class="arr-title">🛬 ${title}${ap.country ? ` <span class="muted">${ap.country}</span>` : ''}</div>
+    <table class="arr-table">
+      <thead><tr><th>Flight</th><th>From</th><th>Arr</th><th>In</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+}
+
+async function drawArrivals() {
+  try {
+    const data = await (await fetch('/api/arrivals')).json();
+    arrivalsLayer.clearLayers();
+    for (const grp of data.airports || []) {
+      const ap = grp.airport;
+      if (ap.lat == null || ap.lon == null) continue;
+      const code = ap.iata || ap.icao || '✈';
+      const icon = L.divIcon({
+        className: 'airport-icon',
+        html: `<div class="airport-pin"><span class="airport-code">🛬 ${code}</span><span class="airport-badge">${grp.arrivals.length}</span></div>`,
+        iconSize: [60, 22], iconAnchor: [30, 11]
+      });
+      const m = L.marker([ap.lat, ap.lon], { icon, zIndexOffset: 1000 }).addTo(arrivalsLayer);
+      m.bindPopup(arrivalsPopupHtml(ap, grp.arrivals), { maxWidth: 360, className: 'arr-leaflet-popup' });
+      // clicking a row selects that aircraft (if it's live)
+      m.on('popupopen', (e) => {
+        e.popup.getElement()?.querySelectorAll('.arr-table tr[data-hex]').forEach((tr) =>
+          tr.addEventListener('click', () => { if (state.aircraft.has(tr.dataset.hex)) selectAircraft(tr.dataset.hex, true); }));
+      });
+    }
+  } catch { /* ignore */ }
+}
+
+$('#arrivals-toggle').addEventListener('change', (e) => {
+  state.arrivalsOn = e.target.checked;
+  if (state.arrivalsOn) {
+    arrivalsLayer.addTo(map);
+    drawArrivals();
+    // refresh while shown, but don't yank a popup the user is reading
+    arrivalsTimer = setInterval(() => {
+      const open = arrivalsLayer.getLayers().some((l) => l.isPopupOpen && l.isPopupOpen());
+      if (!open) drawArrivals();
+    }, 15000);
+  } else {
+    map.removeLayer(arrivalsLayer);
+    arrivalsLayer.clearLayers();
+    if (arrivalsTimer) { clearInterval(arrivalsTimer); arrivalsTimer = null; }
+  }
+  refreshLayersBtn();
+});
 
 // ----------------------------------------------------------------- frequencies layer
 const freqLayer = L.layerGroup();

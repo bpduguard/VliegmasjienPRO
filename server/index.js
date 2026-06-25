@@ -10,7 +10,7 @@ import {
 } from './enrich.js';
 import { lookupPhoto, extFetch, photoServiceError } from './enrich.js';
 import {
-  startTracker, snapshot, aircraftDetail, trackerStatus, setTrackerBroadcast
+  startTracker, snapshot, aircraftDetail, trackerStatus, setTrackerBroadcast, arrivalsSnapshot
 } from './tracker.js';
 import { setBroadcast, notify } from './notify.js';
 import { refreshFrequencies, frequenciesMeta } from './freq.js';
@@ -62,6 +62,9 @@ app.get('/api/stream', (req, res) => {
 
 // ------------------------------------------------------------------ aircraft
 app.get('/api/aircraft', (req, res) => res.json(snapshot()));
+
+// Arrivals layer: tracked aircraft grouped by their destination airport.
+app.get('/api/arrivals', (req, res) => res.json(arrivalsSnapshot()));
 
 app.get('/api/aircraft/:hex', async (req, res) => {
   const detail = await aircraftDetail(req.params.hex);

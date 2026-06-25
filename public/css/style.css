@@ -257,6 +257,25 @@ button.danger:hover { background: rgba(239,68,68,0.12); border-color: var(--dang
 .freq-tbl td { padding: 2px 8px 2px 0; vertical-align: top; }
 .freq-tbl .ft { font-weight: 700; color: var(--accent); white-space: nowrap; }
 .freq-tbl .fd { color: var(--muted); }
+/* arrivals (airport) markers + popup */
+.airport-pin {
+  display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
+  padding: 2px 6px; background: rgba(13, 20, 38, 0.9); border: 1px solid #f59e0b;
+  border-radius: 11px; font-size: 12px; line-height: 16px; color: var(--text);
+}
+.airport-pin .airport-code { font-weight: 700; }
+.airport-pin .airport-badge {
+  background: #f59e0b; color: #06243a; font-weight: 700; font-size: 10px;
+  border-radius: 8px; padding: 0 5px; min-width: 14px; text-align: center;
+}
+.arr-title { font-weight: 700; margin-bottom: 6px; }
+.arr-table { border-collapse: collapse; font-size: 0.8rem; width: 100%; }
+.arr-table th { text-align: left; color: var(--muted); font-weight: 600; padding: 2px 10px 4px 0; border-bottom: 1px solid var(--border); }
+.arr-table td { padding: 4px 10px 4px 0; vertical-align: top; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.arr-table tr[data-hex] { cursor: pointer; }
+.arr-table tr[data-hex]:hover td { background: rgba(56,189,248,0.08); }
+.arr-table td .muted { font-size: 0.74rem; }
+
 /* Leaflet popups are light by default; theme them dark to match. */
 .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: #0f1830; color: var(--text); }
 .leaflet-popup-content-wrapper { border: 1px solid var(--border); }

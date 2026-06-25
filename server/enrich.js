@@ -329,6 +329,17 @@ export function cachedAirlineName(callsign) {
   return cached?.route?.airline?.name || null;
 }
 
+// Read a route straight from the cache without triggering a network lookup —
+// used by the Arrivals layer, which must stay fast over many aircraft. Returns
+// { route, agreement } or null when nothing (still) cached.
+export function cachedRoute(callsign) {
+  const cs = (callsign || '').trim().toUpperCase();
+  const cached = routeCache.get(cs);
+  if (!cached || !cached.route) return null;
+  if (Date.now() - cached.ts >= ROUTE_TTL) return null;
+  return { route: cached.route, agreement: cached.agreement };
+}
+
 // ----------------------------------------------------- aircraft DB (hex→reg/type)
 
 // Plain dump1090-fa / SBS feeds don't carry registration or ICAO type per
