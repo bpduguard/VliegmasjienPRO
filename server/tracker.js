@@ -11,6 +11,7 @@ import { upsertSighting, pruneOldData, insertTracks, pruneTracks } from './db.js
 import { notify } from './notify.js';
 import { ensureSbs, stopSbs, sbsSnapshot, sbsStatus } from './sbs.js';
 import { icaoToCountry } from './country.js';
+import { isMilitaryAircraft } from './military.js';
 import { initRange, updateRangePoint, saveRange } from './range.js';
 
 // hex -> live aircraft object
@@ -51,9 +52,12 @@ const BIZJET_TYPES = /^(GLF|GL[0-9]|GLEX|G[0-9]{3}|CL[0-9]{2}|C25|C50|C52|C55|C5
 
 function classify(ac) {
   if (ac.emergency) return 'emergency';
-  if (ac.military) return 'military';
+  // Military checked BEFORE the airline branch — air forces use airline-style
+  // callsigns (GAF/RCH/BAF/CTM…), so without this they'd be tagged "airline".
+  if (ac.military) return 'military'; // readsb/tar1090 dbFlags bit (if present)
   const padb = ac.padbCategory ? ac.padbCategory.toLowerCase() : '';
   if (padb.includes('mil')) return 'military';
+  if (isMilitaryAircraft(ac)) return 'military'; // hex block / callsign prefix / type
   if (ac.airlineCallsign) return 'airline';
   if (ac.type && BIZJET_TYPES.test(ac.type.toUpperCase())) return 'business';
   // ICAO emitter categories: A1 light, A2 small, A7 rotorcraft → mostly GA/private

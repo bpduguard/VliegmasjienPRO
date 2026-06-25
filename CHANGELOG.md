@@ -2,6 +2,16 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.7.1
+- **Better military recognition.** Military aircraft that fly with airline-style callsigns (e.g.
+  **GAF** German Air Force, **BAF** Belgian Air Force, **RCH** US "Reach", **CTM** French Cotam, **NATO**)
+  were being tagged **airline** on the map. Recognition no longer depends on the readsb/tar1090
+  `dbFlags` bit (plain dump1090-fa never sends it) or plane-alert-db membership — a new check uses
+  three always-available signals, applied *before* the airline rule: **military ICAO address blocks**
+  (per-nation military hex allocations, incl. the US `ADF7C8–AFFFFF` range), **military callsign
+  prefixes**, and **military-only type designators** (fast jets, A400M, C-130, C-17, P-8…). Civil
+  traffic is unaffected (KLM/Ryanair/Cessna stay as they were; civil An-124 operators aren't swept up).
+
 ## 1.7.0
 - Notifications now include the aircraft's **estimated location** — e.g. `📍 near Aarschot, Belgium`
   — reverse-geocoded from its position to the nearest village/town/city via OpenStreetMap Nominatim

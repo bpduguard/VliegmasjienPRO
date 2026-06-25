@@ -24,7 +24,9 @@ Designed to run in Docker on a **Raspberry Pi 5** (arm64) next to your existing 
   aircraft by ICAO hex / registration / callsign, or import any plane-alert-db–format CSV
 - 🛫 **Routes**: origin & destination airports + airline (via adsbdb.com), distance flown / to go and a
   computed **ETA at destination**; "tracked since" shows when you first picked up the flight
-- 🧮 **Filters**: airlines / military / private / business / emergency, plus a free-text airline filter
+- 🧮 **Filters**: airlines / military / private / business / emergency, plus a free-text airline filter.
+  **Military** is detected even without readsb `dbFlags` — from military ICAO address blocks, air-force
+  callsign prefixes (GAF, BAF, RCH, CTM, NATO…) and military-only type designators
 - 📈 **Statistics** with a configurable retention period: aircraft per day, top types, top airlines,
   categories — and a per-aircraft **sighting history** ("seen before") when you click a plane.
   Settings shows the **on-disk size of the retained log** and a **Purge log now** button to clear it
