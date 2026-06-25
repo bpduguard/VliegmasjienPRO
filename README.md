@@ -6,7 +6,9 @@ Designed to run in Docker on a **Raspberry Pi 5** (arm64) next to your existing 
 
 ## Features
 
-- 🗺 **Live map** (Leaflet, dark & light) with rotating plane icons, labels, trails and **follow mode**
+- 🗺 **Live map** (Leaflet, dark & light) with rotating plane icons, labels, trails and **follow mode**,
+  plus **🎯 Auto-follow** — automatically centres on and shows details of the newest aircraft, holding
+  each for at least 10 s before switching to a newer arrival
 - 📊 **Live data** per aircraft: altitude, ground speed, vertical rate, track, squawk, signal, distance…
 - 🌦 **Weather overlay** you can toggle: rain radar via RainViewer (no API key needed) + optional
   OpenWeatherMap cloud layer

@@ -278,7 +278,8 @@ button.danger:hover { background: rgba(239,68,68,0.12); border-color: var(--dang
 .rb-clock { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 1.02rem; color: var(--accent); }
 #rb-scrub { width: 100%; margin-top: 10px; accent-color: var(--accent); }
 .toolbtn { padding: 5px 11px; border-radius: 8px; font-size: 0.86rem; }
-#replay-open.active { background: var(--accent); color: #06243a; border-color: var(--accent); font-weight: 600; }
+#replay-open.active,
+#autofollow-btn.active { background: var(--accent); color: #06243a; border-color: var(--accent); font-weight: 600; }
 
 /* legend */
 #legend { position: absolute; left: 50%; transform: translateX(-50%); bottom: 12px; z-index: 1000; text-align: center; }

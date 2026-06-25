@@ -7,6 +7,9 @@ const state = {
   receiver: null,
   selected: null,
   follow: false,
+  autoFollow: false,       // auto-follow the newest aircraft
+  autoFollowHex: null,     // hex currently auto-followed
+  autoFollowSince: 0,      // when we started following it (for the 10s minimum)
   filter: 'all',
   airlineQuery: '',
   showLabels: true,
@@ -515,7 +518,67 @@ function renderAircraft() {
     }
   }
   renderList(visibleCount);
+  autoFollowTick();
 }
+
+// ------------------------------------------------------ auto-follow newest plane
+const AUTO_FOLLOW_MIN_MS = 10000; // hold each plane at least this long before switching
+
+// Pick the newest visible aircraft and follow it; switch to a newer arrival only
+// after the current one has been followed for AUTO_FOLLOW_MIN_MS. Called at the
+// end of every renderAircraft pass (i.e. on each live snapshot).
+function autoFollowTick() {
+  if (!state.autoFollow) return;
+  // newest visible aircraft = latest firstSeen, with a position and not filtered out
+  let newest = null;
+  for (const ac of state.aircraft.values()) {
+    if (ac.lat == null || ac.lon == null || !classifiedVisible(ac)) continue;
+    if (!newest || (ac.firstSeen || 0) > (newest.firstSeen || 0)) newest = ac;
+  }
+  if (!newest) return;
+
+  const cur = state.autoFollowHex ? state.aircraft.get(state.autoFollowHex) : null;
+  const curVisible = cur && cur.lat != null && cur.lon != null && classifiedVisible(cur);
+  const heldLongEnough = Date.now() - state.autoFollowSince >= AUTO_FOLLOW_MIN_MS;
+
+  let target = null;
+  if (!curVisible) target = newest; // current plane gone — jump to newest now
+  else if (heldLongEnough && (newest.firstSeen || 0) > (cur.firstSeen || 0)) target = newest;
+
+  if (target && target.hex !== state.autoFollowHex) {
+    state.autoFollowHex = target.hex;
+    state.autoFollowSince = Date.now();
+    autoSelect(target.hex, target);
+  }
+}
+
+// Select + follow a plane without re-entering renderAircraft (avoids recursion
+// when called from inside the render pass). Mirrors selectAircraft's side panel.
+function autoSelect(hex, ac) {
+  state.selected = hex;
+  state.follow = true;
+  $('#detail').classList.remove('hidden');
+  $('#d-follow').classList.add('active');
+  if (ac.lat != null) map.setView([ac.lat, ac.lon], Math.max(map.getZoom(), 9));
+  try { updateDetailLive(ac); } catch (e) { console.warn('detail render error', e); }
+  loadDetailExtras(hex);
+}
+
+function setAutoFollow(on) {
+  state.autoFollow = on;
+  $('#autofollow-btn').classList.toggle('active', on);
+  if (on) {
+    if (state.replay?.active) closeReplay(); // replay and auto-follow don't mix
+    state.autoFollowHex = null;
+    state.autoFollowSince = 0;
+    renderAircraft(); // pick + follow the newest immediately
+  } else {
+    state.follow = false;
+    $('#d-follow').classList.remove('active');
+  }
+}
+
+$('#autofollow-btn').addEventListener('click', () => setAutoFollow(!state.autoFollow));
 
 // ----------------------------------------------------------------- aircraft list
 state.listExpanded = false;
@@ -638,6 +701,7 @@ async function openReplay() {
     toast({ kind: 'test', title: 'No replay data yet', message: 'Track recording has just started — let it run a while, then try again.' });
     return;
   }
+  if (state.autoFollow) { state.autoFollow = false; $('#autofollow-btn').classList.remove('active'); }
   state.replay.active = true;
   state.replay.bounds = bounds;
   $('#replay-open').classList.add('active');
@@ -767,6 +831,8 @@ $('#airline-filter').addEventListener('input', (e) => {
 
 // ----------------------------------------------------------------- detail panel
 async function selectAircraft(hex, pan = false) {
+  // A manual pick takes over from auto-follow.
+  if (state.autoFollow) { state.autoFollow = false; $('#autofollow-btn').classList.remove('active'); }
   state.selected = hex;
   state.follow = false;
   $('#d-follow').classList.remove('active');
@@ -913,6 +979,7 @@ async function loadDetailExtras(hex) {
 }
 
 $('#d-close').addEventListener('click', () => {
+  if (state.autoFollow) { state.autoFollow = false; $('#autofollow-btn').classList.remove('active'); }
   state.selected = null;
   state.follow = false;
   $('#detail').classList.add('hidden');

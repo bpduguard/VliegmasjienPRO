@@ -2,6 +2,13 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.8.0
+- New **Auto-follow** mode (🎯 button on the map toolbar): automatically follows the **newest**
+  aircraft — keeps it centred on the map and opens its detail panel. It holds each aircraft for at
+  least **10 seconds**, then switches to a newer arrival when one appears. Clicking any aircraft, or
+  closing the detail panel, hands control back to you and turns auto-follow off; opening Replay also
+  disables it. Respects the current filters (only follows visible aircraft).
+
 ## 1.7.1
 - **Better military recognition.** Military aircraft that fly with airline-style callsigns (e.g.
   **GAF** German Air Force, **BAF** Belgian Air Force, **RCH** US "Reach", **CTM** French Cotam, **NATO**)
