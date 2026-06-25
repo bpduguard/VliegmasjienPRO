@@ -154,6 +154,11 @@ button.danger:hover { background: rgba(239,68,68,0.12); border-color: var(--dang
 .menu-item { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 7px; cursor: pointer; white-space: nowrap; color: var(--text); }
 .menu-item:hover { background: rgba(255,255,255,0.06); }
 .menu-item input { accent-color: var(--accent); }
+.menu-sub { padding: 2px 8px 8px 28px; display: flex; flex-direction: column; gap: 6px; font-size: 0.85rem; }
+.menu-sub.hidden { display: none; }
+.menu-sub select { font-size: 0.85rem; }
+.hm-grad { height: 9px; border-radius: 5px; background: linear-gradient(to right, #2c3e9e, #2c7fb8, #41b6c4, #a1dab4, #fdae61, #f46d43, #d7191c); }
+#hm-info { font-size: 0.78rem; }
 #layers-btn.has-active, #source-btn.has-active { border-color: var(--accent); color: var(--accent); }
 .menu-actions { display: flex; gap: 6px; padding: 6px 4px 2px; border-top: 1px solid var(--border); margin-top: 4px; }
 .menu-actions button { flex: 1; padding: 4px; font-size: 0.8rem; }

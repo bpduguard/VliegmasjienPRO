@@ -448,6 +448,27 @@ export function pruneTracks(retentionDays) {
   db.prepare('DELETE FROM tracks WHERE ts < ?').run(cutoff);
 }
 
+// Density heatmap: bin recorded positions (since `sinceMs`) onto a `grid`-degree
+// grid and count how many position reports fell in each cell. Returns the busiest
+// cells (capped) as [latCenter, lonCenter, count] plus the peak count and the
+// total number of points in the window.
+export function heatmapCells(sinceMs, grid = 0.01, limit = 80000) {
+  const total = db.prepare('SELECT COUNT(*) AS c FROM tracks WHERE ts >= ?').get(sinceMs).c;
+  const rows = db.prepare(
+    `SELECT CAST(lat / ? AS INT) AS gy, CAST(lon / ? AS INT) AS gx, COUNT(*) AS c
+     FROM tracks WHERE ts >= ?
+     GROUP BY gy, gx
+     ORDER BY c DESC
+     LIMIT ?`
+  ).all(grid, grid, sinceMs, limit);
+  let max = 0;
+  const cells = rows.map((r) => {
+    if (r.c > max) max = r.c;
+    return [+((r.gy + 0.5) * grid).toFixed(5), +((r.gx + 0.5) * grid).toFixed(5), r.c];
+  });
+  return { cells, max, count: cells.length, total, grid, capped: rows.length >= limit };
+}
+
 export function tracksCount() {
   return db.prepare('SELECT COUNT(*) AS c FROM tracks').get().c;
 }

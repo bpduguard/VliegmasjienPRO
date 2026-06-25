@@ -140,7 +140,8 @@ $('#labels-toggle').addEventListener('change', (e) => {
 // layers dropdown (Weather / Frequencies / Labels)
 function refreshLayersBtn() {
   const anyOn = $('#weather-toggle').checked || $('#freq-toggle').checked || $('#rings-toggle').checked
-    || $('#range-toggle').checked || $('#arrivals-toggle').checked || $('#space-toggle').checked;
+    || $('#range-toggle').checked || $('#arrivals-toggle').checked || $('#space-toggle').checked
+    || $('#heatmap-toggle').checked;
   $('#layers-btn').classList.toggle('has-active', anyOn);
 }
 $('#layers-btn').addEventListener('click', (e) => {
@@ -453,6 +454,54 @@ $('#space-toggle').addEventListener('change', (e) => {
   if (state.spaceOn) enableSpace(); else disableSpace();
   refreshLayersBtn();
 });
+
+// ----------------------------------------------------------------- heatmap layer
+// Density of recorded aircraft positions (the replay track log), aggregated
+// server-side and drawn with leaflet.heat — the tar1090-style position heatmap.
+const HEAT_GRADIENT = { 0.0: '#2c3e9e', 0.3: '#2c7fb8', 0.5: '#41b6c4', 0.65: '#a1dab4', 0.78: '#fdae61', 0.9: '#f46d43', 1.0: '#d7191c' };
+let heatLayer = null;
+let heatLoadToken = 0;
+
+function heatmapSinceMs() {
+  const hours = parseInt($('#hm-range').value, 10) || 6;
+  return Date.now() - hours * 3600000;
+}
+
+async function drawHeatmap() {
+  if (!state.heatmapOn) return;
+  if (typeof L.heatLayer !== 'function') {
+    $('#hm-info').textContent = 'Heatmap library failed to load.';
+    return;
+  }
+  const token = ++heatLoadToken;
+  $('#hm-info').textContent = 'Loading…';
+  let data;
+  try { data = await (await fetch(`/api/heatmap?since=${heatmapSinceMs()}`)).json(); }
+  catch { $('#hm-info').textContent = 'Failed to load.'; return; }
+  if (token !== heatLoadToken || !state.heatmapOn) return;
+  // log-compress counts so busy areas near the receiver don't wash out the rest
+  const lmax = Math.log1p(data.max || 1) || 1;
+  const points = (data.cells || []).map((c) => [c[0], c[1], Math.log1p(c[2])]);
+  if (heatLayer) { map.removeLayer(heatLayer); heatLayer = null; }
+  heatLayer = L.heatLayer(points, {
+    radius: 18, blur: 16, minOpacity: 0.25, maxZoom: 9, max: lmax, gradient: HEAT_GRADIENT
+  }).addTo(map);
+  $('#hm-info').textContent = data.total
+    ? `${data.total.toLocaleString()} points · ${data.count.toLocaleString()} cells${data.capped ? ' (capped)' : ''}`
+    : 'No recorded positions in this period yet.';
+}
+
+$('#heatmap-toggle').addEventListener('change', (e) => {
+  state.heatmapOn = e.target.checked;
+  $('#heatmap-opts').classList.toggle('hidden', !state.heatmapOn);
+  if (state.heatmapOn) {
+    drawHeatmap();
+  } else if (heatLayer) {
+    map.removeLayer(heatLayer); heatLayer = null;
+  }
+  refreshLayersBtn();
+});
+$('#hm-range').addEventListener('change', drawHeatmap);
 
 // ----------------------------------------------------------------- frequencies layer
 const freqLayer = L.layerGroup();

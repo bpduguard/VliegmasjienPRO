@@ -2,6 +2,13 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.13.0
+- New **🔥 Heatmap** map layer (Layers menu), like tar1090's: a density heatmap of where aircraft
+  have actually flown, built from the recorded position log. Pick a time window (last 1 / 6 / 24 hours
+  or 3 days) and the busiest areas glow hottest. Positions are binned and counted server-side (so the
+  payload stays small) and drawn with `leaflet.heat`; intensity is log-compressed so busy airways near
+  the receiver don't wash out the fainter edges. Coverage spans up to your replay retention window.
+
 ## 1.12.1
 - Settings page now has a footer with the app version and a link to the GitHub repository
   (github.com/bpduguard/VliegmasjienPRO). Brought the README up to date (removed the long-gone

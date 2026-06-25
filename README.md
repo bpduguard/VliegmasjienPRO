@@ -50,6 +50,8 @@ container.
   satellite.js (SGP4) from **CelesTrak** TLEs. Optional **visible-pass notifications** alert you ~1h
   before the ISS/Hubble makes a pass visible from your location (dark sky), with the time and
   rise/set direction
+- 🔥 **Heatmap** overlay (tar1090-style) — a density map of where aircraft have flown over a selectable
+  time window (1h–3 days), built from the recorded position log
 - ⊚ **Distance rings** overlay (10/25/50/100/200/400 km around the receiver) and 🏳 **country flags**
   per aircraft in the list (from the ICAO address). The app **version** is shown in Settings
   (see [CHANGELOG.md](CHANGELOG.md))

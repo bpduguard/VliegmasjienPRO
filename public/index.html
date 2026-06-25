@@ -64,6 +64,19 @@
           <label class="menu-item"><input type="checkbox" id="range-toggle" /> <span>📡 Range outline</span></label>
           <label class="menu-item"><input type="checkbox" id="arrivals-toggle" /> <span>🛬 Arrivals</span></label>
           <label class="menu-item"><input type="checkbox" id="space-toggle" /> <span>🛰 Aerospace (ISS, Hubble)</span></label>
+          <label class="menu-item"><input type="checkbox" id="heatmap-toggle" /> <span>🔥 Heatmap</span></label>
+          <div id="heatmap-opts" class="menu-sub hidden">
+            <label>Last
+              <select id="hm-range">
+                <option value="1">1 hour</option>
+                <option value="6" selected>6 hours</option>
+                <option value="24">24 hours</option>
+                <option value="72">3 days</option>
+              </select>
+            </label>
+            <div class="hm-grad" title="position density: low → high"></div>
+            <div id="hm-info" class="muted"></div>
+          </div>
           <label class="menu-item"><input type="checkbox" id="labels-toggle" checked /> <span>🏷 Aircraft labels</span></label>
         </div>
       </div>
@@ -454,6 +467,7 @@
   <div id="toasts"></div>
 
   <script src="vendor/leaflet/leaflet.js"></script>
+  <script src="vendor/leaflet-heat/leaflet-heat.js"></script>
   <script src="vendor/satellite/satellite.min.js"></script>
   <script src="js/app.js"></script>
 </body>

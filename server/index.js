@@ -14,7 +14,7 @@ import {
 } from './tracker.js';
 import { setBroadcast, notify } from './notify.js';
 import { refreshFrequencies, frequenciesMeta } from './freq.js';
-import { airportFreqsInBounds, replayBounds, replayFrame, spottedSince } from './db.js';
+import { airportFreqsInBounds, replayBounds, replayFrame, spottedSince, heatmapCells } from './db.js';
 import { icaoToCountry } from './country.js';
 import { rangeOutline, clearRange } from './range.js';
 import { getTles, startPassNotifier } from './space.js';
@@ -36,6 +36,8 @@ app.use('/vendor/leaflet', express.static(path.join(__dirname, '..', 'node_modul
 app.use('/vendor/flag-icons', express.static(path.join(__dirname, '..', 'node_modules', 'flag-icons')));
 // satellite.js (SGP4) served locally for the Aerospace layer.
 app.use('/vendor/satellite', express.static(path.join(__dirname, '..', 'node_modules', 'satellite.js', 'dist')));
+// leaflet.heat (canvas heatmap) served locally for the Heatmap layer.
+app.use('/vendor/leaflet-heat', express.static(path.join(__dirname, '..', 'node_modules', 'leaflet.heat', 'dist')));
 
 // ------------------------------------------------------------------ SSE stream
 const sseClients = new Set();
@@ -68,6 +70,15 @@ app.get('/api/aircraft', (req, res) => res.json(snapshot()));
 
 // Arrivals layer: tracked aircraft grouped by their destination airport.
 app.get('/api/arrivals', (req, res) => res.json(arrivalsSnapshot()));
+
+// Heatmap layer: density of recorded aircraft positions over a time window.
+app.get('/api/heatmap', (req, res) => {
+  const since = parseInt(req.query.since, 10);
+  if (!Number.isFinite(since)) return res.status(400).json({ error: 'since (ms) required' });
+  const grid = Math.min(0.05, Math.max(0.002, parseFloat(req.query.grid) || 0.01));
+  try { res.json(heatmapCells(since, grid)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 // Aerospace layer: orbital elements (TLEs) for the ISS and Hubble, from CelesTrak.
 app.get('/api/aerospace/tle', async (req, res) => {
