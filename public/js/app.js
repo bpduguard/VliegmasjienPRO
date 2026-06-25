@@ -514,6 +514,67 @@ function planeSvg(kind, color, track, onGround) {
 
 const markers = new Map(); // hex -> { marker, trail }
 
+// Selected-aircraft trail. Accumulated from the live snapshots (recent tail) and
+// seeded with the full history from the detail endpoint, keyed by timestamp so it
+// never shortens while the plane is tracked. Gaps (long time jumps between
+// consecutive points) are drawn as dashed connectors so signal loss is visible.
+const selTrailLayer = L.layerGroup().addTo(map);
+let selTrailHex = null;
+let selTrailPoints = new Map(); // ts -> [lat, lon, alt, ts]
+const TRAIL_GAP_MS = 20000; // a jump larger than this between points = a gap
+
+function clearSelTrail() {
+  selTrailLayer.clearLayers();
+  selTrailPoints = new Map();
+  selTrailHex = null;
+}
+
+function mergeSelTrail(points) {
+  for (const p of points || []) {
+    if (Array.isArray(p) && p.length >= 4 && p[3] != null && !selTrailPoints.has(p[3])) {
+      selTrailPoints.set(p[3], p);
+    }
+  }
+}
+
+// Seed the selected trail with the full history returned by the detail endpoint.
+function seedSelTrail(hex, fullTrail) {
+  if (hex !== state.selected) return;
+  if (selTrailHex !== hex) { clearSelTrail(); selTrailHex = hex; }
+  mergeSelTrail(fullTrail);
+  const ac = state.aircraft.get(hex);
+  if (ac) drawSelTrail(trailColor(ac));
+}
+
+function trailColor(ac) {
+  return ac.emergency ? CLASS_COLORS.emergency : CLASS_COLORS[ac.classification] || CLASS_COLORS.unknown;
+}
+
+// Rebuild the trail polylines: solid segments where points are continuous, and a
+// dashed amber connector (with end dots) across any gap so it's clearly visible.
+function drawSelTrail(color) {
+  selTrailLayer.clearLayers();
+  const pts = [...selTrailPoints.values()].sort((a, b) => a[3] - b[3]);
+  if (pts.length < 1) return;
+  let seg = [[pts[0][0], pts[0][1]]];
+  const flushSeg = () => { if (seg.length >= 2) L.polyline(seg, { color, weight: 2.5, opacity: 0.85 }).addTo(selTrailLayer); };
+  for (let i = 1; i < pts.length; i++) {
+    if (pts[i][3] - pts[i - 1][3] > TRAIL_GAP_MS) {
+      flushSeg();
+      const a = [pts[i - 1][0], pts[i - 1][1]], b = [pts[i][0], pts[i][1]];
+      L.polyline([a, b], { color: '#fbbf24', weight: 2, opacity: 0.85, dashArray: '3 8' })
+        .bindTooltip('Signal gap', { sticky: true }).addTo(selTrailLayer);
+      for (const e of [a, b]) {
+        L.circleMarker(e, { radius: 3, color: '#fbbf24', weight: 1.5, fillColor: '#1b2238', fillOpacity: 1 }).addTo(selTrailLayer);
+      }
+      seg = [[pts[i][0], pts[i][1]]];
+    } else {
+      seg.push([pts[i][0], pts[i][1]]);
+    }
+  }
+  flushSeg();
+}
+
 function classifiedVisible(ac) {
   if (state.filter !== 'all') {
     if (state.filter === 'emergency' && !ac.emergency) return false;
@@ -568,26 +629,25 @@ function renderAircraft() {
     } else if (entry.labeled && entry.marker.getTooltip()?.getContent() !== labelText) {
       entry.marker.setTooltipContent(labelText);
     }
-    // selected: trail + follow
+    // selected: accumulate + draw the full trail (with visible gaps) + follow
     if (state.selected === ac.hex) {
-      const latlngs = (ac.trail || []).map((p) => [p[0], p[1]]);
-      if (entry.trail) entry.trail.setLatLngs(latlngs);
-      else entry.trail = L.polyline(latlngs, { color, weight: 2, opacity: 0.7 }).addTo(map);
+      if (selTrailHex !== ac.hex) { clearSelTrail(); selTrailHex = ac.hex; }
+      mergeSelTrail(ac.trail);
+      drawSelTrail(color);
       if (state.follow) map.panTo([ac.lat, ac.lon], { animate: true });
       updateDetailLive(ac);
-    } else if (entry.trail) {
-      map.removeLayer(entry.trail);
-      entry.trail = null;
     }
   }
   // remove stale markers
   for (const [hex, entry] of markers) {
     if (!live.has(hex)) {
       map.removeLayer(entry.marker);
-      if (entry.trail) map.removeLayer(entry.trail);
       markers.delete(hex);
     }
   }
+  // the selected plane's trail persists until it actually leaves the map
+  // (expires from tracking) — keep it across brief signal gaps.
+  if (selTrailHex && !state.aircraft.has(selTrailHex)) clearSelTrail();
   renderList(visibleCount);
   autoFollowTick();
 }
@@ -760,6 +820,7 @@ function clearLiveMarkers() {
     if (entry.trail) map.removeLayer(entry.trail);
   }
   markers.clear();
+  clearSelTrail();
 }
 
 function ymdLocal(d) {
@@ -988,6 +1049,7 @@ async function loadDetailExtras(hex) {
     .then((r) => r.json())
     .then((d) => {
       if (state.selected !== hex) return;
+      seedSelTrail(hex, d.trailFull); // fill in the full pre-click history
       if (!d.route) {
         $('#d-route').innerHTML = d.routeError
           ? `<span class="muted">Route unavailable — ${d.routeError}. Check the container's internet access.</span>`
@@ -1053,6 +1115,7 @@ $('#d-close').addEventListener('click', () => {
   if (state.autoFollow) { state.autoFollow = false; $('#autofollow-btn').classList.remove('active'); }
   state.selected = null;
   state.follow = false;
+  clearSelTrail();
   $('#detail').classList.add('hidden');
   renderAircraft();
 });

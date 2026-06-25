@@ -16,6 +16,11 @@ import { initRange, updateRangePoint, saveRange } from './range.js';
 
 // hex -> live aircraft object
 const aircraft = new Map();
+// Full in-memory trail cap per aircraft. Generous so a selected aircraft keeps
+// its whole path while tracked (it's freed when the aircraft expires). The SSE
+// snapshot only carries the recent tail (cfg.trailLength); the full trail is
+// served by the detail endpoint and re-assembled client-side.
+const MAX_TRAIL = 1500;
 // hex -> Set of zone ids the aircraft is currently inside (for enter detection)
 const zonePresence = new Map();
 
@@ -236,7 +241,7 @@ async function pollOnce() {
       const last = ac.trail[ac.trail.length - 1];
       if (!last || last[0] !== ac.lat || last[1] !== ac.lon) {
         ac.trail.push([ac.lat, ac.lon, ac.alt_baro ?? null, now]);
-        if (ac.trail.length > cfg.trailLength) ac.trail.splice(0, ac.trail.length - cfg.trailLength);
+        if (ac.trail.length > MAX_TRAIL) ac.trail.splice(0, ac.trail.length - MAX_TRAIL);
       }
     }
 
@@ -413,6 +418,7 @@ function backgroundAircraftLookup(ac, now) {
 
 // Compact snapshot for the SSE stream / list endpoint.
 export function snapshot() {
+  const tail = getConfig().trailLength || 120; // recent trail tail sent per aircraft
   return {
     ts: Date.now(),
     receiver: getConfig().receiver,
@@ -450,7 +456,7 @@ export function snapshot() {
       distKm: ac.distKm ?? null,
       firstSeen: ac.firstSeen,
       zones: ac.zones || [],
-      trail: ac.trail
+      trail: ac.trail.length > tail ? ac.trail.slice(-tail) : ac.trail
     }))
   };
 }
@@ -500,6 +506,9 @@ export async function aircraftDetail(hex) {
     etaDestSec: confidence === 'low' ? null : etaDest,
     distToDestKm,
     distFromOriginKm,
+    // full trail (with timestamps) so the client can draw the complete path and
+    // show gaps — the SSE snapshot only carries the recent tail.
+    trailFull: ac.trail,
     // "departed" approximation: when we (or the route) first saw this flight
     firstSeen: ac.firstSeen
   };

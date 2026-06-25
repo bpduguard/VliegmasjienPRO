@@ -2,6 +2,14 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.10.0
+- **Full selected-aircraft trail with visible gaps.** The trail of the clicked aircraft is no longer
+  capped to a sliding window — it now shows the **complete path since the aircraft appeared** and keeps
+  growing until the aircraft leaves the map (or you deselect it). **Gaps** (signal loss between two
+  points) are drawn as a **dashed amber connector with end dots** instead of a misleading straight line.
+  The full path is assembled client-side from the live feed plus the detail endpoint's full trail, so
+  the SSE snapshot payload stays small (it still carries only the recent tail per aircraft).
+
 ## 1.9.0
 - New **🛬 Arrivals** map layer (Layers menu). Groups the aircraft currently on the map by their
   **destination airport** and drops a marker at each airport; clicking it shows a table of inbound
