@@ -140,7 +140,7 @@ $('#labels-toggle').addEventListener('change', (e) => {
 // layers dropdown (Weather / Frequencies / Labels)
 function refreshLayersBtn() {
   const anyOn = $('#weather-toggle').checked || $('#freq-toggle').checked || $('#rings-toggle').checked
-    || $('#range-toggle').checked || $('#arrivals-toggle').checked;
+    || $('#range-toggle').checked || $('#arrivals-toggle').checked || $('#space-toggle').checked;
   $('#layers-btn').classList.toggle('has-active', anyOn);
 }
 $('#layers-btn').addEventListener('click', (e) => {
@@ -329,6 +329,133 @@ $('#arrivals-toggle').addEventListener('change', (e) => {
     arrivalsLayer.clearLayers();
     if (arrivalsTimer) { clearInterval(arrivalsTimer); arrivalsTimer = null; }
   }
+  refreshLayersBtn();
+});
+
+// ----------------------------------------------------------------- aerospace layer
+// ISS + Hubble, propagated from CelesTrak TLEs with satellite.js (SGP4) in the
+// browser: live markers + ~95-min ground tracks. JWST is at Sun–Earth L2 with no
+// ground track, so it's surfaced as an informational note, not a fake position.
+const SPACE_DEFS = [
+  { key: 'iss', name: 'ISS (ZARYA)', icon: '🛰', color: '#34d399' },
+  { key: 'hst', name: 'Hubble Space Telescope', icon: '🔭', color: '#f472b6' }
+];
+const spaceLayer = L.layerGroup();        // satellite markers
+const spaceTrackLayer = L.layerGroup();   // ground-track polylines
+let spaceObjs = [];                        // [{ key, name, icon, color, satrec }]
+const spaceMarkers = new Map();            // key -> L.marker
+let spaceTimer = null;
+let spaceTick = 0;
+let spaceMeta = null;                       // { fetchedAt, source }
+let jwstNoticeShown = false;
+
+function satGeo(satrec, date) {
+  let pv;
+  try { pv = satellite.propagate(satrec, date); } catch { return null; }
+  if (!pv || !pv.position) return null;
+  const g = satellite.eciToGeodetic(pv.position, satellite.gstime(date));
+  const v = pv.velocity;
+  return {
+    lat: satellite.degreesLat(g.latitude),
+    lon: satellite.degreesLong(g.longitude),
+    altKm: g.height,
+    speedKms: v ? Math.hypot(v.x, v.y, v.z) : null
+  };
+}
+
+// Ground track from ~35 min ago to ~60 min ahead, split at the ±180° meridian
+// so the line doesn't smear across the whole map.
+function spaceGroundTrack(satrec) {
+  const now = Date.now();
+  const segs = []; let seg = []; let prevLon = null;
+  for (let s = -35 * 60; s <= 60 * 60; s += 30) {
+    const p = satGeo(satrec, new Date(now + s * 1000));
+    if (!p) { if (seg.length > 1) segs.push(seg); seg = []; prevLon = null; continue; }
+    if (prevLon != null && Math.abs(p.lon - prevLon) > 180) { if (seg.length > 1) segs.push(seg); seg = []; }
+    seg.push([p.lat, p.lon]); prevLon = p.lon;
+  }
+  if (seg.length > 1) segs.push(seg);
+  return segs;
+}
+
+function updateSpace() {
+  if (!state.spaceOn || !spaceObjs.length) return;
+  if (!mapVisible()) return; // skip propagation while the map isn't on screen
+  const now = new Date();
+  for (const o of spaceObjs) {
+    const p = satGeo(o.satrec, now);
+    if (!p) continue;
+    let m = spaceMarkers.get(o.key);
+    if (!m) {
+      const icon = L.divIcon({
+        className: 'sat-icon',
+        html: `<div class="sat-pin" style="border-color:${o.color}">${o.icon}<span class="sat-code">${o.key.toUpperCase()}</span></div>`,
+        iconSize: [56, 22], iconAnchor: [28, 11]
+      });
+      m = L.marker([p.lat, p.lon], { icon, zIndexOffset: 2000 }).addTo(spaceLayer);
+      spaceMarkers.set(o.key, m);
+    } else {
+      m.setLatLng([p.lat, p.lon]);
+    }
+    const age = spaceMeta?.fetchedAt ? fmt.time(spaceMeta.fetchedAt) : '?';
+    m.bindPopup(`<div class="arr-title">${o.icon} ${o.name}</div>
+      <table class="arr-table"><tbody>
+        <tr><td>Latitude</td><td>${p.lat.toFixed(2)}°</td></tr>
+        <tr><td>Longitude</td><td>${p.lon.toFixed(2)}°</td></tr>
+        <tr><td>Altitude</td><td>${Math.round(p.altKm).toLocaleString()} km</td></tr>
+        <tr><td>Speed</td><td>${p.speedKms ? Math.round(p.speedKms * 3600).toLocaleString() + ' km/h' : '—'}</td></tr>
+      </tbody></table>
+      <div class="muted" style="margin-top:6px">Orbit via CelesTrak TLE · updated ${age}</div>`);
+  }
+  if (spaceTick % 60 === 0) { // refresh the ground track ~once a minute
+    spaceTrackLayer.clearLayers();
+    for (const o of spaceObjs) {
+      for (const seg of spaceGroundTrack(o.satrec)) {
+        L.polyline(seg, { color: o.color, weight: 1.5, opacity: 0.6, dashArray: '4 6' }).addTo(spaceTrackLayer);
+      }
+    }
+  }
+  spaceTick++;
+}
+
+async function enableSpace() {
+  if (typeof satellite === 'undefined') {
+    toast({ kind: 'test', title: 'Aerospace unavailable', message: 'The satellite.js library failed to load.' });
+    $('#space-toggle').checked = false; state.spaceOn = false; return;
+  }
+  let data = null;
+  try { data = await (await fetch('/api/aerospace/tle')).json(); } catch { /* ignore */ }
+  if (!data || !data.sats || !Object.keys(data.sats).length) {
+    toast({ kind: 'test', title: 'Aerospace data unavailable', message: (data && data.error) || 'Could not load orbital elements (the server needs internet to reach CelesTrak).' });
+    $('#space-toggle').checked = false; state.spaceOn = false; refreshLayersBtn(); return;
+  }
+  spaceMeta = { fetchedAt: data.fetchedAt, source: data.source };
+  spaceObjs = [];
+  for (const def of SPACE_DEFS) {
+    const s = data.sats[def.key];
+    if (!s) continue;
+    try { spaceObjs.push({ ...def, satrec: satellite.twoline2satrec(s.line1, s.line2) }); } catch { /* skip bad TLE */ }
+  }
+  spaceLayer.addTo(map); spaceTrackLayer.addTo(map);
+  spaceTick = 0;
+  updateSpace();
+  spaceTimer = setInterval(updateSpace, 1000);
+  if (!jwstNoticeShown) {
+    jwstNoticeShown = true;
+    toast({ kind: 'test', title: '🔭 James Webb (JWST)', message: 'JWST orbits Sun–Earth L2, ~1.5 million km away — it has no ground track over Earth, so it can’t be plotted here. Follow it on NASA’s official “Where Is Webb” tracker.' });
+  }
+}
+
+function disableSpace() {
+  if (spaceTimer) { clearInterval(spaceTimer); spaceTimer = null; }
+  map.removeLayer(spaceLayer); map.removeLayer(spaceTrackLayer);
+  spaceLayer.clearLayers(); spaceTrackLayer.clearLayers();
+  spaceMarkers.clear(); spaceObjs = [];
+}
+
+$('#space-toggle').addEventListener('change', (e) => {
+  state.spaceOn = e.target.checked;
+  if (state.spaceOn) enableSpace(); else disableSpace();
   refreshLayersBtn();
 });
 

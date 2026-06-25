@@ -17,6 +17,7 @@ import { refreshFrequencies, frequenciesMeta } from './freq.js';
 import { airportFreqsInBounds, replayBounds, replayFrame, spottedSince } from './db.js';
 import { icaoToCountry } from './country.js';
 import { rangeOutline, clearRange } from './range.js';
+import { getTles } from './space.js';
 import { VERSION } from './version.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -33,6 +34,8 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 app.use('/vendor/leaflet', express.static(path.join(__dirname, '..', 'node_modules', 'leaflet', 'dist')));
 // Bundled SVG country flags (served locally so they render everywhere incl. Windows).
 app.use('/vendor/flag-icons', express.static(path.join(__dirname, '..', 'node_modules', 'flag-icons')));
+// satellite.js (SGP4) served locally for the Aerospace layer.
+app.use('/vendor/satellite', express.static(path.join(__dirname, '..', 'node_modules', 'satellite.js', 'dist')));
 
 // ------------------------------------------------------------------ SSE stream
 const sseClients = new Set();
@@ -65,6 +68,17 @@ app.get('/api/aircraft', (req, res) => res.json(snapshot()));
 
 // Arrivals layer: tracked aircraft grouped by their destination airport.
 app.get('/api/arrivals', (req, res) => res.json(arrivalsSnapshot()));
+
+// Aerospace layer: orbital elements (TLEs) for the ISS and Hubble, from CelesTrak.
+app.get('/api/aerospace/tle', async (req, res) => {
+  try {
+    const data = await getTles();
+    if (!data) return res.json({ sats: {}, error: 'No orbital data yet — the server needs internet to fetch TLEs from CelesTrak.' });
+    res.json({ fetchedAt: data.fetchedAt, source: data.source, sats: data.sats });
+  } catch (e) {
+    res.status(502).json({ error: e.message });
+  }
+});
 
 app.get('/api/aircraft/:hex', async (req, res) => {
   const detail = await aircraftDetail(req.params.hex);
