@@ -17,7 +17,7 @@ import { refreshFrequencies, frequenciesMeta } from './freq.js';
 import { airportFreqsInBounds, replayBounds, replayFrame, spottedSince } from './db.js';
 import { icaoToCountry } from './country.js';
 import { rangeOutline, clearRange } from './range.js';
-import { getTles } from './space.js';
+import { getTles, startPassNotifier } from './space.js';
 import { VERSION } from './version.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -516,4 +516,5 @@ app.post('/api/notify/test', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`VliegmasjienPRO listening on http://0.0.0.0:${PORT}`);
   startTracker();
+  startPassNotifier();
 });

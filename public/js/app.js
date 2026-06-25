@@ -1781,6 +1781,7 @@ async function loadSettings() {
   $('#s-cooldown').value = c.notifyCooldownMin;
   $('#s-notify-mil').checked = c.notifyMilitary;
   $('#s-notify-emerg').checked = c.notifyEmergency;
+  $('#s-notify-passes').checked = c.notifySatellitePasses;
   $('#s-owm').value = '';
   $('#s-owm').placeholder = c.weather.hasOwmKey ? 'key configured ✓ (enter to replace)' : '(optional)';
   const meta = await (await fetch('/api/planedb/meta')).json();
@@ -1900,6 +1901,7 @@ $('#s-save').addEventListener('click', async () => {
     notifyCooldownMin: Math.max(1, parseInt($('#s-cooldown').value, 10) || 15),
     notifyMilitary: $('#s-notify-mil').checked,
     notifyEmergency: $('#s-notify-emerg').checked,
+    notifySatellitePasses: $('#s-notify-passes').checked,
     ui: { units: $('#s-units').value }
   };
   if ($('#s-owm').value.trim()) patch.weather = { openWeatherMapKey: $('#s-owm').value.trim() };

@@ -10,8 +10,11 @@
 // so it isn't tracked.)
 import fs from 'node:fs';
 import path from 'node:path';
-import { DATA_DIR } from './config.js';
+import * as satellite from 'satellite.js';
+import { DATA_DIR, getConfig } from './config.js';
 import { extFetch } from './enrich.js';
+import { notify } from './notify.js';
+import { predictVisiblePasses } from './passes.js';
 
 const CELESTRAK_BASE = process.env.CELESTRAK_BASE || 'https://celestrak.org/NORAD/elements';
 const TLE_FILE = path.join(DATA_DIR, 'tle.json');
@@ -67,4 +70,65 @@ export async function getTles() {
   if (!inflight) inflight = refresh().finally(() => { inflight = null; });
   await inflight;
   return cache;
+}
+
+// ----------------------------------------------------- visible-pass notifications
+const PASS_LOOKAHEAD_MS = 3 * 3600000; // search this far ahead for passes
+const NOTIFY_BEFORE_MS = 60 * 60000;   // alert ~1h before the pass
+const notifiedPasses = new Map();      // key -> pass startMs (for dedupe + pruning)
+
+function fmtLocalTime(ms) {
+  try {
+    return new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' });
+  } catch { return new Date(ms).toISOString().slice(11, 16) + ' UTC'; }
+}
+
+// `nowMs` is injectable for testing; defaults to the wall clock.
+export async function checkPassNotifications(nowMs = Date.now()) {
+  const cfg = getConfig();
+  if (!cfg.notifySatellitePasses) return;
+  const rcv = cfg.receiver;
+  if (rcv?.lat == null || rcv?.lon == null) return;
+
+  const data = await getTles();
+  if (!data?.sats) return;
+  const observer = { latDeg: rcv.lat, lonDeg: rcv.lon, heightKm: 0.05 };
+  const now = nowMs;
+
+  for (const obj of SPACE_OBJECTS) {
+    const tle = data.sats[obj.key];
+    if (!tle) continue;
+    let satrec;
+    try { satrec = satellite.twoline2satrec(tle.line1, tle.line2); } catch { continue; }
+    let passes;
+    try { passes = predictVisiblePasses(satrec, observer, now, now + PASS_LOOKAHEAD_MS); } catch { continue; }
+    for (const p of passes) {
+      const until = p.startMs - now;
+      if (until <= 0 || until > NOTIFY_BEFORE_MS) continue; // only within the hour before
+      const key = `${obj.key}:${Math.round(p.startMs / 60000)}`;
+      if (notifiedPasses.has(key)) continue;
+      notifiedPasses.set(key, p.startMs);
+      const mins = Math.round(until / 60000);
+      notify({
+        key,
+        kind: 'test', // not aircraft — reuse the generic styling
+        title: `${obj.icon} Visible ${obj.name} pass in ~${mins} min`,
+        message:
+          `${obj.name} will be visible from your location — skies will be dark.\n` +
+          `Starts ${fmtLocalTime(p.startMs)}, rising in the ${p.riseDir} and setting in the ${p.setDir}, ` +
+          `up to ${p.maxElev}° high (${p.peakDir}). Visible for about ${Math.max(1, Math.round(p.durationSec / 60))} min.`
+      });
+    }
+  }
+  // prune passes that are well in the past
+  for (const [k, startMs] of notifiedPasses) {
+    if (startMs < now - 3600000) notifiedPasses.delete(k);
+  }
+}
+
+let passTimer = null;
+export function startPassNotifier() {
+  // first check shortly after startup, then every 5 minutes
+  setTimeout(() => { checkPassNotifications().catch(() => {}); }, 30000);
+  passTimer = setInterval(() => { checkPassNotifications().catch(() => {}); }, 5 * 60000);
 }

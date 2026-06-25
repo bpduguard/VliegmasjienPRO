@@ -2,6 +2,16 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.12.0
+- New **visible-pass notifications** for the **ISS** and **Hubble** (Settings ▸ Notifications). When
+  enabled, you get an alert **~1 hour before** the satellite makes a pass that is actually *visible*
+  from your receiver location — i.e. it rises high enough (≥10°), the **sky is dark** (sun past civil
+  dusk) and the satellite is sunlit. The message gives the **start time**, the **direction it rises
+  and sets** (e.g. "rising in the SW, setting in the NE"), the peak elevation and how long it's
+  visible. Predicted server-side with SGP4 (satellite.js) from the CelesTrak TLEs, a low-precision
+  solar-position model for darkness/illumination, checked every 5 minutes, and de-duplicated so each
+  pass alerts once. Delivered over the same Pushover / Discord / browser channels.
+
 ## 1.11.1
 - Remove the **James Webb (JWST)** notice from the Aerospace layer. JWST orbits Sun–Earth L2
   (~1.5 million km away) and has no ground track over Earth, so it isn't trackable on a map — the layer

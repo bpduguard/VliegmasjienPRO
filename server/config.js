@@ -42,6 +42,9 @@ const DEFAULTS = {
   // Notify on any military / emergency aircraft regardless of watchlist.
   notifyMilitary: false,
   notifyEmergency: true,
+  // Notify ~1h ahead when the ISS or Hubble makes a visible pass (dark sky) over
+  // the receiver location.
+  notifySatellitePasses: false,
   // plane-alert-db source (same resource planefence/plane-alert uses)
   planeAlertDbUrl: 'https://raw.githubusercontent.com/sdr-enthusiasts/plane-alert-db/main/plane-alert-db.csv',
   planeAlertDbAutoRefreshHours: 168,
