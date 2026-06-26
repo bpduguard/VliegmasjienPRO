@@ -63,6 +63,8 @@
           <label class="menu-item"><input type="checkbox" id="rings-toggle" /> <span>⊚ Distance rings</span></label>
           <label class="menu-item"><input type="checkbox" id="range-toggle" /> <span>📡 Range outline</span></label>
           <label class="menu-item"><input type="checkbox" id="arrivals-toggle" /> <span>🛬 Arrivals</span></label>
+          <label class="menu-item"><input type="checkbox" id="airspace-toggle" /> <span>🛫 Airspace (OpenAIP)</span></label>
+          <label class="menu-item"><input type="checkbox" id="metar-toggle" /> <span>🌬 Aviation weather (METAR)</span></label>
           <label class="menu-item"><input type="checkbox" id="space-toggle" /> <span>🛰 Aerospace (ISS, Hubble)</span></label>
           <label class="menu-item"><input type="checkbox" id="heatmap-toggle" /> <span>🔥 Heatmap</span></label>
           <div id="heatmap-opts" class="menu-sub hidden">
@@ -449,6 +451,19 @@
           <a href="https://openweathermap.org/api" target="_blank" rel="noopener">OpenWeatherMap API key</a>.</p>
         <div class="row wrap">
           <label>OpenWeatherMap key <input id="s-owm" size="36" placeholder="(optional)" /></label>
+        </div>
+      </section>
+
+      <section class="settings-block">
+        <h3>Aeronautical layers</h3>
+        <p class="muted">The <strong>🛫 Airspace</strong> overlay (controlled airspace, CTR/TMA/CTA…) uses
+          <a href="https://www.openaip.net" target="_blank" rel="noopener">OpenAIP</a> — get a free API key from your
+          OpenAIP account (<em>My Account → API Keys</em>) and paste it here. The
+          <strong>🌬 Aviation weather (METAR)</strong> layer uses
+          <a href="https://aviationweather.gov" target="_blank" rel="noopener">aviationweather.gov</a> and needs no key.
+          Toggle both from the map's <strong>Layers</strong> menu.</p>
+        <div class="row wrap">
+          <label>OpenAIP API key <input id="s-openaip" size="36" placeholder="(optional)" /></label>
         </div>
       </section>
 

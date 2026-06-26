@@ -478,6 +478,62 @@ app.get('/api/weather/owm/:layer/:z/:x/:y', async (req, res) => {
   }
 });
 
+// ------------------------------------------------------------------ airspace (OpenAIP)
+// Controlled-airspace tile overlay proxied from OpenAIP so the API key stays
+// server-side and there are no CORS issues. Needs a free OpenAIP API key.
+app.get('/api/airspace/tiles/:z/:x/:y', async (req, res) => {
+  const key = getConfig().openAip?.apiKey;
+  if (!key) return res.status(404).json({ error: 'no OpenAIP key configured' });
+  const { z, x, y } = req.params;
+  if (![z, x, y].every((v) => /^\d+$/.test(v))) return res.status(400).end();
+  try {
+    const base = process.env.OPENAIP_TILES_BASE || 'https://api.tiles.openaip.net/api/data/openaip';
+    const r = await fetch(`${base}/${z}/${x}/${y}.png?apiKey=${key}`, {
+      headers: { 'x-openaip-api-key': key },
+      signal: AbortSignal.timeout(10000)
+    });
+    if (!r.ok) return res.status(r.status).end();
+    res.setHeader('content-type', 'image/png');
+    res.setHeader('cache-control', 'public, max-age=86400');
+    res.end(Buffer.from(await r.arrayBuffer()));
+  } catch {
+    res.status(502).end();
+  }
+});
+
+// ------------------------------------------------------------------ aviation weather (METAR)
+// Current METARs in a bounding box from the NOAA Aviation Weather Center
+// (aviationweather.gov) — free, no key. Cached briefly per bbox.
+const metarCache = new Map(); // bbox key -> { ts, data }
+app.get('/api/avwx/metar', async (req, res) => {
+  const nums = ['s', 'w', 'n', 'e'].map((k) => parseFloat(req.query[k]));
+  if (nums.some((v) => !Number.isFinite(v))) return res.status(400).json({ error: 's,w,n,e required' });
+  const [s, w, n, e] = nums;
+  const key = nums.map((v) => v.toFixed(2)).join(',');
+  const hit = metarCache.get(key);
+  if (hit && Date.now() - hit.ts < 120000) return res.json(hit.data);
+  try {
+    const base = process.env.AVWX_BASE || 'https://aviationweather.gov/api/data';
+    const url = `${base}/metar?bbox=${s},${w},${n},${e}&format=json`;
+    const r = await extFetch(url, { signal: AbortSignal.timeout(12000) });
+    if (!r.ok) return res.status(502).json({ error: `aviationweather.gov HTTP ${r.status}` });
+    const arr = await r.json();
+    const stations = (Array.isArray(arr) ? arr : []).map((m) => ({
+      id: m.icaoId, name: m.name || null, lat: m.lat, lon: m.lon,
+      fltCat: m.fltCat || null, temp: m.temp ?? null, dewp: m.dewp ?? null,
+      wdir: m.wdir ?? null, wspd: m.wspd ?? null, wgst: m.wgst ?? null,
+      visib: m.visib ?? null, altim: m.altim ?? null, obsTime: m.obsTime ?? null,
+      raw: m.rawOb || null
+    })).filter((m) => Number.isFinite(m.lat) && Number.isFinite(m.lon));
+    const data = { stations };
+    metarCache.set(key, { ts: Date.now(), data });
+    if (metarCache.size > 200) metarCache.clear();
+    res.json(data);
+  } catch (err) {
+    res.status(502).json({ error: err.name === 'TimeoutError' ? 'aviationweather.gov timed out' : 'aviationweather.gov unreachable' });
+  }
+});
+
 // ------------------------------------------------------------------ replay
 app.get('/api/replay/bounds', (req, res) => res.json(replayBounds()));
 

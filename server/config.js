@@ -53,6 +53,8 @@ const DEFAULTS = {
     // RainViewer radar needs no key. OpenWeatherMap layers need a free API key.
     openWeatherMapKey: process.env.OWM_API_KEY || ''
   },
+  // OpenAIP (controlled-airspace tile overlay) — needs a free API key.
+  openAip: { apiKey: process.env.OPENAIP_API_KEY || '' },
   // UI defaults
   ui: { darkMode: true, units: 'metric' }
 };
@@ -114,6 +116,7 @@ export function publicConfig() {
     ...c,
     pushover: { ...c.pushover, token: c.pushover.token ? '••••' : '', user: c.pushover.user ? '••••' : '' },
     discord: { ...c.discord, webhookUrl: c.discord.webhookUrl ? '••••' : '' },
-    weather: { hasOwmKey: !!c.weather.openWeatherMapKey }
+    weather: { hasOwmKey: !!c.weather.openWeatherMapKey },
+    openAip: { hasKey: !!c.openAip?.apiKey }
   };
 }

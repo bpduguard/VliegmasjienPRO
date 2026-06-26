@@ -2,6 +2,15 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.14.0
+- New **🛫 Airspace (OpenAIP)** map layer — controlled-airspace overlay (CTR / TMA / CTA / classes)
+  from [OpenAIP](https://www.openaip.net). Needs a free OpenAIP API key (Settings ▸ Aeronautical
+  layers); the key is kept server-side and the tiles are proxied + cached.
+- New **🌬 Aviation weather (METAR)** map layer — current METARs from NOAA's
+  [aviationweather.gov](https://aviationweather.gov) (free, no key) as colour-coded station markers by
+  flight category (VFR / MVFR / IFR / LIFR). Click a station for decoded wind, visibility, temperature,
+  altimeter and the raw METAR. Stations refresh as you pan/zoom.
+
 ## 1.13.1
 - Fix **bogus same-airport routes** (e.g. "LHR → LHR") shown as ✓ confirmed. adsbdb sometimes returns a
   degenerate route whose origin equals its destination; the app trusted it and even marked it confirmed

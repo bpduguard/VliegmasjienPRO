@@ -52,6 +52,9 @@ container.
   rise/set direction
 - 🔥 **Heatmap** overlay (tar1090-style) — a density map of where aircraft have flown over a selectable
   time window (1h–3 days), built from the recorded position log
+- 🛫 **Airspace** overlay — controlled airspace (CTR/TMA/CTA/classes) from **OpenAIP** (free API key);
+  and 🌬 **Aviation weather (METAR)** overlay — colour-coded station markers by flight category
+  (VFR/MVFR/IFR/LIFR) with decoded wind/visibility/altimeter, from **aviationweather.gov** (no key)
 - ⊚ **Distance rings** overlay (10/25/50/100/200/400 km around the receiver) and 🏳 **country flags**
   per aircraft in the list (from the ICAO address). The app **version** is shown in Settings
   (see [CHANGELOG.md](CHANGELOG.md))
@@ -141,6 +144,7 @@ later start, so the app never "forgets" a URL you set in the UI:
 | `SOURCE_MODE` | `json` (default) or `sbs` for BaseStation TCP |
 | `SBS_HOST` / `SBS_PORT` | Beasthost address + SBS port (default 30003) when `SOURCE_MODE=sbs` |
 | `OWM_API_KEY` | Optional OpenWeatherMap key for the cloud layer (rain radar needs no key) |
+| `OPENAIP_API_KEY` | Optional OpenAIP key for the controlled-airspace layer |
 | `PORT` | HTTP port (default 8390) |
 | `DATA_DIR` | Data directory (default `/data` in Docker) |
 
@@ -162,6 +166,8 @@ later start, so the app never "forgets" a URL you set in the UI:
 | [OpenWeatherMap](https://openweathermap.org) | extra cloud layer (optional) | free key |
 | [CelesTrak](https://celestrak.org) | orbital elements (TLEs) for the ISS/Hubble (Aerospace layer) | no |
 | [Nominatim](https://nominatim.openstreetmap.org) | reverse geocode aircraft location in notifications | no |
+| [OpenAIP](https://www.openaip.net) | controlled-airspace tile overlay (Airspace layer) | free key |
+| [aviationweather.gov](https://aviationweather.gov) | METARs for the aviation-weather layer | no |
 
 Notes on route/ETA data: adsbdb provides the airports for a callsign, not the airline's schedule. The
 **ETA at destination** is computed live from position, ground speed and remaining great-circle

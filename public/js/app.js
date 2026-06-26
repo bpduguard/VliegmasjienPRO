@@ -141,7 +141,7 @@ $('#labels-toggle').addEventListener('change', (e) => {
 function refreshLayersBtn() {
   const anyOn = $('#weather-toggle').checked || $('#freq-toggle').checked || $('#rings-toggle').checked
     || $('#range-toggle').checked || $('#arrivals-toggle').checked || $('#space-toggle').checked
-    || $('#heatmap-toggle').checked;
+    || $('#heatmap-toggle').checked || $('#airspace-toggle').checked || $('#metar-toggle').checked;
   $('#layers-btn').classList.toggle('has-active', anyOn);
 }
 $('#layers-btn').addEventListener('click', (e) => {
@@ -502,6 +502,81 @@ $('#heatmap-toggle').addEventListener('change', (e) => {
   refreshLayersBtn();
 });
 $('#hm-range').addEventListener('change', drawHeatmap);
+
+// ----------------------------------------------------------------- airspace (OpenAIP)
+// Controlled-airspace tile overlay, proxied through the server (key stays server-side).
+let airspaceLayer = null;
+
+async function enableAirspace() {
+  if (!state.config) { try { state.config = await (await fetch('/api/config')).json(); } catch { /* ignore */ } }
+  if (!state.config?.openAip?.hasKey) {
+    toast({ kind: 'test', title: 'OpenAIP key needed', message: 'Add a free OpenAIP API key in Settings → Aeronautical layers to show controlled airspace.' });
+    $('#airspace-toggle').checked = false; state.airspaceOn = false; refreshLayersBtn();
+    return;
+  }
+  airspaceLayer = L.tileLayer('/api/airspace/tiles/{z}/{x}/{y}', {
+    opacity: 0.85, maxZoom: 14, tileSize: 256, zIndex: 350, attribution: 'Airspace &copy; OpenAIP'
+  }).addTo(map);
+}
+function disableAirspace() {
+  if (airspaceLayer) { map.removeLayer(airspaceLayer); airspaceLayer = null; }
+}
+$('#airspace-toggle').addEventListener('change', (e) => {
+  state.airspaceOn = e.target.checked;
+  if (state.airspaceOn) enableAirspace(); else disableAirspace();
+  refreshLayersBtn();
+});
+
+// ----------------------------------------------------------------- aviation weather (METAR)
+// Colour-coded METAR station markers from aviationweather.gov (no key).
+const metarLayer = L.layerGroup();
+let metarLoadToken = 0;
+const FLT_CAT_COLORS = { VFR: '#22c55e', MVFR: '#3b82f6', IFR: '#ef4444', LIFR: '#d946ef' };
+
+function metarPopup(m) {
+  const color = FLT_CAT_COLORS[m.fltCat] || '#94a3b8';
+  const rows = [];
+  if (m.wspd != null) {
+    const wind = m.wspd === 0 ? 'calm'
+      : `${m.wdir == null || m.wdir === 'VRB' ? 'VRB' : m.wdir + '°'} @ ${m.wspd} kt${m.wgst ? ' G' + m.wgst : ''}`;
+    rows.push(['Wind', wind]);
+  }
+  if (m.visib != null) rows.push(['Visibility', `${m.visib} sm`]);
+  if (m.temp != null) rows.push(['Temp / dew', `${Math.round(m.temp)}° / ${m.dewp != null ? Math.round(m.dewp) + '°' : '—'} C`]);
+  if (m.altim != null) rows.push(['Altimeter', `${Math.round(m.altim)} hPa · ${(m.altim / 33.8639).toFixed(2)} inHg`]);
+  const body = rows.map(([k, v]) => `<tr><td class="muted">${k}</td><td>${v}</td></tr>`).join('');
+  return `<div class="metar-pop">
+    <div class="arr-title">${m.id}${m.name ? ` · ${m.name}` : ''}</div>
+    <div><span class="fltcat" style="background:${color}">${m.fltCat || '—'}</span></div>
+    <table class="arr-table"><tbody>${body}</tbody></table>
+    ${m.raw ? `<div class="metar-raw">${m.raw}</div>` : ''}
+  </div>`;
+}
+
+async function loadMetar() {
+  if (!state.metarOn) return;
+  const b = map.getBounds();
+  const token = ++metarLoadToken;
+  let data;
+  try {
+    const p = new URLSearchParams({ s: b.getSouth(), w: b.getWest(), n: b.getNorth(), e: b.getEast() });
+    data = await (await fetch(`/api/avwx/metar?${p}`)).json();
+  } catch { return; }
+  if (token !== metarLoadToken || !state.metarOn) return;
+  metarLayer.clearLayers();
+  for (const m of data.stations || []) {
+    L.circleMarker([m.lat, m.lon], {
+      radius: 6, color: '#0b1220', weight: 1, fillColor: FLT_CAT_COLORS[m.fltCat] || '#94a3b8', fillOpacity: 0.95
+    }).bindPopup(metarPopup(m), { maxWidth: 320 }).bindTooltip(m.id, { direction: 'top' }).addTo(metarLayer);
+  }
+}
+$('#metar-toggle').addEventListener('change', (e) => {
+  state.metarOn = e.target.checked;
+  if (state.metarOn) { metarLayer.addTo(map); loadMetar(); }
+  else { map.removeLayer(metarLayer); metarLayer.clearLayers(); }
+  refreshLayersBtn();
+});
+map.on('moveend', () => { if (state.metarOn) loadMetar(); });
 
 // ----------------------------------------------------------------- frequencies layer
 const freqLayer = L.layerGroup();
@@ -1833,6 +1908,8 @@ async function loadSettings() {
   $('#s-notify-passes').checked = c.notifySatellitePasses;
   $('#s-owm').value = '';
   $('#s-owm').placeholder = c.weather.hasOwmKey ? 'key configured ✓ (enter to replace)' : '(optional)';
+  $('#s-openaip').value = '';
+  $('#s-openaip').placeholder = c.openAip?.hasKey ? 'key configured ✓ (enter to replace)' : '(optional)';
   const meta = await (await fetch('/api/planedb/meta')).json();
   $('#s-padb-meta').textContent = meta.rows
     ? `${meta.rows.toLocaleString()} aircraft in DB, updated ${meta.updatedAt ? fmt.dateTime(meta.updatedAt) : '(bundled)'}`
@@ -1955,6 +2032,7 @@ $('#s-save').addEventListener('click', async () => {
     ui: { units: $('#s-units').value }
   };
   if ($('#s-owm').value.trim()) patch.weather = { openWeatherMapKey: $('#s-owm').value.trim() };
+  if ($('#s-openaip').value.trim()) patch.openAip = { apiKey: $('#s-openaip').value.trim() };
   await fetch('/api/config', {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch)
   });
