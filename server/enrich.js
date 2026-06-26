@@ -275,29 +275,43 @@ export async function lookupRoute(callsign) {
   const sources = [];
   const error = adsb.error;
 
-  if (adsb.route) {
+  const oA = adsb.route?.origin?.icao;
+  const dA = adsb.route?.destination?.icao;
+  // A route is only usable if it has two *different* endpoints. adsbdb sometimes
+  // returns a degenerate same-airport route (e.g. EGLL→EGLL); treat that as "no
+  // route from adsbdb" so a real route from hexdb can take over.
+  const adsbDistinct = !!(adsb.route && oA && dA && oA !== dA);
+  const hexFirst = hexList?.[0];
+  const hexLast = hexList?.[hexList.length - 1];
+  const hexDistinct = !!(hexList && hexList.length >= 2 && hexFirst !== hexLast);
+
+  if (adsbDistinct) {
     route = adsb.route;
     sources.push('adsbdb');
-    if (hexList?.length) {
-      const oIcao = adsb.route.origin?.icao;
-      const dIcao = adsb.route.destination?.icao;
-      if (oIcao && dIcao) {
-        sources.push('hexdb');
-        agreement = hexList.includes(oIcao) && hexList.includes(dIcao) ? 'confirmed' : 'conflict';
-      } else {
-        agreement = 'single'; // can't compare reliably
-      }
+    if (hexDistinct) {
+      sources.push('hexdb');
+      // Confirm only when the endpoints match in order (origin→destination), not
+      // just that both airports appear somewhere in hexdb's list — otherwise a
+      // reversed or same-airport route would be wrongly "confirmed".
+      agreement = (oA === hexFirst && dA === hexLast) ? 'confirmed' : 'conflict';
     } else {
       agreement = 'single';
     }
-  } else if (hexList && hexList.length >= 2) {
-    // only hexdb has a route — build one from its first/last airport
-    const [o, d] = await Promise.all([lookupHexdbAirport(hexList[0]), lookupHexdbAirport(hexList[hexList.length - 1])]);
+  } else if (hexDistinct) {
+    // adsbdb has no usable route (missing or degenerate) — build from hexdb's
+    // first/last airport. Keep the adsbdb airline name if we got one.
+    const [o, d] = await Promise.all([lookupHexdbAirport(hexFirst), lookupHexdbAirport(hexLast)]);
     if (o || d) {
-      route = { callsign: cs, airline: null, origin: o, destination: d };
+      route = { callsign: cs, airline: adsb.route?.airline || null, origin: o, destination: d };
       sources.push('hexdb');
       agreement = 'single';
     }
+  } else if (adsb.route && oA && dA) {
+    // Only a same-airport route is available from either source (possibly a
+    // genuine round trip). Show it, but don't claim it's confirmed.
+    route = adsb.route;
+    sources.push('adsbdb');
+    agreement = 'single';
   }
 
   const value = { route, error, agreement, sources };

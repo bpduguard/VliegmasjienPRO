@@ -2,6 +2,14 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.13.1
+- Fix **bogus same-airport routes** (e.g. "LHR → LHR") shown as ✓ confirmed. adsbdb sometimes returns a
+  degenerate route whose origin equals its destination; the app trusted it and even marked it confirmed
+  because the cross-check only tested whether each airport *appeared anywhere* in hexdb's route (so
+  "LHR" matched the "LHR–BRU" list twice). Now a same-airport route from adsbdb is treated as no route,
+  so the real route from hexdb (LHR → BRU) is used; and confirmation requires the **origin and
+  destination to match in order**, which also stops reversed routes being falsely confirmed.
+
 ## 1.13.0
 - New **🔥 Heatmap** map layer (Layers menu), like tar1090's: a density heatmap of where aircraft
   have actually flown, built from the recorded position log. Pick a time window (last 1 / 6 / 24 hours
