@@ -2,6 +2,14 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.14.1
+- **Richer notifications.** Alerts now include more about the aircraft and its location: registration
+  and squawk, altitude with a climb/descent arrow, speed, **heading with a compass direction**, the
+  route (origin → destination) when known, distance from the receiver, the nearest place name, the
+  **exact coordinates**, and a **tappable map link**. Altitude/speed respect your metric/aviation unit
+  setting. Pushover links straight to the map location; the Discord embed gets dedicated fields
+  (Reg / Altitude / Speed / Heading / Squawk / Location / Coordinates) with a clickable map link.
+
 ## 1.14.0
 - New **🛫 Airspace (OpenAIP)** map layer — controlled-airspace overlay (CTR / TMA / CTA / classes)
   from [OpenAIP](https://www.openaip.net). Needs a free OpenAIP API key (Settings ▸ Aeronautical

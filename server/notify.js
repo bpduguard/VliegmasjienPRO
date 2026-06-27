@@ -27,13 +27,16 @@ export async function notify({ key, title, message, kind, aircraft, url }) {
   }
   const cfg = getConfig();
 
-  // Estimate where the aircraft is (nearest village/town/city) and add it to the
-  // message. Only runs past the cooldown gate, so lookups stay rare.
-  let place = null;
+  // Add where the aircraft is: nearest village/town/city, its coordinates, and a
+  // tappable map link. Only runs past the cooldown gate, so lookups stay rare.
+  let place = null, coords = null, mapUrl = null;
   if (Number.isFinite(aircraft?.lat) && Number.isFinite(aircraft?.lon)) {
     place = await reverseGeocode(aircraft.lat, aircraft.lon);
+    coords = `${aircraft.lat.toFixed(4)}, ${aircraft.lon.toFixed(4)}`;
+    mapUrl = `https://www.google.com/maps?q=${aircraft.lat.toFixed(5)},${aircraft.lon.toFixed(5)}`;
   }
   if (place) message = `${message}\n📍 ${place}`;
+  if (coords) message = `${message}\n${coords}`;
 
   logAlert(aircraft?.hex, aircraft?.flight, kind, `${title} — ${message}`);
 
@@ -46,24 +49,31 @@ export async function notify({ key, title, message, kind, aircraft, url }) {
       title,
       message,
       place,
+      lat: aircraft?.lat ?? null,
+      lon: aircraft?.lon ?? null,
+      mapUrl,
       hex: aircraft?.hex,
       callsign: aircraft?.flight,
       browser: !!cfg.browserNotifications.enabled
     });
   }
 
+  // Prefer a caller-supplied link (e.g. watchlist link); otherwise link to the map.
+  const linkUrl = url || mapUrl;
+  const linkTitle = url ? 'Open tracker' : 'Open location in maps';
+
   const jobs = [];
   if (cfg.pushover.enabled && cfg.pushover.token && cfg.pushover.user) {
-    jobs.push(sendPushover(cfg.pushover, title, message, url));
+    jobs.push(sendPushover(cfg.pushover, title, message, linkUrl, linkTitle));
   }
   if (cfg.discord.enabled && cfg.discord.webhookUrl) {
-    jobs.push(sendDiscord(cfg.discord.webhookUrl, title, message, kind, aircraft, url, place));
+    jobs.push(sendDiscord(cfg.discord.webhookUrl, title, message, kind, aircraft, linkUrl, place, coords));
   }
   await Promise.allSettled(jobs);
   return true;
 }
 
-async function sendPushover(po, title, message, url) {
+async function sendPushover(po, title, message, url, urlTitle) {
   try {
     const body = new URLSearchParams({
       token: po.token,
@@ -72,7 +82,7 @@ async function sendPushover(po, title, message, url) {
       message,
       priority: String(po.priority ?? 0)
     });
-    if (url) { body.set('url', url); body.set('url_title', 'Open tracker'); }
+    if (url) { body.set('url', url); body.set('url_title', urlTitle || 'Open'); }
     const res = await fetch('https://api.pushover.net/1/messages.json', {
       method: 'POST',
       body,
@@ -86,7 +96,7 @@ async function sendPushover(po, title, message, url) {
 
 const KIND_COLORS = { zone: 0x3b82f6, watchlist: 0xf59e0b, military: 0x16a34a, emergency: 0xdc2626, test: 0x8b5cf6 };
 
-async function sendDiscord(webhookUrl, title, message, kind, aircraft, url, place) {
+async function sendDiscord(webhookUrl, title, message, kind, aircraft, url, place, coords) {
   try {
     const embed = {
       title,
@@ -95,14 +105,18 @@ async function sendDiscord(webhookUrl, title, message, kind, aircraft, url, plac
       timestamp: new Date().toISOString(),
       footer: { text: 'VliegmasjienPRO' }
     };
-    if (url) embed.url = url;
+    if (url) embed.url = url; // makes the title clickable (map link by default)
     if (aircraft?.hex) {
       embed.fields = [
         { name: 'ICAO', value: aircraft.hex, inline: true },
         ...(aircraft.flight ? [{ name: 'Callsign', value: aircraft.flight, inline: true }] : []),
-        ...(Number.isFinite(aircraft.alt_baro) ? [{ name: 'Altitude', value: `${aircraft.alt_baro} ft`, inline: true }] : []),
+        ...(aircraft.registration ? [{ name: 'Reg', value: aircraft.registration, inline: true }] : []),
+        ...(Number.isFinite(aircraft.alt_baro) ? [{ name: 'Altitude', value: aircraft.onGround ? 'on ground' : `${aircraft.alt_baro} ft`, inline: true }] : []),
         ...(Number.isFinite(aircraft.gs) ? [{ name: 'Speed', value: `${Math.round(aircraft.gs)} kt`, inline: true }] : []),
-        ...(place ? [{ name: 'Location', value: place, inline: true }] : [])
+        ...(Number.isFinite(aircraft.track) ? [{ name: 'Heading', value: `${Math.round(aircraft.track)}°`, inline: true }] : []),
+        ...(aircraft.squawk ? [{ name: 'Squawk', value: String(aircraft.squawk), inline: true }] : []),
+        ...(place ? [{ name: 'Location', value: place, inline: true }] : []),
+        ...(coords ? [{ name: 'Coordinates', value: url ? `[${coords}](${url})` : coords, inline: true }] : [])
       ];
     }
     const res = await fetch(webhookUrl, {

@@ -374,14 +374,37 @@ function checkAlerts(ac, cfg) {
   }
 }
 
-function alertBody(ac) {
-  const parts = [];
-  if (ac.typeName || ac.type) parts.push(ac.typeName || ac.type);
-  if (ac.operator) parts.push(ac.operator);
-  if (Number.isFinite(ac.alt_baro)) parts.push(`${ac.alt_baro} ft`);
-  if (Number.isFinite(ac.gs)) parts.push(`${Math.round(ac.gs)} kt`);
-  if (ac.distKm != null) parts.push(`${ac.distKm} km away`);
-  return parts.join(' · ') || 'No extra data';
+const COMPASS16 = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+const compass = (deg) => COMPASS16[Math.round((((deg % 360) + 360) % 360) / 22.5) % 16];
+
+export function alertBody(ac) {
+  const metric = getConfig().ui?.units === 'metric';
+  const lines = [];
+  // identity: type · operator
+  const id = [ac.typeName || ac.type, ac.operator].filter(Boolean).join(' · ');
+  if (id) lines.push(id);
+  // registration · squawk
+  const reg = [ac.registration && `Reg ${ac.registration}`, ac.squawk && `squawk ${ac.squawk}`].filter(Boolean).join(' · ');
+  if (reg) lines.push(reg);
+  // altitude (with climb/descent arrow) · speed · heading (respecting units)
+  const dyn = [];
+  if (ac.onGround) {
+    dyn.push('on ground');
+  } else if (Number.isFinite(ac.alt_baro)) {
+    const alt = metric ? `${Math.round(ac.alt_baro * 0.3048).toLocaleString()} m` : `${ac.alt_baro.toLocaleString()} ft`;
+    const trend = ac.baro_rate > 100 ? ' ↑' : ac.baro_rate < -100 ? ' ↓' : '';
+    dyn.push(alt + trend);
+  }
+  if (Number.isFinite(ac.gs)) dyn.push(metric ? `${Math.round(ac.gs * 1.852)} km/h` : `${Math.round(ac.gs)} kt`);
+  if (Number.isFinite(ac.track)) dyn.push(`hdg ${Math.round(ac.track)}° ${compass(ac.track)}`);
+  if (dyn.length) lines.push(dyn.join(' · '));
+  // route, if we already know it
+  const cr = ac.flight ? cachedRoute(ac.flight) : null;
+  const o = cr?.route?.origin, d = cr?.route?.destination;
+  if (o || d) lines.push(`${o?.iata || o?.icao || '?'} → ${d?.iata || d?.icao || '?'}`);
+  // distance from receiver
+  if (ac.distKm != null) lines.push(`${ac.distKm} km from receiver`);
+  return lines.join('\n') || 'No extra data';
 }
 
 // Resolve airline names lazily for airline callsigns (cached in enrich.js).
