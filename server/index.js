@@ -18,7 +18,12 @@ import { airportFreqsInBounds, replayBounds, replayFrame, spottedSince, heatmapC
 import { icaoToCountry } from './country.js';
 import { rangeOutline, clearRange } from './range.js';
 import { getTles, startPassNotifier } from './space.js';
-import { authed, requireAuth, isPasswordSet, setPassword, verifyPassword, setAuthCookie, clearAuthCookie } from './auth.js';
+import {
+  authed, requireAuth, isPasswordSet, setPassword, verifyPassword, setAuthCookie, clearAuthCookie,
+  isTotpEnabled, verifyTotp, newTotpSecret, otpauthUri, setPendingTotp, getPendingTotp, enableTotp, disableTotp,
+  loginLockedFor, recordFail, recordSuccess
+} from './auth.js';
+import QRCode from 'qrcode';
 import { VERSION } from './version.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -95,8 +100,11 @@ app.get('/api/stream', (req, res) => {
 });
 
 // ------------------------------------------------------------------ auth
+const clientKey = (req) => req.ip || req.socket?.remoteAddress || 'unknown';
+const delay = (ms) => new Promise((r) => setTimeout(r, ms));
+
 app.get('/api/auth/status', (req, res) =>
-  res.json({ passwordSet: isPasswordSet(), authenticated: authed(req) }));
+  res.json({ passwordSet: isPasswordSet(), authenticated: authed(req), twoFactorEnabled: isTotpEnabled() }));
 
 // First-run setup: create the password only when none exists yet, then log in.
 app.post('/api/auth/setup', (req, res) => {
@@ -108,9 +116,21 @@ app.post('/api/auth/setup', (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   if (!isPasswordSet()) return res.status(400).json({ error: 'no password configured yet' });
-  if (!verifyPassword(String(req.body?.password || ''))) return res.status(401).json({ error: 'wrong password' });
+  const key = clientKey(req);
+  const locked = loginLockedFor(key);
+  if (locked) { res.setHeader('Retry-After', String(locked)); return res.status(429).json({ error: `too many attempts — try again in ${locked}s`, retryAfter: locked }); }
+
+  const okPw = verifyPassword(String(req.body?.password || ''));
+  // when 2FA is on, also require a valid TOTP code
+  const totpOk = !isTotpEnabled() || verifyTotp(getConfigTotpSecret(), req.body?.code);
+  if (!okPw || !totpOk) {
+    recordFail(key);
+    await delay(350); // slow scripted guessing
+    return res.status(401).json({ error: okPw ? 'invalid 2FA code' : 'wrong password', needCode: isTotpEnabled() });
+  }
+  recordSuccess(key);
   setAuthCookie(res);
   res.json({ ok: true });
 });
@@ -123,6 +143,36 @@ app.post('/api/auth/password', requireAuth, (req, res) => {
   if (pw.length < 6) return res.status(400).json({ error: 'new password must be at least 6 characters' });
   setPassword(pw);
   setAuthCookie(res);
+  res.json({ ok: true });
+});
+
+// ---- 2FA (TOTP) enrollment, all authenticated ----
+function getConfigTotpSecret() { return (getConfig().auth?.totp?.secret) || ''; }
+
+// Begin enrollment: generate a fresh secret (pending, not yet active) + a QR.
+app.post('/api/auth/2fa/setup', requireAuth, async (req, res) => {
+  const secret = newTotpSecret();
+  setPendingTotp(secret);
+  const uri = otpauthUri(secret);
+  let qr = null;
+  try { qr = await QRCode.toDataURL(uri, { margin: 1, width: 220 }); } catch { /* show secret instead */ }
+  res.json({ secret, uri, qr });
+});
+
+// Confirm enrollment: the code must match the pending secret.
+app.post('/api/auth/2fa/enable', requireAuth, (req, res) => {
+  const pending = getPendingTotp();
+  if (!pending) return res.status(400).json({ error: 'start 2FA setup first' });
+  if (!verifyTotp(pending, req.body?.code)) return res.status(400).json({ error: 'code did not match — check your authenticator and try again' });
+  enableTotp(pending);
+  res.json({ ok: true });
+});
+
+// Turn 2FA off — requires the current password and a valid code.
+app.post('/api/auth/2fa/disable', requireAuth, (req, res) => {
+  if (!verifyPassword(String(req.body?.password || ''))) return res.status(401).json({ error: 'wrong password' });
+  if (isTotpEnabled() && !verifyTotp(getConfigTotpSecret(), req.body?.code)) return res.status(400).json({ error: 'invalid 2FA code' });
+  disableTotp();
   res.json({ ok: true });
 });
 

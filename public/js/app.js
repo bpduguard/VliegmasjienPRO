@@ -123,6 +123,7 @@ function authMsg(t, cls) { const el = $('#auth-msg'); if (el) { el.textContent =
 function renderAuthGate() {
   const gate = $('#auth-gate'); if (!gate) return;
   if (isAuthed()) {
+    const twoFA = state.auth.twoFactorEnabled;
     gate.innerHTML = `<div class="auth-card"><h3>🔓 Authenticated — full access</h3>
       <p class="muted">Visitors without the password get the public view: the map, statistics and spotted list, with the
         receiver location and any location-revealing feature (distance rings, range outline, heatmap, distances) hidden.</p>
@@ -132,20 +133,43 @@ function renderAuthGate() {
         <div class="row"><input id="auth-new" type="password" placeholder="new password (min 6)" />
           <button id="auth-change-save" class="primary">Save</button></div>
       </div>
+      <hr style="border:none;border-top:1px solid var(--border);margin:14px 0">
+      <div class="row" style="margin-bottom:4px"><strong>Two-factor authentication (2FA)</strong>
+        <span class="${twoFA ? 'ok' : 'muted'}" style="font-size:0.85rem">${twoFA ? '● enabled' : '○ disabled'}</span></div>
+      ${twoFA
+        ? `<p class="muted">A 6-digit authenticator code is required at login.</p>
+           <button id="twofa-disable-btn">Disable 2FA…</button>
+           <div id="twofa-disable-form" class="hidden" style="margin-top:8px">
+             <div class="row"><input id="twofa-dis-pw" type="password" placeholder="password" />
+               <input id="twofa-dis-code" inputmode="numeric" maxlength="6" placeholder="2FA code" style="width:120px" />
+               <button id="twofa-dis-save" class="danger">Disable</button></div>
+           </div>`
+        : `<p class="muted">Add a second factor: scan the QR with Google Authenticator / Authy and enter the code to confirm.</p>
+           <button id="twofa-enable-btn" class="primary">Enable 2FA…</button>
+           <div id="twofa-enroll" class="hidden" style="margin-top:10px"></div>`}
       <div class="auth-msg" id="auth-msg"></div></div>`;
     $('#auth-logout').addEventListener('click', logout);
     $('#auth-change').addEventListener('click', () => $('#auth-change-form').classList.toggle('hidden'));
     $('#auth-change-save').addEventListener('click', changePassword);
+    if (twoFA) {
+      $('#twofa-disable-btn').addEventListener('click', () => $('#twofa-disable-form').classList.toggle('hidden'));
+      $('#twofa-dis-save').addEventListener('click', disable2fa);
+    } else {
+      $('#twofa-enable-btn').addEventListener('click', begin2faEnroll);
+    }
   } else if (state.auth.passwordSet) {
+    const twoFA = state.auth.twoFactorEnabled;
     gate.innerHTML = `<div class="auth-card"><h3>🔒 Log in</h3>
       <p class="muted">Enter the password to unlock all features — Settings, Watchlist, Zones, Alerts, the receiver location,
         distance rings, range outline and heatmap.</p>
-      <div class="row"><input id="auth-pw" type="password" placeholder="password" />
-        <button id="auth-login" class="primary">Log in</button></div>
+      <div class="row"><input id="auth-pw" type="password" placeholder="password" /></div>
+      ${twoFA ? `<div class="row"><input id="auth-code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6-digit 2FA code" /></div>` : ''}
+      <div class="row"><button id="auth-login" class="primary">Log in</button></div>
       <div class="auth-msg" id="auth-msg"></div></div>`;
-    const go = () => login($('#auth-pw').value);
+    const go = () => login($('#auth-pw').value, $('#auth-code')?.value);
     $('#auth-login').addEventListener('click', go);
     $('#auth-pw').addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+    $('#auth-code')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
   } else {
     gate.innerHTML = `<div class="auth-card"><h3>🔑 Set up a password</h3>
       <p class="muted">No password is configured yet. Create one to protect the private side of this tracker. Until you do,
@@ -160,10 +184,43 @@ function renderAuthGate() {
   }
 }
 
-async function login(pw) {
-  const r = await fetch('/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: pw }) });
+async function login(pw, code) {
+  const r = await fetch('/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: pw, code }) });
+  if (r.ok) { location.reload(); return; }
+  const j = await r.json().catch(() => ({}));
+  authMsg(j.error || (r.status === 429 ? 'Too many attempts — please wait.' : 'Login failed'), 'err');
+}
+
+// ---- 2FA enrollment / disable (authenticated) ----
+async function begin2faEnroll() {
+  const box = $('#twofa-enroll');
+  box.classList.remove('hidden');
+  box.innerHTML = '<span class="muted">Generating…</span>';
+  let d = {};
+  try { d = await (await fetch('/api/auth/2fa/setup', { method: 'POST' })).json(); } catch { /* ignore */ }
+  if (!d.secret) { box.innerHTML = '<span class="auth-msg err">Could not start 2FA setup.</span>'; return; }
+  box.innerHTML = `
+    ${d.qr ? `<img class="twofa-qr" src="${d.qr}" alt="2FA QR code" />` : ''}
+    <div class="muted" style="font-size:0.8rem">Or enter this key manually:</div>
+    <div class="twofa-secret">${d.secret.replace(/(.{4})/g, '$1 ').trim()}</div>
+    <div class="row" style="margin-top:8px"><input id="twofa-code" inputmode="numeric" maxlength="6" placeholder="code from app" style="width:140px" />
+      <button id="twofa-confirm" class="primary">Verify &amp; enable</button></div>`;
+  const go = async () => {
+    const r = await fetch('/api/auth/2fa/enable', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: $('#twofa-code').value }) });
+    if (r.ok) location.reload();
+    else authMsg((await r.json().catch(() => ({}))).error || '2FA enable failed', 'err');
+  };
+  $('#twofa-confirm').addEventListener('click', go);
+  $('#twofa-code').addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+}
+
+async function disable2fa() {
+  const r = await fetch('/api/auth/2fa/disable', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ password: $('#twofa-dis-pw').value, code: $('#twofa-dis-code').value })
+  });
   if (r.ok) location.reload();
-  else authMsg((await r.json().catch(() => ({}))).error || 'Login failed', 'err');
+  else authMsg((await r.json().catch(() => ({}))).error || 'Could not disable 2FA', 'err');
 }
 async function setupPassword(p1, p2) {
   if ((p1 || '').length < 6) return authMsg('Password must be at least 6 characters', 'err');

@@ -12,7 +12,8 @@ container.
   location-revealing feature (receiver marker, distance rings, range outline, heatmap, distances,
   receiver weather). Set the password in *Settings* on first run; the public map shows a footer noting
   it's a self-hosted receiver map. The server strips receiver coordinates/distances from public API
-  responses, not just the UI
+  responses, not just the UI. Optional **TOTP 2FA** (Google Authenticator / Authy) and **brute-force
+  login throttling** (escalating lockout)
 
 - 🗺 **Live map** (Leaflet, dark & light) with rotating plane icons, labels, and **follow mode**,
   plus **🎯 Auto-follow** — automatically centres on and shows details of the newest aircraft, holding

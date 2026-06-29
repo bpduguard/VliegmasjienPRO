@@ -2,6 +2,16 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.17.0
+- **Optional two-factor authentication (2FA)** for the authenticated login. Enable it in Settings —
+  scan the QR with Google Authenticator / Authy (or paste the key) and confirm a code; afterwards login
+  requires the password **and** a 6-digit TOTP code. Disable needs the password + a current code.
+  Standard RFC 6238 TOTP, implemented on `node:crypto` (no third-party auth library).
+- **Brute-force protection on login.** Failed attempts are throttled with a small delay and an
+  escalating per-client lockout (locked after 5 failures, doubling from 30 s up to 15 min), plus a
+  global flood guard — applied to both the password and the 2FA code. Lockouts return HTTP 429 with a
+  `Retry-After`.
+
 ## 1.16.0
 - **Public / authenticated split** (single password, no RBAC). Anonymous visitors get a **public view**
   — Map, Statistics and Spotted only — that **never reveals the receiver's location**: the receiver
