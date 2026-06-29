@@ -7,6 +7,13 @@ container.
 
 ## Features
 
+- 🔐 **Public / private split**: a password-protected **authenticated** view with everything, and a
+  **public** view (Map / Statistics / Spotted) that hides the receiver location and any
+  location-revealing feature (receiver marker, distance rings, range outline, heatmap, distances,
+  receiver weather). Set the password in *Settings* on first run; the public map shows a footer noting
+  it's a self-hosted receiver map. The server strips receiver coordinates/distances from public API
+  responses, not just the UI
+
 - 🗺 **Live map** (Leaflet, dark & light) with rotating plane icons, labels, and **follow mode**,
   plus **🎯 Auto-follow** — automatically centres on and shows details of the newest aircraft, holding
   each for at least 10 s before switching to a newer arrival. Clicking an aircraft shows its **full

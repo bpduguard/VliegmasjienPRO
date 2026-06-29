@@ -18,6 +18,7 @@ import { airportFreqsInBounds, replayBounds, replayFrame, spottedSince, heatmapC
 import { icaoToCountry } from './country.js';
 import { rangeOutline, clearRange } from './range.js';
 import { getTles, startPassNotifier } from './space.js';
+import { authed, requireAuth, isPasswordSet, setPassword, verifyPassword, setAuthCookie, clearAuthCookie } from './auth.js';
 import { VERSION } from './version.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -39,12 +40,37 @@ app.use('/vendor/satellite', express.static(path.join(__dirname, '..', 'node_mod
 // leaflet.heat (canvas heatmap) served locally for the Heatmap layer.
 app.use('/vendor/leaflet-heat', express.static(path.join(__dirname, '..', 'node_modules', 'leaflet.heat', 'dist')));
 
+// ----------------------------------------------------------------- public/auth split
+// Strip everything that could resolve the receiver's location from data served to
+// unauthenticated ("public") clients: the receiver coordinates, per-aircraft
+// distance-from-receiver, and zone membership/ETA (zones sit at the receiver).
+function stripAircraftLocation(a) {
+  return { ...a, distKm: null, zones: [] };
+}
+function publicSnapshot(s) {
+  return {
+    ts: s.ts,
+    status: s.status,
+    receiver: { lat: null, lon: null },
+    aircraft: (s.aircraft || []).map(stripAircraftLocation)
+  };
+}
+
 // ------------------------------------------------------------------ SSE stream
-const sseClients = new Set();
+const sseClients = new Set(); // { res, authed }
+function sseFrame(event, data) { return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`; }
 
 function broadcast(event, data) {
-  const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-  for (const res of sseClients) res.write(payload);
+  let full, pub;
+  for (const c of sseClients) {
+    if (event === 'aircraft') {
+      if (c.authed) { full ??= sseFrame('aircraft', data); c.res.write(full); }
+      else { pub ??= sseFrame('aircraft', publicSnapshot(data)); c.res.write(pub); }
+    } else if (c.authed) {
+      // alerts (and other private events) only go to authenticated clients
+      c.res.write(sseFrame(event, data));
+    }
+  }
 }
 setBroadcast(broadcast);
 setTrackerBroadcast(broadcast);
@@ -56,23 +82,61 @@ app.get('/api/stream', (req, res) => {
     connection: 'keep-alive',
     'x-accel-buffering': 'no'
   });
-  res.write(`event: aircraft\ndata: ${JSON.stringify(snapshot())}\n\n`);
-  sseClients.add(res);
+  const isAuth = authed(req);
+  const snap = snapshot();
+  res.write(sseFrame('aircraft', isAuth ? snap : publicSnapshot(snap)));
+  const client = { res, authed: isAuth };
+  sseClients.add(client);
   const ping = setInterval(() => res.write(': ping\n\n'), 25000);
   req.on('close', () => {
     clearInterval(ping);
-    sseClients.delete(res);
+    sseClients.delete(client);
   });
 });
 
+// ------------------------------------------------------------------ auth
+app.get('/api/auth/status', (req, res) =>
+  res.json({ passwordSet: isPasswordSet(), authenticated: authed(req) }));
+
+// First-run setup: create the password only when none exists yet, then log in.
+app.post('/api/auth/setup', (req, res) => {
+  if (isPasswordSet()) return res.status(403).json({ error: 'a password is already configured' });
+  const pw = String(req.body?.password || '');
+  if (pw.length < 6) return res.status(400).json({ error: 'password must be at least 6 characters' });
+  setPassword(pw);
+  setAuthCookie(res);
+  res.json({ ok: true });
+});
+
+app.post('/api/auth/login', (req, res) => {
+  if (!isPasswordSet()) return res.status(400).json({ error: 'no password configured yet' });
+  if (!verifyPassword(String(req.body?.password || ''))) return res.status(401).json({ error: 'wrong password' });
+  setAuthCookie(res);
+  res.json({ ok: true });
+});
+
+app.post('/api/auth/logout', (req, res) => { clearAuthCookie(res); res.json({ ok: true }); });
+
+app.post('/api/auth/password', requireAuth, (req, res) => {
+  if (!verifyPassword(String(req.body?.current || ''))) return res.status(401).json({ error: 'current password is wrong' });
+  const pw = String(req.body?.password || '');
+  if (pw.length < 6) return res.status(400).json({ error: 'new password must be at least 6 characters' });
+  setPassword(pw);
+  setAuthCookie(res);
+  res.json({ ok: true });
+});
+
 // ------------------------------------------------------------------ aircraft
-app.get('/api/aircraft', (req, res) => res.json(snapshot()));
+app.get('/api/aircraft', (req, res) => {
+  const snap = snapshot();
+  res.json(authed(req) ? snap : publicSnapshot(snap));
+});
 
 // Arrivals layer: tracked aircraft grouped by their destination airport.
 app.get('/api/arrivals', (req, res) => res.json(arrivalsSnapshot()));
 
-// Heatmap layer: density of recorded aircraft positions over a time window.
-app.get('/api/heatmap', (req, res) => {
+// Heatmap layer (reveals the coverage shape → authenticated only).
+app.get('/api/heatmap', requireAuth, (req, res) => {
   const since = parseInt(req.query.since, 10);
   if (!Number.isFinite(since)) return res.status(400).json({ error: 'since (ms) required' });
   const grid = Math.min(0.05, Math.max(0.002, parseFloat(req.query.grid) || 0.01));
@@ -94,6 +158,7 @@ app.get('/api/aerospace/tle', async (req, res) => {
 app.get('/api/aircraft/:hex', async (req, res) => {
   const detail = await aircraftDetail(req.params.hex);
   if (!detail) return res.status(404).json({ error: 'aircraft not currently tracked' });
+  if (!authed(req)) { detail.distKm = null; detail.zones = []; } // hide receiver-relative data
   res.json(detail);
 });
 
@@ -128,7 +193,9 @@ app.get('/api/photo/:hex', async (req, res) => {
 });
 
 app.get('/api/aircraft/:hex/history', (req, res) => {
-  res.json({ history: aircraftHistory(req.params.hex) });
+  const history = aircraftHistory(req.params.hex);
+  if (!authed(req)) for (const h of history) h.min_dist_km = null; // closest approach reveals the receiver
+  res.json({ history });
 });
 
 // ------------------------------------------------------------------ stats & alerts
@@ -137,28 +204,31 @@ app.get('/api/stats', (req, res) => {
   res.json(statsSummary(days));
 });
 
-app.get('/api/alerts', (req, res) => res.json({ alerts: recentAlerts(150) }));
+// Alerts carry place names / locations near the receiver → authenticated only.
+app.get('/api/alerts', requireAuth, (req, res) => res.json({ alerts: recentAlerts(150) }));
 
 // Storage usage of the retention-governed log data (history, alerts, replay).
-app.get('/api/storage', (req, res) => {
+app.get('/api/storage', requireAuth, (req, res) => {
   try { res.json(logStorageInfo()); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 // Manually purge all log data and reclaim disk space.
-app.post('/api/storage/purge', (req, res) => {
+app.post('/api/storage/purge', requireAuth, (req, res) => {
   try { res.json(purgeLogs()); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.get('/api/status', (req, res) =>
-  res.json({
+app.get('/api/status', (req, res) => {
+  const status = {
     ...trackerStatus(),
     planeDb: planeDbMeta(),
     aircraftDb: { count: aircraftDbCount(), error: aircraftDbError() },
     photos: { error: photoServiceError() },
     version: VERSION
-  })
-);
+  };
+  if (!authed(req)) status.receiver = { lat: null, lon: null }; // never expose the location publicly
+  res.json(status);
+});
 
 // --------------------------------------------------- spotted (plane-alert-db ∩ seen)
 // Aircraft seen on the radar since `since` (ms) that are also in plane-alert-db,
@@ -187,7 +257,7 @@ app.get('/api/spotted', (req, res) => {
       lastSeen: r.last_seen,
       maxAlt: r.max_alt,
       maxSpeed: r.max_speed,
-      minDistKm: r.min_dist_km
+      minDistKm: authed(req) ? r.min_dist_km : null // closest-approach reveals the receiver
     });
   }
   res.json({ spotted, total: spotted.length });
@@ -207,7 +277,7 @@ app.get('/api/route/:callsign', async (req, res) => {
 // Bulk import a hex→registration/type[/operator] dataset (CSV or NDJSON) for
 // users whose receiver/firewall can't do per-hex lookups, or who want the whole
 // database loaded at once. Accepts a `url` to fetch or a pasted `csv` body.
-app.post('/api/aircraftdb/import', async (req, res) => {
+app.post('/api/aircraftdb/import', requireAuth, async (req, res) => {
   try {
     let text = req.body?.csv;
     if (!text && req.body?.url) {
@@ -272,9 +342,19 @@ function parseAircraftDataset(text) {
 }
 
 // ------------------------------------------------------------------ config
-app.get('/api/config', (req, res) => res.json(publicConfig()));
+// Public clients get the config with the receiver location removed; full config
+// (incl. receiver) only for authenticated clients.
+app.get('/api/config', (req, res) => {
+  const c = publicConfig();
+  if (!authed(req)) {
+    c.receiver = { lat: null, lon: null };
+    c.weather = { hasOwmKey: false }; // owner's API keys aren't offered to public clients
+    c.openAip = { hasKey: false };
+  }
+  res.json(c);
+});
 
-app.post('/api/config', (req, res) => {
+app.post('/api/config', requireAuth, (req, res) => {
   const patch = req.body || {};
   // Don't let masked secrets ('••••') overwrite real ones.
   for (const sect of ['pushover', 'discord']) {
@@ -289,9 +369,9 @@ app.post('/api/config', (req, res) => {
 });
 
 // ------------------------------------------------------------------ zones
-app.get('/api/zones', (req, res) => res.json({ zones: getConfig().zones }));
+app.get('/api/zones', requireAuth, (req, res) => res.json({ zones: getConfig().zones }));
 
-app.post('/api/zones', (req, res) => {
+app.post('/api/zones', requireAuth, (req, res) => {
   const { name, lat, lon, radiusKm, notify: doNotify = true, color } = req.body || {};
   if (!name || !Number.isFinite(lat) || !Number.isFinite(lon) || !Number.isFinite(radiusKm)) {
     return res.status(400).json({ error: 'name, lat, lon and radiusKm are required' });
@@ -304,22 +384,22 @@ app.post('/api/zones', (req, res) => {
   res.json({ zones });
 });
 
-app.put('/api/zones/:id', (req, res) => {
+app.put('/api/zones/:id', requireAuth, (req, res) => {
   const zones = getConfig().zones.map((z) => (z.id === req.params.id ? { ...z, ...req.body, id: z.id } : z));
   saveConfig({ zones });
   res.json({ zones });
 });
 
-app.delete('/api/zones/:id', (req, res) => {
+app.delete('/api/zones/:id', requireAuth, (req, res) => {
   const zones = getConfig().zones.filter((z) => z.id !== req.params.id);
   saveConfig({ zones });
   res.json({ zones });
 });
 
 // ------------------------------------------------------------------ watchlist
-app.get('/api/watchlist', (req, res) => res.json({ watchlist: getConfig().watchlist }));
+app.get('/api/watchlist', requireAuth, (req, res) => res.json({ watchlist: getConfig().watchlist }));
 
-app.post('/api/watchlist', (req, res) => {
+app.post('/api/watchlist', requireAuth, (req, res) => {
   const e = req.body || {};
   if (!e.icao && !e.registration && !e.callsign) {
     return res.status(400).json({ error: 'icao, registration or callsign required' });
@@ -344,14 +424,14 @@ app.post('/api/watchlist', (req, res) => {
   res.json({ watchlist });
 });
 
-app.delete('/api/watchlist/:id', (req, res) => {
+app.delete('/api/watchlist/:id', requireAuth, (req, res) => {
   const watchlist = getConfig().watchlist.filter((w) => w.id !== req.params.id);
   saveConfig({ watchlist });
   res.json({ watchlist });
 });
 
 // Import a CSV in plane-alert-db format directly into the watchlist.
-app.post('/api/watchlist/import', (req, res) => {
+app.post('/api/watchlist/import', requireAuth, (req, res) => {
   const { csv } = req.body || {};
   if (!csv) return res.status(400).json({ error: 'csv body field required' });
   let added = 0;
@@ -385,7 +465,7 @@ app.post('/api/watchlist/import', (req, res) => {
 // ------------------------------------------------------------------ plane-alert-db
 app.get('/api/planedb/meta', (req, res) => res.json(planeDbMeta()));
 
-app.post('/api/planedb/refresh', async (req, res) => {
+app.post('/api/planedb/refresh', requireAuth, async (req, res) => {
   try {
     res.json(await refreshPlaneDb());
   } catch (e) {
@@ -401,7 +481,7 @@ app.get('/api/planedb/:hex', (req, res) => res.json({ entry: planeDbLookup(req.p
 // Current conditions at the receiver (Open-Meteo — free, no API key). Cached
 // for 10 minutes so we don't poll it on every page.
 let currentWxCache = { ts: 0, key: '', data: null };
-app.get('/api/weather/current', async (req, res) => {
+app.get('/api/weather/current', requireAuth, async (req, res) => {
   const r = getConfig().receiver;
   if (r.lat == null || r.lon == null) return res.status(400).json({ error: 'no receiver location set' });
   const key = `${r.lat.toFixed(3)},${r.lon.toFixed(3)}`;
@@ -437,8 +517,8 @@ app.get('/api/weather/current', async (req, res) => {
 });
 
 // ------------------------------------------------------------------ range outline
-app.get('/api/range', (req, res) => res.json(rangeOutline()));
-app.post('/api/range/clear', (req, res) => res.json(clearRange()));
+app.get('/api/range', requireAuth, (req, res) => res.json(rangeOutline()));
+app.post('/api/range/clear', requireAuth, (req, res) => res.json(clearRange()));
 
 // RainViewer frame metadata proxy (avoids CORS surprises and centralizes caching).
 let rainviewerCache = { ts: 0, data: null };
@@ -459,7 +539,7 @@ app.get('/api/weather/rainviewer', async (req, res) => {
 });
 
 // OpenWeatherMap tile proxy so the API key never reaches the browser.
-app.get('/api/weather/owm/:layer/:z/:x/:y', async (req, res) => {
+app.get('/api/weather/owm/:layer/:z/:x/:y', requireAuth, async (req, res) => {
   const key = getConfig().weather.openWeatherMapKey;
   if (!key) return res.status(404).json({ error: 'no OpenWeatherMap key configured' });
   const { layer, z, x, y } = req.params;
@@ -481,7 +561,7 @@ app.get('/api/weather/owm/:layer/:z/:x/:y', async (req, res) => {
 // ------------------------------------------------------------------ airspace (OpenAIP)
 // Controlled-airspace tile overlay proxied from OpenAIP so the API key stays
 // server-side and there are no CORS issues. Needs a free OpenAIP API key.
-app.get('/api/airspace/tiles/:z/:x/:y', async (req, res) => {
+app.get('/api/airspace/tiles/:z/:x/:y', requireAuth, async (req, res) => {
   const key = getConfig().openAip?.apiKey;
   if (!key) return res.status(404).json({ error: 'no OpenAIP key configured' });
   const { z, x, y } = req.params;
@@ -568,7 +648,7 @@ app.get('/api/replay/frame', (req, res) => {
 // ------------------------------------------------------------------ frequencies
 app.get('/api/frequencies/meta', (req, res) => res.json(frequenciesMeta()));
 
-app.post('/api/frequencies/refresh', async (req, res) => {
+app.post('/api/frequencies/refresh', requireAuth, async (req, res) => {
   try {
     res.json(await refreshFrequencies());
   } catch (e) {
@@ -590,7 +670,7 @@ app.get('/api/frequencies', (req, res) => {
 });
 
 // ------------------------------------------------------------------ test notification
-app.post('/api/notify/test', async (req, res) => {
+app.post('/api/notify/test', requireAuth, async (req, res) => {
   await notify({
     key: null,
     kind: 'test',

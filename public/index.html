@@ -15,13 +15,14 @@
     <nav id="tabs">
       <button data-tab="map" class="active">Map</button>
       <button data-tab="stats">Statistics</button>
-      <button data-tab="watchlist">Watchlist</button>
+      <button data-tab="watchlist" class="auth-only">Watchlist</button>
       <button data-tab="spotted">Spotted</button>
-      <button data-tab="zones">Zones</button>
-      <button data-tab="alerts">Alerts</button>
+      <button data-tab="zones" class="auth-only">Zones</button>
+      <button data-tab="alerts" class="auth-only">Alerts</button>
       <button data-tab="settings">Settings</button>
     </nav>
-    <div id="wx" class="wx hidden" title="Current weather at the receiver">
+    <button id="auth-btn" title="Log in for full access">🔒 Login</button>
+    <div id="wx" class="wx hidden auth-only" title="Current weather at the receiver">
       <span id="wx-cond" class="wx-cond"></span>
       <span class="wx-item" title="Temperature"><span id="wx-temp">—</span></span>
       <span class="wx-item" title="Wind speed &amp; direction">💨 <span id="wx-wind">—</span></span>
@@ -60,14 +61,14 @@
         <div id="layers-menu" class="menu-pop hidden">
           <label class="menu-item"><input type="checkbox" id="weather-toggle" /> <span>🌦 Weather radar</span></label>
           <label class="menu-item"><input type="checkbox" id="freq-toggle" /> <span>📻 Frequencies</span></label>
-          <label class="menu-item"><input type="checkbox" id="rings-toggle" /> <span>⊚ Distance rings</span></label>
-          <label class="menu-item"><input type="checkbox" id="range-toggle" /> <span>📡 Range outline</span></label>
+          <label class="menu-item auth-only"><input type="checkbox" id="rings-toggle" /> <span>⊚ Distance rings</span></label>
+          <label class="menu-item auth-only"><input type="checkbox" id="range-toggle" /> <span>📡 Range outline</span></label>
           <label class="menu-item"><input type="checkbox" id="arrivals-toggle" /> <span>🛬 Arrivals</span></label>
           <label class="menu-item"><input type="checkbox" id="airspace-toggle" /> <span>🛫 Airspace (OpenAIP)</span></label>
           <label class="menu-item"><input type="checkbox" id="metar-toggle" /> <span>🌬 Aviation weather (METAR)</span></label>
           <label class="menu-item"><input type="checkbox" id="space-toggle" /> <span>🛰 Aerospace (ISS, Hubble)</span></label>
-          <label class="menu-item"><input type="checkbox" id="heatmap-toggle" /> <span>🔥 Heatmap</span></label>
-          <div id="heatmap-opts" class="menu-sub hidden">
+          <label class="menu-item auth-only"><input type="checkbox" id="heatmap-toggle" /> <span>🔥 Heatmap</span></label>
+          <div id="heatmap-opts" class="menu-sub hidden auth-only">
             <label>Last
               <select id="hm-range">
                 <option value="1">1 hour</option>
@@ -177,6 +178,11 @@
         <button id="d-watch-add">⭐ Add to watchlist</button>
       </section>
     </aside>
+
+    <div id="public-footer">
+      📡 Self-hosted <strong>ADS-B receiver map</strong> — shows only aircraft currently within radio range.
+      <a href="https://github.com/bpduguard/VliegmasjienPRO" target="_blank" rel="noopener">github.com/bpduguard/VliegmasjienPRO</a>
+    </div>
   </main>
 
   <!-- ============================== STATS TAB ============================== -->
@@ -270,7 +276,7 @@
           <th data-sort="sessions">Times</th>
           <th data-sort="firstSeen">First seen</th>
           <th data-sort="lastSeen">Last seen</th>
-          <th data-sort="minDistKm">Closest</th>
+          <th data-sort="minDistKm" class="auth-only">Closest</th>
           <th>Route</th>
         </tr></thead>
         <tbody></tbody>
@@ -329,6 +335,8 @@
   <main id="tab-settings" class="tab">
     <div class="page">
       <h2>Settings <span id="s-version" class="muted" style="font-size:0.7em">v—</span></h2>
+
+      <div id="auth-gate"></div>
 
       <section class="settings-block">
         <h3>Receiver</h3>

@@ -505,3 +505,26 @@ button.danger:hover { background: rgba(239,68,68,0.12); border-color: var(--dang
 #invaders .inv-board td:last-child { color: #7dffa0; text-align: right; }
 #invaders .inv-board tr.me td { color: #fde047; }
 #invaders .inv-actions { display: flex; gap: 10px; justify-content: center; margin-top: 6px; }
+
+/* public / authenticated split */
+.mode-public .auth-only { display: none !important; }
+.mode-public #tab-settings .page > *:not(#auth-gate):not(h2) { display: none; }
+#auth-btn { background: var(--bg2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 6px 11px; font-size: 0.85rem; white-space: nowrap; }
+#auth-btn:hover { border-color: var(--accent); }
+#auth-gate { margin: 6px 0 18px; }
+.auth-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; max-width: 480px; }
+.auth-card h3 { margin: 0 0 8px; color: var(--accent); }
+.auth-card input[type="password"] { min-width: 200px; }
+.auth-msg { font-size: 0.85rem; margin-top: 8px; min-height: 1em; }
+.auth-msg.err { color: var(--danger); }
+.auth-msg.ok { color: var(--ok); }
+#public-footer { display: none; }
+.mode-public #public-footer {
+  display: block; position: absolute; bottom: 46px; left: 50%; transform: translateX(-50%);
+  z-index: 900; background: rgba(13,20,38,0.88); border: 1px solid var(--border); border-radius: 10px;
+  padding: 6px 14px; font-size: 0.8rem; color: var(--muted); backdrop-filter: blur(6px);
+  max-width: calc(100% - 24px); text-align: center; box-shadow: 0 4px 18px rgba(0,0,0,0.4);
+}
+.mode-public #public-footer strong { color: var(--text); }
+.mode-public #public-footer a { color: var(--accent); text-decoration: none; }
+.mode-public #public-footer a:hover { text-decoration: underline; }

@@ -112,8 +112,9 @@ export function saveConfig(patch) {
 // Config sent to the browser — secrets are masked, only presence is exposed.
 export function publicConfig() {
   const c = getConfig();
+  const { auth, ...rest } = c; // never expose the password hash / session secret
   return {
-    ...c,
+    ...rest,
     pushover: { ...c.pushover, token: c.pushover.token ? '••••' : '', user: c.pushover.user ? '••••' : '' },
     discord: { ...c.discord, webhookUrl: c.discord.webhookUrl ? '••••' : '' },
     weather: { hasOwmKey: !!c.weather.openWeatherMapKey },

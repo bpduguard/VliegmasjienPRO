@@ -87,6 +87,101 @@ $$('#tabs button').forEach((btn) =>
 // Catch up the map view when the page becomes visible again after being hidden.
 document.addEventListener('visibilitychange', () => { if (mapVisible()) renderAircraft(); });
 
+// ----------------------------------------------------------------- auth (public / private split)
+state.auth = { passwordSet: false, authenticated: false };
+const isAuthed = () => !!state.auth.authenticated;
+
+async function loadAuth() {
+  try { state.auth = await (await fetch('/api/auth/status')).json(); }
+  catch { state.auth = { passwordSet: false, authenticated: false }; }
+  applyAuthMode();
+}
+
+function applyAuthMode() {
+  const authed = isAuthed();
+  document.body.classList.toggle('mode-auth', authed);
+  document.body.classList.toggle('mode-public', !authed);
+  const btn = $('#auth-btn');
+  if (btn) { btn.textContent = authed ? '🔓 Logout' : '🔒 Login'; btn.title = authed ? 'Log out' : 'Log in for full access'; }
+  renderAuthGate();
+}
+
+function gotoSettings() {
+  $$('#tabs button').forEach((b) => b.classList.remove('active'));
+  $('#tabs button[data-tab="settings"]').classList.add('active');
+  $$('.tab').forEach((t) => t.classList.remove('active'));
+  $('#tab-settings').classList.add('active');
+}
+
+$('#auth-btn').addEventListener('click', () => {
+  if (isAuthed()) logout();
+  else { gotoSettings(); setTimeout(() => $('#auth-gate input')?.focus(), 60); }
+});
+
+function authMsg(t, cls) { const el = $('#auth-msg'); if (el) { el.textContent = t; el.className = 'auth-msg ' + (cls || ''); } }
+
+function renderAuthGate() {
+  const gate = $('#auth-gate'); if (!gate) return;
+  if (isAuthed()) {
+    gate.innerHTML = `<div class="auth-card"><h3>🔓 Authenticated — full access</h3>
+      <p class="muted">Visitors without the password get the public view: the map, statistics and spotted list, with the
+        receiver location and any location-revealing feature (distance rings, range outline, heatmap, distances) hidden.</p>
+      <div class="row"><button id="auth-logout">Log out</button><button id="auth-change">Change password…</button></div>
+      <div id="auth-change-form" class="hidden">
+        <div class="row"><input id="auth-cur" type="password" placeholder="current password" /></div>
+        <div class="row"><input id="auth-new" type="password" placeholder="new password (min 6)" />
+          <button id="auth-change-save" class="primary">Save</button></div>
+      </div>
+      <div class="auth-msg" id="auth-msg"></div></div>`;
+    $('#auth-logout').addEventListener('click', logout);
+    $('#auth-change').addEventListener('click', () => $('#auth-change-form').classList.toggle('hidden'));
+    $('#auth-change-save').addEventListener('click', changePassword);
+  } else if (state.auth.passwordSet) {
+    gate.innerHTML = `<div class="auth-card"><h3>🔒 Log in</h3>
+      <p class="muted">Enter the password to unlock all features — Settings, Watchlist, Zones, Alerts, the receiver location,
+        distance rings, range outline and heatmap.</p>
+      <div class="row"><input id="auth-pw" type="password" placeholder="password" />
+        <button id="auth-login" class="primary">Log in</button></div>
+      <div class="auth-msg" id="auth-msg"></div></div>`;
+    const go = () => login($('#auth-pw').value);
+    $('#auth-login').addEventListener('click', go);
+    $('#auth-pw').addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+  } else {
+    gate.innerHTML = `<div class="auth-card"><h3>🔑 Set up a password</h3>
+      <p class="muted">No password is configured yet. Create one to protect the private side of this tracker. Until you do,
+        everything runs in the restricted <strong>public</strong> view (receiver location hidden).</p>
+      <div class="row"><input id="auth-new1" type="password" placeholder="new password (min 6)" /></div>
+      <div class="row"><input id="auth-new2" type="password" placeholder="confirm password" />
+        <button id="auth-setup" class="primary">Create password</button></div>
+      <div class="auth-msg" id="auth-msg"></div></div>`;
+    const go = () => setupPassword($('#auth-new1').value, $('#auth-new2').value);
+    $('#auth-setup').addEventListener('click', go);
+    $('#auth-new2').addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+  }
+}
+
+async function login(pw) {
+  const r = await fetch('/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: pw }) });
+  if (r.ok) location.reload();
+  else authMsg((await r.json().catch(() => ({}))).error || 'Login failed', 'err');
+}
+async function setupPassword(p1, p2) {
+  if ((p1 || '').length < 6) return authMsg('Password must be at least 6 characters', 'err');
+  if (p1 !== p2) return authMsg('Passwords do not match', 'err');
+  const r = await fetch('/api/auth/setup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: p1 }) });
+  if (r.ok) location.reload();
+  else authMsg((await r.json().catch(() => ({}))).error || 'Setup failed', 'err');
+}
+async function logout() {
+  await fetch('/api/auth/logout', { method: 'POST' });
+  location.reload();
+}
+async function changePassword() {
+  const r = await fetch('/api/auth/password', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ current: $('#auth-cur').value, password: $('#auth-new').value }) });
+  if (r.ok) authMsg('Password changed ✓', 'ok');
+  else authMsg((await r.json().catch(() => ({}))).error || 'Change failed', 'err');
+}
+
 // ----------------------------------------------------------------- map
 const darkTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
   attribution: '&copy; OpenStreetMap &copy; CARTO',
@@ -1108,7 +1203,9 @@ function renderList() {
 
   if (state.listExpanded) {
     const { key, dir } = state.listSort;
-    const head = LIST_COLUMNS.map(
+    // hide the distance-from-receiver column for public (anonymous) viewers
+    const cols = isAuthed() ? LIST_COLUMNS : LIST_COLUMNS.filter(([k]) => k !== 'distKm');
+    const head = cols.map(
       ([k, label]) => {
         const text = typeof label === 'function' ? label() : label;
         return `<th data-key="${k}" class="${k === key ? 'sorted' : ''}">${text}${k === key ? (dir > 0 ? ' ▲' : ' ▼') : ''}</th>`;
@@ -1117,7 +1214,7 @@ function renderList() {
     const body = rows
       .map(
         (ac) => `<tr class="${rowClasses(ac, '')}" data-hex="${ac.hex}" style="box-shadow: inset 4px 0 0 ${sourceColor(ac.source)}">
-          ${LIST_COLUMNS.map(([, , render]) => `<td>${render(ac)}</td>`).join('')}
+          ${cols.map(([, , render]) => `<td>${render(ac)}</td>`).join('')}
         </tr>`
       )
       .join('');
@@ -1349,7 +1446,8 @@ function updateDetailLive(ac) {
     ['Vertical rate', fmt.vr(ac.vr)],
     ['Track', ac.track != null ? Math.round(ac.track) + '°' : '—'],
     ['Squawk', ac.squawk || '—'],
-    ['Distance', fmt.dist(ac.distKm)],
+    // distance-from-receiver only for authenticated viewers
+    ...(isAuthed() ? [['Distance', fmt.dist(ac.distKm)]] : []),
     ['Signal', ac.rssi != null ? ac.rssi + ' dBFS' : '—'],
     ['Messages', ac.messages?.toLocaleString() ?? '—'],
     ['First seen', fmt.time(ac.firstSeen)],
@@ -1502,6 +1600,7 @@ function connectStream() {
       ? `dump1090 unreachable: ${snap.status.lastPollError}`
       : `Connected · ${snap.aircraft.length} aircraft`;
     if (!centeredOnce && snap.receiver?.lat != null) {
+      // authenticated: centre on (and mark) the receiver
       centeredOnce = true;
       map.setView([snap.receiver.lat, snap.receiver.lon], 9);
       receiverMarker = L.circleMarker([snap.receiver.lat, snap.receiver.lon], {
@@ -1509,6 +1608,10 @@ function connectStream() {
       }).bindTooltip('Receiver').addTo(map);
       if (state.ringsOn) drawRings(); // receiver now known
       loadWeather(); // location available -> fetch local weather
+    } else if (!centeredOnce && !isAuthed()) {
+      // public: no receiver location — fit the view to the aircraft instead
+      const pts = snap.aircraft.filter((a) => a.lat != null).map((a) => [a.lat, a.lon]);
+      if (pts.length) { centeredOnce = true; try { map.fitBounds(L.latLngBounds(pts).pad(0.25)); } catch { /* ignore */ } }
     }
     renderAircraft();
   });
@@ -1872,7 +1975,7 @@ function renderSpotted() {
             <td>${s.sessions}×</td>
             <td>${fmt.dateTime(s.firstSeen)}</td>
             <td>${fmt.dateTime(s.lastSeen)}</td>
-            <td>${closest}</td>
+            <td class="auth-only">${closest}</td>
             <td class="spotted-route" data-cs="${s.callsign || ''}">${spottedRouteHtml(s.callsign)}</td>
           </tr>`;
         })
@@ -2183,6 +2286,7 @@ const compass = (deg) => (deg == null ? '' : COMPASS[Math.round(deg / 45) % 8]);
 
 async function loadWeather() {
   const wx = $('#wx');
+  if (!isAuthed()) { wx.classList.add('hidden'); return; } // receiver weather is private
   try {
     const res = await fetch('/api/weather/current');
     if (!res.ok) { wx.classList.add('hidden'); return; }
@@ -2205,14 +2309,17 @@ async function loadWeather() {
 }
 
 (async function boot() {
+  await loadAuth();
   try {
     state.config = await (await fetch('/api/config')).json();
     state.units = state.config.ui?.units || 'aviation';
   } catch { /* server starting */ }
-  loadZones();
+  if (isAuthed()) loadZones();
   connectStream();
-  loadWeather();
-  setInterval(loadWeather, 600000); // refresh every 10 min
+  if (isAuthed()) {
+    loadWeather();
+    setInterval(loadWeather, 600000); // refresh every 10 min
+  }
   if (Notification.permission === 'default') {
     // unobtrusive: ask once after a short delay
     setTimeout(() => Notification.requestPermission(), 4000);

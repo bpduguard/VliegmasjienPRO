@@ -2,6 +2,17 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.16.0
+- **Public / authenticated split** (single password, no RBAC). Anonymous visitors get a **public view**
+  — Map, Statistics and Spotted only — that **never reveals the receiver's location**: the receiver
+  marker, distance rings, range outline and heatmap layers, the per-aircraft/closest distances, the
+  receiver-weather widget, and Zones/Watchlist/Alerts/Settings are all hidden, and the **server strips**
+  the receiver coordinates + distances from the public API (and SSE) so they can't be read directly or
+  trilaterated. The public map shows a footer noting it's a self-hosted ADS-B receiver map (aircraft in
+  range only) with a link to the repo. Log in with the password to unlock everything. If no password is
+  set yet, the **Settings tab prompts you to create one** (after which you're logged in). The password
+  is stored only as a scrypt hash; sessions are signed HMAC cookies.
+
 ## 1.15.0
 - 🥚 **Easter egg.** Type a certain two-word arcade classic into the map search box and press Enter…
   the map turns into a game where the aircraft currently on your screen (and new ones as they appear)
