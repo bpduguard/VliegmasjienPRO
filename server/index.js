@@ -534,6 +534,27 @@ app.get('/api/avwx/metar', async (req, res) => {
   }
 });
 
+// ------------------------------------------------------------------ easter egg: invaders highscores
+const HISCORE_FILE = path.join(DATA_DIR, 'invaders-highscores.json');
+function readHiscores() {
+  try { const a = JSON.parse(fs.readFileSync(HISCORE_FILE, 'utf8')); return Array.isArray(a) ? a : []; }
+  catch { return []; }
+}
+app.get('/api/invaders/highscores', (req, res) => {
+  res.json({ scores: readHiscores().sort((a, b) => b.score - a.score).slice(0, 10) });
+});
+app.post('/api/invaders/highscores', (req, res) => {
+  const name = (String(req.body?.name || '').replace(/[^\w .\-]/g, '').trim().slice(0, 12)) || 'AAA';
+  const score = Math.max(0, Math.min(100000000, Math.floor(Number(req.body?.score) || 0)));
+  const entry = { name, score, ts: Date.now() };
+  const list = readHiscores();
+  list.push(entry);
+  list.sort((a, b) => b.score - a.score);
+  const top = list.slice(0, 50);
+  try { fs.writeFileSync(HISCORE_FILE, JSON.stringify(top)); } catch { /* ignore */ }
+  res.json({ scores: top.slice(0, 10), rank: top.indexOf(entry) >= 0 ? top.indexOf(entry) + 1 : null });
+});
+
 // ------------------------------------------------------------------ replay
 app.get('/api/replay/bounds', (req, res) => res.json(replayBounds()));
 

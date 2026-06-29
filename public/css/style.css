@@ -475,3 +475,33 @@ button.danger:hover { background: rgba(239,68,68,0.12); border-color: var(--dang
   #detail { left: 12px; width: auto; top: auto; max-height: 60%; }
   .stats-grid { grid-template-columns: 1fr; }
 }
+
+/* ✦ easter egg: Space Invaders ✦ */
+#invaders { position: fixed; inset: 0; z-index: 5000; background: #04060d; opacity: 0; transition: opacity 0.35s ease; }
+#invaders.show { opacity: 1; }
+#invaders canvas { display: block; width: 100%; height: 100%; }
+#invaders .inv-hud { position: absolute; top: 10px; left: 0; right: 0; display: flex; align-items: center; gap: 22px; justify-content: center;
+  font-family: ui-monospace, monospace; color: #7dffa0; letter-spacing: 2px; font-size: 0.95rem; text-shadow: 0 0 8px rgba(125,255,160,0.5); pointer-events: none; }
+#invaders .inv-lives { color: #fca5a5; letter-spacing: 1px; }
+#invaders .inv-quit { pointer-events: auto; position: absolute; right: 14px; top: -2px; background: transparent; color: #7dffa0;
+  border: 1px solid #2c6b46; border-radius: 7px; padding: 4px 10px; font-family: ui-monospace, monospace; cursor: pointer; letter-spacing: 1px; }
+#invaders .inv-quit:hover { background: rgba(125,255,160,0.12); }
+#invaders .inv-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(4,6,13,0.55); }
+#invaders .inv-overlay.hidden { display: none; }
+#invaders .inv-panel { background: #0a1020; border: 1px solid #2c6b46; border-radius: 14px; padding: 24px 28px; min-width: 320px; max-width: 92vw;
+  text-align: center; font-family: ui-monospace, monospace; color: #cde9d6; box-shadow: 0 12px 50px rgba(0,0,0,0.6); }
+#invaders .inv-title { color: #f87171; font-size: 1.8rem; letter-spacing: 4px; text-shadow: 0 0 12px rgba(248,113,113,0.5); margin-bottom: 6px; }
+#invaders .inv-final { color: #7dffa0; font-size: 1.3rem; letter-spacing: 2px; margin-bottom: 12px; }
+#invaders .inv-sub { color: #9fb4d6; font-size: 0.85rem; margin-bottom: 10px; }
+#invaders .inv-row { display: flex; gap: 8px; justify-content: center; margin-bottom: 12px; }
+#invaders .inv-name { background: #04060d; border: 1px solid #2c6b46; color: #7dffa0; border-radius: 7px; padding: 7px 10px;
+  font-family: ui-monospace, monospace; text-transform: uppercase; letter-spacing: 2px; width: 130px; text-align: center; }
+#invaders .inv-save, #invaders .inv-again, #invaders .inv-back { background: transparent; color: #7dffa0; border: 1px solid #2c6b46;
+  border-radius: 7px; padding: 7px 14px; font-family: ui-monospace, monospace; cursor: pointer; letter-spacing: 1px; }
+#invaders .inv-save:hover, #invaders .inv-again:hover, #invaders .inv-back:hover { background: rgba(125,255,160,0.12); }
+#invaders .inv-board { margin: 6px auto 14px; border-collapse: collapse; font-size: 0.85rem; min-width: 240px; }
+#invaders .inv-board td { padding: 3px 12px; text-align: left; color: #9fb4d6; }
+#invaders .inv-board td:first-child { color: #5e7398; text-align: right; }
+#invaders .inv-board td:last-child { color: #7dffa0; text-align: right; }
+#invaders .inv-board tr.me td { color: #fde047; }
+#invaders .inv-actions { display: flex; gap: 10px; justify-content: center; margin-top: 6px; }

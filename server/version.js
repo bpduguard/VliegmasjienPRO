@@ -1,2 +1,2 @@
 // Single source of truth for the app version. Bump on each released change.
-export const VERSION = '1.14.2';
+export const VERSION = '1.15.0';

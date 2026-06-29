@@ -2,6 +2,12 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.15.0
+- 🥚 **Easter egg.** Type a certain two-word arcade classic into the map search box and press Enter…
+  the map turns into a game where the aircraft currently on your screen (and new ones as they appear)
+  become the invaders to shoot down. Arrow keys / A–D to move, Space to fire, Esc to quit. Persistent
+  highscores (`/api/invaders/highscores`). (No spoilers here — go find it.)
+
 ## 1.14.2
 - METAR popups now include a **decoded breakdown** of the raw report — each token explained in plain
   English in a table (e.g. `31006KT` → "Wind from 310° at 6 kt", `9999` → "Visibility 10 km or more",
