@@ -23,9 +23,45 @@ services:
       # - SBS_PORT=30003
       # Optional — extra weather layers (clouds). Rain radar works without it.
       - OWM_API_KEY=${OWM_API_KEY:-}
+      # Set TRUST_PROXY=1 when reaching the app through a reverse proxy / the
+      # cloudflared tunnel below, so brute-force lockouts use the real client IP
+      # (CF-Connecting-IP) instead of the proxy's address. Leave empty for plain
+      # LAN/direct use. The tunnel profile below sets it for you.
+      - TRUST_PROXY=${TRUST_PROXY:-}
     # Uncomment if dump1090 runs on the same docker network:
     # networks:
     #   - adsb
+
+  # ---------------------------------------------------------------------------
+  # Optional: expose the app over HTTPS with a Cloudflare Tunnel — no open ports,
+  # no port-forwarding. It is OPT-IN via a compose profile, so a normal
+  # `docker compose up -d` does NOT start it and nothing changes for you.
+  #
+  # To use it:
+  #   1. In the Cloudflare Zero Trust dashboard → Networks → Tunnels, create a
+  #      tunnel and copy its token. Add a Public Hostname (e.g. adsb.example.com)
+  #      pointing the service to:  http://vliegmasjien:8390
+  #      (that's this compose service name — cloudflared resolves it on the shared
+  #      docker network; it is NOT localhost).
+  #   2. Put the token in a .env file next to this compose file:
+  #        CLOUDFLARE_TUNNEL_TOKEN=eyJh...   (the long token)
+  #        TRUST_PROXY=1
+  #   3. Start everything including the tunnel:
+  #        docker compose --profile cloudflared up -d
+  #   4. In the dashboard for that hostname, disable Rocket Loader, Auto Minify
+  #      (JS) and Email Obfuscation (they inject inline scripts the strict CSP
+  #      blocks). See README → "Exposing it with a Cloudflare Tunnel".
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: vliegmasjien-cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      - vliegmasjien
+    profiles:
+      - cloudflared
 
 volumes:
   vliegmasjien-data:

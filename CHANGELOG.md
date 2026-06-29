@@ -2,6 +2,12 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.18.2
+- Add a ready-to-use **`cloudflared` service** to `docker-compose.yml` (token-based Cloudflare Tunnel)
+  behind an opt-in **compose profile** — `docker compose --profile cloudflared up -d` — so it has no
+  effect on a normal `docker compose up -d`. Added `.env.example` (tunnel token + `TRUST_PROXY`) and
+  `.env` to `.gitignore`.
+
 ## 1.18.1
 - **Reverse-proxy / Cloudflare Tunnel friendliness.** The session cookie now gets the **Secure** flag
   (and HSTS is sent) automatically when the request arrives over HTTPS via `X-Forwarded-Proto` — so it's
