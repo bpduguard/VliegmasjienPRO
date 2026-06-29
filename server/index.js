@@ -133,7 +133,25 @@ app.get('/api/stream', (req, res) => {
 });
 
 // ------------------------------------------------------------------ auth
-const clientKey = (req) => req.ip || req.socket?.remoteAddress || 'unknown';
+// Is the request HTTPS at the edge? (Cloudflare Tunnel / reverse proxies set
+// X-Forwarded-Proto.) Used to add the Secure cookie flag + HSTS.
+const secureReq = (req) => req.secure || req.headers['x-forwarded-proto'] === 'https';
+
+// Real client IP for rate-limiting / logging. Behind a tunnel/proxy every request
+// arrives from the proxy (e.g. 127.0.0.1), so when TRUST_PROXY is enabled we read
+// the forwarded client IP (Cloudflare's CF-Connecting-IP, else the first
+// X-Forwarded-For hop). Off by default so a directly-exposed app can't be tricked
+// by a spoofed header.
+const TRUST_PROXY = /^(1|true|yes)$/i.test(process.env.TRUST_PROXY || '');
+function clientKey(req) {
+  if (TRUST_PROXY) {
+    const cf = req.headers['cf-connecting-ip'];
+    if (cf) return String(cf).trim();
+    const xff = req.headers['x-forwarded-for'];
+    if (xff) return String(xff).split(',')[0].trim();
+  }
+  return req.socket?.remoteAddress || req.ip || 'unknown';
+}
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 
 app.get('/api/auth/status', (req, res) =>
@@ -145,7 +163,7 @@ app.post('/api/auth/setup', (req, res) => {
   const pw = String(req.body?.password || '');
   if (pw.length < 8) return res.status(400).json({ error: 'password must be at least 8 characters' });
   setPassword(pw);
-  setAuthCookie(res);
+  setAuthCookie(res, secureReq(req));
   res.json({ ok: true });
 });
 
@@ -170,18 +188,18 @@ app.post('/api/auth/login', async (req, res) => {
   }
   recordSuccess(key);
   console.log(`[auth] login ok from ${key}`);
-  setAuthCookie(res);
+  setAuthCookie(res, secureReq(req));
   res.json({ ok: true });
 });
 
-app.post('/api/auth/logout', (req, res) => { clearAuthCookie(res); res.json({ ok: true }); });
+app.post('/api/auth/logout', (req, res) => { clearAuthCookie(res, secureReq(req)); res.json({ ok: true }); });
 
 app.post('/api/auth/password', requireAuth, (req, res) => {
   if (!verifyPassword(String(req.body?.current || ''))) return res.status(401).json({ error: 'current password is wrong' });
   const pw = String(req.body?.password || '');
   if (pw.length < 8) return res.status(400).json({ error: 'new password must be at least 8 characters' });
   setPassword(pw);
-  setAuthCookie(res);
+  setAuthCookie(res, secureReq(req));
   res.json({ ok: true });
 });
 

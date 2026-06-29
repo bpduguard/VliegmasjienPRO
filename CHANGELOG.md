@@ -2,6 +2,15 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.18.1
+- **Reverse-proxy / Cloudflare Tunnel friendliness.** The session cookie now gets the **Secure** flag
+  (and HSTS is sent) automatically when the request arrives over HTTPS via `X-Forwarded-Proto` — so it's
+  protected behind a tunnel while still working over plain HTTP on the LAN. Set `TRUST_PROXY=1` to make
+  brute-force lockouts and auth logging use the **real client IP** (`CF-Connecting-IP` / first
+  `X-Forwarded-For` hop) instead of the tunnel's loopback address. See the README's *Cloudflare Tunnel*
+  notes (disable Rocket Loader / JS minify so the strict CSP isn't broken; SSE works via the keep-alive
+  ping).
+
 ## 1.18.0
 - **Security hardening against the OWASP Top 10.** Strict **Content-Security-Policy** (`script-src 'self'`,
   no inline scripts, `frame-ancestors 'none'`) plus `X-Content-Type-Options`, `X-Frame-Options: DENY`,

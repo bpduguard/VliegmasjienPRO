@@ -68,11 +68,13 @@ export function authed(req) {
   return validToken(cookieValue(req, COOKIE));
 }
 
-export function setAuthCookie(res) {
-  res.setHeader('Set-Cookie', `${COOKIE}=${makeToken()}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_DAYS * 86400}`);
+// `secure` adds the Secure flag (set it when the request reached us over HTTPS —
+// e.g. behind a Cloudflare Tunnel / reverse proxy that terminates TLS).
+export function setAuthCookie(res, secure = false) {
+  res.setHeader('Set-Cookie', `${COOKIE}=${makeToken()}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_DAYS * 86400}${secure ? '; Secure' : ''}`);
 }
-export function clearAuthCookie(res) {
-  res.setHeader('Set-Cookie', `${COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`);
+export function clearAuthCookie(res, secure = false) {
+  res.setHeader('Set-Cookie', `${COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${secure ? '; Secure' : ''}`);
 }
 
 export function requireAuth(req, res, next) {

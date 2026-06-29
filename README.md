@@ -158,10 +158,35 @@ later start, so the app never "forgets" a URL you set in the UI:
 | `OPENAIP_API_KEY` | Optional OpenAIP key for the controlled-airspace layer |
 | `PORT` | HTTP port (default 8390) |
 | `DATA_DIR` | Data directory (default `/data` in Docker) |
+| `TRUST_PROXY` | Set to `1` behind a reverse proxy / Cloudflare Tunnel so rate-limiting and logging use the real client IP (`CF-Connecting-IP` / `X-Forwarded-For`) instead of the proxy's address |
 
 > **Changing a URL later:** because the saved value wins, editing the env var after the first run has no
 > effect — change it in *Settings → Receiver* instead (or delete `config.json` from the data volume to
 > re-seed from the environment).
+
+### Exposing it with a Cloudflare Tunnel (recommended for remote access)
+
+A Cloudflare Tunnel (`cloudflared`) is the recommended way to reach it from outside your LAN — you get
+HTTPS at Cloudflare's edge while the app stays on loopback. Point the tunnel at the app's HTTP port:
+
+```yaml
+# ~/.cloudflared/config.yml
+ingress:
+  - hostname: adsb.example.com
+    service: http://localhost:8390
+  - service: http_status:404
+```
+
+- **Set `TRUST_PROXY=1`** so the app reads the real client IP (`CF-Connecting-IP`) for brute-force
+  lockouts and logs; otherwise every request looks like it comes from the tunnel.
+- The session cookie automatically becomes **Secure** and **HSTS** is sent (the app detects HTTPS from
+  `X-Forwarded-Proto`), so logins/2FA are protected — while plain HTTP on the LAN keeps working.
+- **Live updates use Server-Sent Events.** They work through the tunnel; the app sends a keep-alive
+  ping every 25 s so the stream isn't dropped as idle. Don't put a "Cache Everything" rule on `/api/*`.
+- In the Cloudflare dashboard for this hostname, **disable Rocket Loader, Auto Minify (JS) and Email
+  Obfuscation** — they inject/rewrite inline scripts, which the strict `script-src 'self'` CSP blocks
+  (it would break the page). Everything else (Bot Fight Mode, WAF, Cloudflare Access for an extra auth
+  layer) is fine.
 
 ## External services used
 
