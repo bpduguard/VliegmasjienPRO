@@ -533,6 +533,93 @@ const metarLayer = L.layerGroup();
 let metarLoadToken = 0;
 const FLT_CAT_COLORS = { VFR: '#22c55e', MVFR: '#3b82f6', IFR: '#ef4444', LIFR: '#d946ef' };
 
+// ---- METAR decoder: turn a raw report into a token-by-token explanation ----
+const METAR_KEYWORDS = new Set(['METAR', 'SPECI', 'COR', 'AUTO', 'NOSIG', 'CAVOK', 'BECMG', 'TEMPO',
+  'NSC', 'NCD', 'SKC', 'CLR', 'NSW', 'RMK']);
+const WX_DESC = { MI: 'shallow', BC: 'patches of', PR: 'partial', DR: 'low drifting', BL: 'blowing', SH: 'showers of', TS: 'thunderstorm', FZ: 'freezing' };
+const WX_PHEN = { DZ: 'drizzle', RA: 'rain', SN: 'snow', SG: 'snow grains', IC: 'ice crystals', PL: 'ice pellets', GR: 'hail', GS: 'small hail', UP: 'unknown precip', BR: 'mist', FG: 'fog', FU: 'smoke', VA: 'volcanic ash', DU: 'widespread dust', SA: 'sand', HZ: 'haze', PY: 'spray', PO: 'dust/sand whirls', SQ: 'squalls', FC: 'funnel cloud', SS: 'sandstorm', DS: 'duststorm' };
+const CLOUD_COVER = { FEW: 'Few clouds', SCT: 'Scattered clouds', BKN: 'Broken clouds', OVC: 'Overcast', VV: 'Vertical visibility' };
+
+function ordinal(n) {
+  const s = ['th', 'st', 'nd', 'rd'], v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+// Returns a plain-English weather string (e.g. "+TSRA" -> "heavy thunderstorm rain") or null.
+function describeWx(s) {
+  let str = s, prefix = '';
+  const im = /^(-|\+|VC)/.exec(str);
+  if (im) { prefix = { '-': 'light ', '+': 'heavy ', VC: 'in the vicinity: ' }[im[1]]; str = str.slice(im[1].length); }
+  const words = []; let matched = false;
+  while (str.length >= 2) {
+    const code = str.slice(0, 2);
+    if (WX_DESC[code]) words.push(WX_DESC[code]);
+    else if (WX_PHEN[code]) words.push(WX_PHEN[code]);
+    else break;
+    matched = true; str = str.slice(2);
+  }
+  if (!matched || str.length) return null;
+  return (prefix + words.join(' ')).trim();
+}
+
+function describeMetarToken(t, couldBeStation) {
+  let m;
+  if (couldBeStation && /^[A-Z]{4}$/.test(t)) return 'Reporting station';
+  if ((m = /^(\d{2})(\d{2})(\d{2})Z$/.exec(t))) return `Observed on the ${ordinal(+m[1])} at ${m[2]}:${m[3]} UTC`;
+  if ((m = /^(\d{3}|VRB)(\d{2,3})(?:G(\d{2,3}))?(KT|MPS|KMH)$/.exec(t))) {
+    const unit = { KT: 'kt', MPS: 'm/s', KMH: 'km/h' }[m[4]];
+    if (m[1] === '000' && m[2] === '00') return 'Wind calm';
+    const dir = m[1] === 'VRB' ? 'variable direction' : `from ${parseInt(m[1], 10)}°`;
+    return `Wind ${dir} at ${parseInt(m[2], 10)} ${unit}${m[3] ? `, gusting ${parseInt(m[3], 10)} ${unit}` : ''}`;
+  }
+  if ((m = /^(\d{3})V(\d{3})$/.exec(t))) return `Wind direction varying between ${parseInt(m[1], 10)}° and ${parseInt(m[2], 10)}°`;
+  if ((m = /^(\d{4})(NDV)?$/.exec(t))) return m[1] === '9999' ? 'Visibility 10 km or more' : `Visibility ${parseInt(m[1], 10).toLocaleString()} m`;
+  if ((m = /^(M)?(\d+(?:\/\d+)?)SM$/.exec(t))) return `Visibility ${m[1] ? 'less than ' : ''}${m[2]} statute mile(s)`;
+  if ((m = /^R(\d{2}[LCR]?)\/([MP]?)(\d{3,4})/.exec(t))) return `Runway ${m[1]} visual range ${m[2] === 'M' ? 'less than ' : m[2] === 'P' ? 'more than ' : ''}${parseInt(m[3], 10)} m/ft`;
+  if ((m = /^(FEW|SCT|BKN|OVC|VV)(\d{3})(CB|TCU)?$/.exec(t))) {
+    const alt = (parseInt(m[2], 10) * 100).toLocaleString();
+    if (m[1] === 'VV') return `Vertical visibility ${alt} ft`;
+    const type = m[3] === 'CB' ? ' (cumulonimbus)' : m[3] === 'TCU' ? ' (towering cumulus)' : '';
+    return `${CLOUD_COVER[m[1]]} at ${alt} ft${type}`;
+  }
+  if ((m = /^(M)?(\d{2})\/(M)?(\d{2})$/.exec(t))) return `Temperature ${(m[1] ? '-' : '') + parseInt(m[2], 10)}°C, dew point ${(m[3] ? '-' : '') + parseInt(m[4], 10)}°C`;
+  if ((m = /^(M)?(\d{2})\/+$/.exec(t))) return `Temperature ${(m[1] ? '-' : '') + parseInt(m[2], 10)}°C, dew point not reported`;
+  if ((m = /^Q(\d{3,4})$/.exec(t))) return `Altimeter (QNH) ${parseInt(m[1], 10)} hPa`;
+  if ((m = /^A(\d{4})$/.exec(t))) return `Altimeter ${(parseInt(m[1], 10) / 100).toFixed(2)} inHg`;
+  if ((m = /^RE(.+)$/.exec(t))) return `Recent ${describeWx(m[1]) || m[1]}`;
+  if (/^WS/.test(t)) return 'Wind shear';
+  return describeWx(t) || '—';
+}
+
+function decodeMetar(raw) {
+  if (!raw) return [];
+  const rows = [];
+  let stationSeen = false, inRmk = false;
+  for (const t of raw.trim().split(/\s+/)) {
+    if (inRmk) { rows.push([t, '(remark)']); continue; }
+    let d;
+    switch (t) {
+      case 'METAR': d = 'Routine aerodrome weather report'; break;
+      case 'SPECI': d = 'Special (unscheduled) report'; break;
+      case 'COR': d = 'Corrected report'; break;
+      case 'AUTO': d = 'Automated report (no human observer)'; break;
+      case 'CAVOK': d = 'Ceiling & visibility OK — vis ≥10 km, no cloud below 5000 ft / no CB, no significant weather'; break;
+      case 'NOSIG': d = 'No significant change expected in the next 2 hours'; break;
+      case 'BECMG': d = 'Becoming — a lasting change is expected'; break;
+      case 'TEMPO': d = 'Temporary fluctuations expected'; break;
+      case 'NSC': d = 'No significant cloud'; break;
+      case 'NCD': d = 'No cloud detected (automatic station)'; break;
+      case 'SKC': case 'CLR': d = 'Sky clear'; break;
+      case 'NSW': d = 'No significant weather'; break;
+      case 'RMK': d = 'Remarks follow'; inRmk = true; break;
+      default: d = describeMetarToken(t, !stationSeen);
+    }
+    if (!stationSeen && /^[A-Z]{4}$/.test(t) && !METAR_KEYWORDS.has(t)) stationSeen = true;
+    rows.push([t, d || '—']);
+  }
+  return rows;
+}
+
 function metarPopup(m) {
   const color = FLT_CAT_COLORS[m.fltCat] || '#94a3b8';
   const rows = [];
@@ -545,11 +632,18 @@ function metarPopup(m) {
   if (m.temp != null) rows.push(['Temp / dew', `${Math.round(m.temp)}° / ${m.dewp != null ? Math.round(m.dewp) + '°' : '—'} C`]);
   if (m.altim != null) rows.push(['Altimeter', `${Math.round(m.altim)} hPa · ${(m.altim / 33.8639).toFixed(2)} inHg`]);
   const body = rows.map(([k, v]) => `<tr><td class="muted">${k}</td><td>${v}</td></tr>`).join('');
+  const decoded = decodeMetar(m.raw);
+  const decodeTable = decoded.length
+    ? `<div class="metar-decode-h muted">Decoded report</div>
+       <table class="metar-decode"><tbody>${decoded.map(([tok, desc]) =>
+         `<tr><td class="mt-tok">${tok}</td><td>${desc}</td></tr>`).join('')}</tbody></table>`
+    : '';
   return `<div class="metar-pop">
     <div class="arr-title">${m.id}${m.name ? ` · ${m.name}` : ''}</div>
     <div><span class="fltcat" style="background:${color}">${m.fltCat || '—'}</span></div>
     <table class="arr-table"><tbody>${body}</tbody></table>
     ${m.raw ? `<div class="metar-raw">${m.raw}</div>` : ''}
+    ${decodeTable}
   </div>`;
 }
 
@@ -567,7 +661,7 @@ async function loadMetar() {
   for (const m of data.stations || []) {
     L.circleMarker([m.lat, m.lon], {
       radius: 6, color: '#0b1220', weight: 1, fillColor: FLT_CAT_COLORS[m.fltCat] || '#94a3b8', fillOpacity: 0.95
-    }).bindPopup(metarPopup(m), { maxWidth: 320 }).bindTooltip(m.id, { direction: 'top' }).addTo(metarLayer);
+    }).bindPopup(metarPopup(m), { maxWidth: 340, maxHeight: 360 }).bindTooltip(m.id, { direction: 'top' }).addTo(metarLayer);
   }
 }
 $('#metar-toggle').addEventListener('change', (e) => {

@@ -2,6 +2,13 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.14.2
+- METAR popups now include a **decoded breakdown** of the raw report — each token explained in plain
+  English in a table (e.g. `31006KT` → "Wind from 310° at 6 kt", `9999` → "Visibility 10 km or more",
+  `FEW040` → "Few clouds at 4,000 ft", `Q1026` → "Altimeter (QNH) 1026 hPa", `NOSIG` → "No significant
+  change expected…"). Handles wind/gusts/variable, visibility (m & SM), clouds, weather phenomena
+  (rain/fog/thunderstorm…), temp/dew (incl. negatives), QNH/inHg, trends and remarks.
+
 ## 1.14.1
 - **Richer notifications.** Alerts now include more about the aircraft and its location: registration
   and squawk, altitude with a climb/descent arrow, speed, **heading with a compass direction**, the

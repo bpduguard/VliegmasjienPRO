@@ -284,6 +284,10 @@ button.danger:hover { background: rgba(239,68,68,0.12); border-color: var(--dang
 /* METAR popup */
 .metar-pop .fltcat { display: inline-block; color: #06121f; font-weight: 700; font-size: 0.74rem; padding: 1px 8px; border-radius: 99px; margin-bottom: 6px; }
 .metar-raw { margin-top: 6px; font-family: ui-monospace, monospace; font-size: 0.72rem; color: var(--muted); background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; padding: 5px 7px; }
+.metar-decode-h { margin: 8px 0 4px; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.4px; }
+.metar-decode { border-collapse: collapse; font-size: 0.78rem; width: 100%; }
+.metar-decode td { padding: 2px 8px 2px 0; vertical-align: top; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.metar-decode .mt-tok { font-family: ui-monospace, monospace; color: var(--accent); white-space: nowrap; font-weight: 600; }
 
 .arr-title { font-weight: 700; margin-bottom: 6px; }
 .arr-table { border-collapse: collapse; font-size: 0.8rem; width: 100%; }
