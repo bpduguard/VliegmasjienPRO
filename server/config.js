@@ -61,10 +61,12 @@ const DEFAULTS = {
 
 let config = null;
 
+const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 function deepMerge(base, extra) {
   const out = Array.isArray(base) ? [...base] : { ...base };
   if (!extra || typeof extra !== 'object') return out;
   for (const [k, v] of Object.entries(extra)) {
+    if (FORBIDDEN_KEYS.has(k)) continue; // guard against prototype pollution
     if (v && typeof v === 'object' && !Array.isArray(v) && base[k] && typeof base[k] === 'object' && !Array.isArray(base[k])) {
       out[k] = deepMerge(base[k], v);
     } else {

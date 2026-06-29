@@ -34,6 +34,39 @@ initDb();
 loadPlaneDbFromDisk();
 
 const app = express();
+app.disable('x-powered-by');
+
+// ----------------------------------------------------------------- security headers
+// A strict Content-Security-Policy is the backstop against XSS: only same-origin
+// scripts (everything is vendored locally), no inline scripts, no framing. Plus
+// the usual hardening headers. img-src allows https: for the map-tile CDNs.
+app.use((req, res, next) => {
+  res.setHeader('Content-Security-Policy', [
+    "default-src 'self'",
+    "base-uri 'self'",
+    "object-src 'none'",
+    "frame-ancestors 'none'",
+    "form-action 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: https:",
+    "font-src 'self'",
+    "connect-src 'self'",
+    "worker-src 'self'"
+  ].join('; '));
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=(), interest-cohort=()');
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+  res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+  // HSTS only matters over TLS; harmless otherwise but set it when the request is secure.
+  if (req.secure || req.headers['x-forwarded-proto'] === 'https') {
+    res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
+  }
+  next();
+});
+
 app.use(express.json({ limit: '2mb' }));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 // Leaflet is served locally so the app works without internet/CDN access.
@@ -110,7 +143,7 @@ app.get('/api/auth/status', (req, res) =>
 app.post('/api/auth/setup', (req, res) => {
   if (isPasswordSet()) return res.status(403).json({ error: 'a password is already configured' });
   const pw = String(req.body?.password || '');
-  if (pw.length < 6) return res.status(400).json({ error: 'password must be at least 6 characters' });
+  if (pw.length < 8) return res.status(400).json({ error: 'password must be at least 8 characters' });
   setPassword(pw);
   setAuthCookie(res);
   res.json({ ok: true });
@@ -120,17 +153,23 @@ app.post('/api/auth/login', async (req, res) => {
   if (!isPasswordSet()) return res.status(400).json({ error: 'no password configured yet' });
   const key = clientKey(req);
   const locked = loginLockedFor(key);
-  if (locked) { res.setHeader('Retry-After', String(locked)); return res.status(429).json({ error: `too many attempts — try again in ${locked}s`, retryAfter: locked }); }
+  if (locked) {
+    console.warn(`[auth] login blocked (locked ${locked}s) from ${key}`);
+    res.setHeader('Retry-After', String(locked));
+    return res.status(429).json({ error: `too many attempts — try again in ${locked}s`, retryAfter: locked });
+  }
 
   const okPw = verifyPassword(String(req.body?.password || ''));
   // when 2FA is on, also require a valid TOTP code
   const totpOk = !isTotpEnabled() || verifyTotp(getConfigTotpSecret(), req.body?.code);
   if (!okPw || !totpOk) {
     recordFail(key);
+    console.warn(`[auth] failed login (${okPw ? 'bad 2FA code' : 'bad password'}) from ${key}`);
     await delay(350); // slow scripted guessing
     return res.status(401).json({ error: okPw ? 'invalid 2FA code' : 'wrong password', needCode: isTotpEnabled() });
   }
   recordSuccess(key);
+  console.log(`[auth] login ok from ${key}`);
   setAuthCookie(res);
   res.json({ ok: true });
 });
@@ -140,7 +179,7 @@ app.post('/api/auth/logout', (req, res) => { clearAuthCookie(res); res.json({ ok
 app.post('/api/auth/password', requireAuth, (req, res) => {
   if (!verifyPassword(String(req.body?.current || ''))) return res.status(401).json({ error: 'current password is wrong' });
   const pw = String(req.body?.password || '');
-  if (pw.length < 6) return res.status(400).json({ error: 'new password must be at least 6 characters' });
+  if (pw.length < 8) return res.status(400).json({ error: 'new password must be at least 8 characters' });
   setPassword(pw);
   setAuthCookie(res);
   res.json({ ok: true });
@@ -331,7 +370,11 @@ app.post('/api/aircraftdb/import', requireAuth, async (req, res) => {
   try {
     let text = req.body?.csv;
     if (!text && req.body?.url) {
-      const r = await fetch(req.body.url, { signal: AbortSignal.timeout(120000) });
+      // SSRF guard: only fetch public http(s) URLs, not file:// or internal schemes
+      let u;
+      try { u = new URL(String(req.body.url)); } catch { return res.status(400).json({ error: 'invalid URL' }); }
+      if (u.protocol !== 'http:' && u.protocol !== 'https:') return res.status(400).json({ error: 'only http(s) URLs are allowed' });
+      const r = await fetch(u, { signal: AbortSignal.timeout(120000), redirect: 'error' });
       if (!r.ok) return res.status(502).json({ error: `download failed: HTTP ${r.status}` });
       text = await r.text();
     }
@@ -729,6 +772,17 @@ app.post('/api/notify/test', requireAuth, async (req, res) => {
     aircraft: null
   });
   res.json({ ok: true });
+});
+
+// 404 for unknown API routes (other paths fall through to the SPA index).
+app.use('/api', (req, res) => res.status(404).json({ error: 'not found' }));
+
+// Generic error handler — never leak stack traces to clients.
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  console.warn('[error]', err?.message || err);
+  if (res.headersSent) return;
+  res.status(err?.status || 500).json({ error: 'internal server error' });
 });
 
 app.listen(PORT, () => {

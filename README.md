@@ -13,7 +13,9 @@ container.
   receiver weather). Set the password in *Settings* on first run; the public map shows a footer noting
   it's a self-hosted receiver map. The server strips receiver coordinates/distances from public API
   responses, not just the UI. Optional **TOTP 2FA** (Google Authenticator / Authy) and **brute-force
-  login throttling** (escalating lockout)
+  login throttling** (escalating lockout). Hardened against the **OWASP Top 10** — strict CSP, HTML
+  escaping, security headers, prototype-pollution & SSRF guards, scrypt password + HMAC sessions
+  (see [SECURITY.md](SECURITY.md))
 
 - 🗺 **Live map** (Leaflet, dark & light) with rotating plane icons, labels, and **follow mode**,
   plus **🎯 Auto-follow** — automatically centres on and shows details of the newest aircraft, holding

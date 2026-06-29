@@ -2,6 +2,18 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.18.0
+- **Security hardening against the OWASP Top 10.** Strict **Content-Security-Policy** (`script-src 'self'`,
+  no inline scripts, `frame-ancestors 'none'`) plus `X-Content-Type-Options`, `X-Frame-Options: DENY`,
+  `Referrer-Policy`, `Permissions-Policy`, COOP/CORP and conditional HSTS; `X-Powered-By` removed. All
+  third-party data rendered in the UI (callsigns, operators, route/airport names, METAR, photo credits,
+  watchlist/plane-alert-db fields…) is **HTML-escaped**, and the one inline `onerror` handler was
+  removed so the CSP can stay strict. Server adds a **prototype-pollution guard** in the config merge,
+  an **SSRF guard** on the aircraft-DB import URL (http/https only, no redirects), a generic error
+  handler (no stack traces), and an API 404 fallback. Auth: minimum password length raised to 8, the
+  **session secret rotates on password change** (logging out other sessions), and failed logins /
+  lockouts are logged. (`npm audit`: 0 known vulnerabilities.) See **SECURITY.md** for the full mapping.
+
 ## 1.17.0
 - **Optional two-factor authentication (2FA)** for the authenticated login. Enable it in Settings —
   scan the QR with Google Authenticator / Authy (or paste the key) and confirm a code; afterwards login

@@ -24,8 +24,11 @@ function ensureSecret() {
 export function setPassword(pw) {
   const salt = crypto.randomBytes(16).toString('hex');
   const passwordHash = crypto.scryptSync(String(pw), salt, 64).toString('hex');
-  const secret = getConfig().auth?.secret || crypto.randomBytes(32).toString('hex');
-  saveConfig({ auth: { passwordHash, salt, secret } });
+  // Rotate the session-signing secret on every password (re)set so that changing
+  // the password invalidates all existing sessions.
+  const secret = crypto.randomBytes(32).toString('hex');
+  const prev = getConfig().auth || {};
+  saveConfig({ auth: { passwordHash, salt, secret, totp: prev.totp || { enabled: false, secret: '' }, totpPending: '' } });
 }
 
 export function verifyPassword(pw) {

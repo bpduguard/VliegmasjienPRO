@@ -23,6 +23,13 @@ const state = {
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
 
+// Escape untrusted text before putting it in innerHTML / tooltips. Aircraft
+// callsigns are broadcast over the air (attacker-controlled), and operator /
+// type / tags / airport names come from third-party feeds — so anything that
+// originates outside our own code is escaped. (A strict CSP is the backstop.)
+const esc = (v) => (v == null ? '' : String(v).replace(/[&<>"']/g, (c) =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])));
+
 // Unit labels for column headers etc.
 const unitLabels = () =>
   state.units === 'metric' ? { alt: 'Alt m', spd: 'Spd km/h', vr: 'V/S m/s' } : { alt: 'Alt ft', spd: 'Spd kt', vr: 'V/S fpm' };
@@ -130,7 +137,7 @@ function renderAuthGate() {
       <div class="row"><button id="auth-logout">Log out</button><button id="auth-change">Change password…</button></div>
       <div id="auth-change-form" class="hidden">
         <div class="row"><input id="auth-cur" type="password" placeholder="current password" /></div>
-        <div class="row"><input id="auth-new" type="password" placeholder="new password (min 6)" />
+        <div class="row"><input id="auth-new" type="password" placeholder="new password (min 8)" />
           <button id="auth-change-save" class="primary">Save</button></div>
       </div>
       <hr style="border:none;border-top:1px solid var(--border);margin:14px 0">
@@ -174,7 +181,7 @@ function renderAuthGate() {
     gate.innerHTML = `<div class="auth-card"><h3>🔑 Set up a password</h3>
       <p class="muted">No password is configured yet. Create one to protect the private side of this tracker. Until you do,
         everything runs in the restricted <strong>public</strong> view (receiver location hidden).</p>
-      <div class="row"><input id="auth-new1" type="password" placeholder="new password (min 6)" /></div>
+      <div class="row"><input id="auth-new1" type="password" placeholder="new password (min 8)" /></div>
       <div class="row"><input id="auth-new2" type="password" placeholder="confirm password" />
         <button id="auth-setup" class="primary">Create password</button></div>
       <div class="auth-msg" id="auth-msg"></div></div>`;
@@ -223,7 +230,7 @@ async function disable2fa() {
   else authMsg((await r.json().catch(() => ({}))).error || 'Could not disable 2FA', 'err');
 }
 async function setupPassword(p1, p2) {
-  if ((p1 || '').length < 6) return authMsg('Password must be at least 6 characters', 'err');
+  if ((p1 || '').length < 8) return authMsg('Password must be at least 8 characters', 'err');
   if (p1 !== p2) return authMsg('Passwords do not match', 'err');
   const r = await fetch('/api/auth/setup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: p1 }) });
   if (r.ok) location.reload();
@@ -423,19 +430,19 @@ let arrivalsTimer = null;
 
 function arrivalsPopupHtml(ap, arrivals) {
   const rows = arrivals.map((a) => {
-    const op = [a.operator, a.type].filter(Boolean).join(' · ');
-    const from = a.origin ? (a.origin.iata || a.origin.icao || a.origin.name || '?') : '?';
-    const fromTitle = a.origin ? [a.origin.name, a.origin.country].filter(Boolean).join(', ') : 'unknown origin';
-    return `<tr data-hex="${a.hex}">
-      <td><b>${a.callsign}</b>${op ? `<br><span class="muted">${op}</span>` : ''}</td>
+    const op = esc([a.operator, a.type].filter(Boolean).join(' · '));
+    const from = esc(a.origin ? (a.origin.iata || a.origin.icao || a.origin.name || '?') : '?');
+    const fromTitle = esc(a.origin ? [a.origin.name, a.origin.country].filter(Boolean).join(', ') : 'unknown origin');
+    return `<tr data-hex="${esc(a.hex)}">
+      <td><b>${esc(a.callsign)}</b>${op ? `<br><span class="muted">${op}</span>` : ''}</td>
       <td title="${fromTitle}">${from}</td>
       <td>${fmt.time(a.arrivalMs)}</td>
       <td>${a.etaSec != null ? fmt.dur(a.etaSec) : '—'}</td>
     </tr>`;
   }).join('');
-  const title = [ap.iata || ap.icao, ap.name].filter(Boolean).join(' · ') || 'Airport';
+  const title = esc([ap.iata || ap.icao, ap.name].filter(Boolean).join(' · ') || 'Airport');
   return `<div class="arr-popup">
-    <div class="arr-title">🛬 ${title}${ap.country ? ` <span class="muted">${ap.country}</span>` : ''}</div>
+    <div class="arr-title">🛬 ${title}${ap.country ? ` <span class="muted">${esc(ap.country)}</span>` : ''}</div>
     <table class="arr-table">
       <thead><tr><th>Flight</th><th>From</th><th>Arr</th><th>In</th></tr></thead>
       <tbody>${rows}</tbody>
@@ -788,13 +795,13 @@ function metarPopup(m) {
   const decodeTable = decoded.length
     ? `<div class="metar-decode-h muted">Decoded report</div>
        <table class="metar-decode"><tbody>${decoded.map(([tok, desc]) =>
-         `<tr><td class="mt-tok">${tok}</td><td>${desc}</td></tr>`).join('')}</tbody></table>`
+         `<tr><td class="mt-tok">${esc(tok)}</td><td>${esc(desc)}</td></tr>`).join('')}</tbody></table>`
     : '';
   return `<div class="metar-pop">
-    <div class="arr-title">${m.id}${m.name ? ` · ${m.name}` : ''}</div>
-    <div><span class="fltcat" style="background:${color}">${m.fltCat || '—'}</span></div>
+    <div class="arr-title">${esc(m.id)}${m.name ? ` · ${esc(m.name)}` : ''}</div>
+    <div><span class="fltcat" style="background:${color}">${esc(m.fltCat) || '—'}</span></div>
     <table class="arr-table"><tbody>${body}</tbody></table>
-    ${m.raw ? `<div class="metar-raw">${m.raw}</div>` : ''}
+    ${m.raw ? `<div class="metar-raw">${esc(m.raw)}</div>` : ''}
     ${decodeTable}
   </div>`;
 }
@@ -844,10 +851,10 @@ function freqPopup(ap) {
   };
   const list = [...ap.freqs].sort((a, b) => rank(a.type) - rank(b.type));
   const rows = list
-    .map((f) => `<tr><td class="ft">${f.type || ''}</td><td>${f.mhz}</td><td class="fd">${f.description || ''}</td></tr>`)
+    .map((f) => `<tr><td class="ft">${esc(f.type || '')}</td><td>${esc(f.mhz)}</td><td class="fd">${esc(f.description || '')}</td></tr>`)
     .join('');
-  const where = [ap.municipality, ap.country].filter(Boolean).join(', ');
-  return `<div class="freq-pop"><div class="freq-h"><b>${ap.ident}</b> ${ap.name || ''}<div class="muted">${where}</div></div>
+  const where = esc([ap.municipality, ap.country].filter(Boolean).join(', '));
+  return `<div class="freq-pop"><div class="freq-h"><b>${esc(ap.ident)}</b> ${esc(ap.name || '')}<div class="muted">${where}</div></div>
     <table class="freq-tbl">${rows}</table></div>`;
 }
 
@@ -1106,7 +1113,7 @@ function renderAircraft() {
     const color = ac.emergency ? CLASS_COLORS.emergency : CLASS_COLORS[ac.classification] || CLASS_COLORS.unknown;
     const html = planeSvg(ac.iconKind || 'airliner', color, ac.track, ac.onGround);
     let entry = markers.get(ac.hex);
-    const labelText = ac.flight || ac.registration || ac.hex.toUpperCase();
+    const labelText = esc(ac.flight || ac.registration || ac.hex.toUpperCase());
     if (!entry) {
       const icon = L.divIcon({ className: 'plane-icon', html, iconSize: [26, 26], iconAnchor: [13, 13] });
       const marker = L.marker([ac.lat, ac.lon], { icon }).addTo(map);
@@ -1220,15 +1227,15 @@ state.listSort = { key: 'distKm', dir: 1 };
 
 // label can be a string or a function (for unit-dependent headers).
 const LIST_COLUMNS = [
-  ['flight', 'Callsign', (ac) => `${flagHtml(ac.country)}${ac.flight || ac.registration || ac.hex.toUpperCase()}`],
-  ['registration', 'Reg', (ac) => ac.registration || '—'],
-  ['type', 'Type', (ac) => ac.type || '—'],
-  ['airline', 'Airline / operator', (ac) => ac.airline || ac.operator || '—'],
+  ['flight', 'Callsign', (ac) => `${flagHtml(ac.country)}${esc(ac.flight || ac.registration || ac.hex.toUpperCase())}`],
+  ['registration', 'Reg', (ac) => esc(ac.registration) || '—'],
+  ['type', 'Type', (ac) => esc(ac.type) || '—'],
+  ['airline', 'Airline / operator', (ac) => esc(ac.airline || ac.operator) || '—'],
   ['alt', () => unitLabels().alt, (ac) => fmt.altN(ac.alt)],
   ['gs', () => unitLabels().spd, (ac) => fmt.spdN(ac.gs)],
   ['vr', () => unitLabels().vr, (ac) => fmt.vrN(ac.vr)],
   ['distKm', 'Dist km', (ac) => ac.distKm ?? '—'],
-  ['squawk', 'Squawk', (ac) => ac.squawk || '—'],
+  ['squawk', 'Squawk', (ac) => esc(ac.squawk) || '—'],
   ['source', 'Source', (ac) => `<span style="color:${sourceColor(ac.source)}">${sourceLabel(ac.source)}</span>`]
 ];
 
@@ -1284,8 +1291,8 @@ function renderList() {
     .map(
       (ac) => `<div class="${rowClasses(ac, 'ac-row')}" data-hex="${ac.hex}" style="border-left:4px solid ${sourceColor(ac.source)}" title="Source: ${sourceLabel(ac.source)}">
         <div>
-          <div class="cs">${flagHtml(ac.country)}${ac.flight || ac.registration || ac.hex.toUpperCase()}</div>
-          <div class="meta">${ac.type || ac.typeName || ''}</div>
+          <div class="cs">${flagHtml(ac.country)}${esc(ac.flight || ac.registration || ac.hex.toUpperCase())}</div>
+          <div class="meta">${esc(ac.type || ac.typeName || '')}</div>
         </div>
         <div class="meta">${fmt.alt(ac.alt)}<br>${ac.distKm != null ? ac.distKm + ' km' : ''}</div>
       </div>`
@@ -1492,9 +1499,9 @@ function updateDetailLive(ac) {
   const badges = [];
   badges.push(`<span class="badge ${badgeClass(ac)}">${ac.classification}</span>`);
   if (ac.source) badges.push(`<span class="badge" style="border-color:${sourceColor(ac.source)};color:${sourceColor(ac.source)}">${sourceLabel(ac.source)}</span>`);
-  if (ac.emergency) badges.push(`<span class="badge emerg">EMERGENCY ${ac.squawk || ''}</span>`);
-  if (ac.padbCategory) badges.push(`<span class="badge">${ac.padbCategory}</span>`);
-  (ac.padbTags || []).forEach((t) => badges.push(`<span class="badge">${t}</span>`));
+  if (ac.emergency) badges.push(`<span class="badge emerg">EMERGENCY ${esc(ac.squawk || '')}</span>`);
+  if (ac.padbCategory) badges.push(`<span class="badge">${esc(ac.padbCategory)}</span>`);
+  (ac.padbTags || []).forEach((t) => badges.push(`<span class="badge">${esc(t)}</span>`));
   $('#d-badges').innerHTML = badges.join('');
 
   const cells = [
@@ -1502,7 +1509,7 @@ function updateDetailLive(ac) {
     ['Ground speed', fmt.spd(ac.gs)],
     ['Vertical rate', fmt.vr(ac.vr)],
     ['Track', ac.track != null ? Math.round(ac.track) + '°' : '—'],
-    ['Squawk', ac.squawk || '—'],
+    ['Squawk', esc(ac.squawk) || '—'],
     // distance-from-receiver only for authenticated viewers
     ...(isAuthed() ? [['Distance', fmt.dist(ac.distKm)]] : []),
     ['Signal', ac.rssi != null ? ac.rssi + ' dBFS' : '—'],
@@ -1542,9 +1549,11 @@ async function loadDetailExtras(hex) {
     .then(({ photo }) => {
       if (state.selected !== hex) return;
       if (photo?.thumb) {
-        $('#d-photo').innerHTML = `<a href="${photo.link}" target="_blank" rel="noopener">
-          <img src="/api/photo/${hex}" alt="aircraft photo" /></a>
-          <div class="credit">© ${photo.photographer} / planespotters.net</div>`;
+        // only allow http(s) links (no javascript: URLs); escape the credit text
+        const link = /^https?:\/\//i.test(photo.link || '') ? esc(photo.link) : '#';
+        $('#d-photo').innerHTML = `<a href="${link}" target="_blank" rel="noopener">
+          <img src="/api/photo/${esc(hex)}" alt="aircraft photo" /></a>
+          <div class="credit">© ${esc(photo.photographer)} / planespotters.net</div>`;
       }
     })
     .catch(() => {});
@@ -1567,13 +1576,13 @@ async function loadDetailExtras(hex) {
       const o = d.route.origin, dst = d.route.destination;
       const low = d.routeConfidence === 'low';
       let html = '';
-      if (d.route.airline?.name) html += `<div class="muted" style="margin-bottom:6px">${d.route.airline.name}</div>`;
+      if (d.route.airline?.name) html += `<div class="muted" style="margin-bottom:6px">${esc(d.route.airline.name)}</div>`;
       html += `<div class="route-box${low ? ' route-suspect' : ''}">
-        <div class="route-airport"><div class="code">${o?.iata || o?.icao || '?'}</div>
-          <div class="name">${o ? `${o.municipality || o.name}, ${o.country}` : 'Unknown'}</div></div>
+        <div class="route-airport"><div class="code">${esc(o?.iata || o?.icao || '?')}</div>
+          <div class="name">${o ? esc(`${o.municipality || o.name}, ${o.country}`) : 'Unknown'}</div></div>
         <div class="route-arrow">→</div>
-        <div class="route-airport" style="text-align:right"><div class="code">${dst?.iata || dst?.icao || '?'}</div>
-          <div class="name">${dst ? `${dst.municipality || dst.name}, ${dst.country}` : 'Unknown'}</div></div>
+        <div class="route-airport" style="text-align:right"><div class="code">${esc(dst?.iata || dst?.icao || '?')}</div>
+          <div class="name">${dst ? esc(`${dst.municipality || dst.name}, ${dst.country}`) : 'Unknown'}</div></div>
       </div>`;
       const srcLabel = (d.routeSources || []).join(' + ') || 'database';
       if (low) {
@@ -1688,8 +1697,8 @@ function connectStream() {
 // ----------------------------------------------------------------- toasts
 function toast({ kind, title, message, hex }) {
   const el = document.createElement('div');
-  el.className = `toast ${kind || ''}`;
-  el.innerHTML = `<div class="t">${title}</div><div class="m">${message || ''}</div>`;
+  el.className = `toast ${typeof kind === 'string' ? kind.replace(/[^\w-]/g, '') : ''}`;
+  el.innerHTML = `<div class="t">${esc(title)}</div><div class="m">${esc(message || '')}</div>`;
   if (hex) {
     el.style.cursor = 'pointer';
     el.addEventListener('click', () => { selectAircraft(hex, true); el.remove(); });
@@ -1738,10 +1747,10 @@ async function loadWatchlist() {
   $('#wl-table tbody').innerHTML = watchlist
     .map(
       (w) => `<tr>
-        <td>${w.icao || '—'}</td><td>${w.registration || '—'}</td><td>${w.callsign || '—'}</td>
-        <td>${w.operator || '—'}</td><td>${w.type || '—'}</td><td>${w.category || '—'}</td>
+        <td>${esc(w.icao) || '—'}</td><td>${esc(w.registration) || '—'}</td><td>${esc(w.callsign) || '—'}</td>
+        <td>${esc(w.operator) || '—'}</td><td>${esc(w.type) || '—'}</td><td>${esc(w.category) || '—'}</td>
         <td>${w.notify ? '🔔' : '—'}</td>
-        <td><button class="del" data-id="${w.id}">delete</button></td>
+        <td><button class="del" data-id="${esc(w.id)}">delete</button></td>
       </tr>`
     )
     .join('');
@@ -1776,9 +1785,9 @@ async function doPadbSearch() {
   $('#padb-results').innerHTML = results.length
     ? results
         .map(
-          (r) => `<div class="padb-hit"><b>${r.icao}</b><span>${r.registration}</span>
-          <span class="grow">${r.operator} — ${r.type} <span class="muted">(${r.category})</span></span>
-          <button data-icao="${r.icao}" class="padb-add">+ watch</button></div>`
+          (r) => `<div class="padb-hit"><b>${esc(r.icao)}</b><span>${esc(r.registration)}</span>
+          <span class="grow">${esc(r.operator)} — ${esc(r.type)} <span class="muted">(${esc(r.category)})</span></span>
+          <button data-icao="${esc(r.icao)}" class="padb-add">+ watch</button></div>`
         )
         .join('')
     : '<span class="muted">No matches in plane-alert-db (refresh it in Settings if empty)</span>';
@@ -1981,7 +1990,7 @@ function spottedRouteHtml(cs) {
       : entry.agreement === 'conflict'
         ? ' <span class="rt-warn" title="route databases disagree — treat with caution">⚠</span>'
         : '';
-    return `<span title="${o ? o.name + ', ' + o.country : '?'} → ${d ? d.name + ', ' + d.country : '?'}">${o?.iata || o?.icao || '?'} → ${d?.iata || d?.icao || '?'}</span>${badge}`;
+    return `<span title="${esc(o ? o.name + ', ' + o.country : '?')} → ${esc(d ? d.name + ', ' + d.country : '?')}">${esc(o?.iata || o?.icao || '?')} → ${esc(d?.iata || d?.icao || '?')}</span>${badge}`;
   }
   return '<span class="muted">no route</span>';
 }
@@ -1989,8 +1998,9 @@ function spottedRouteHtml(cs) {
 function spottedPhotoHtml(s) {
   // Load straight from the server-side image proxy (cached on disk, reliable).
   // onerror swaps in a ✈ placeholder when there's no photo.
-  return `<a href="https://www.planespotters.net/hex/${s.hex.toUpperCase()}" target="_blank" rel="noopener" title="photos on planespotters.net">
-    <img class="spotted-thumb" src="/api/photo/${s.hex}" loading="lazy" alt="" onerror="imgFallback(this)"></a>`;
+  const hex = esc(String(s.hex || '').replace(/[^0-9a-fA-F]/g, '').slice(0, 6));
+  return `<a href="https://www.planespotters.net/hex/${hex.toUpperCase()}" target="_blank" rel="noopener" title="photos on planespotters.net">
+    <img class="spotted-thumb" src="/api/photo/${hex}" loading="lazy" alt="" data-fallback="1"></a>`;
 }
 
 function renderSpotted() {
@@ -2018,16 +2028,17 @@ function renderSpotted() {
   $('#spotted-table tbody').innerHTML = rows.length
     ? rows
         .map((s) => {
-          const tags = (s.tags || []).filter(Boolean).map((t) => `<span class="badge">${t}</span>`).join(' ');
-          const label = s.callsign || s.registration || s.hex.toUpperCase();
+          const tags = (s.tags || []).filter(Boolean).map((t) => `<span class="badge">${esc(t)}</span>`).join(' ');
+          const label = esc(s.callsign || s.registration || s.hex.toUpperCase());
           const closest = s.minDistKm != null ? `${s.minDistKm.toFixed(1)} km` : '—';
-          return `<tr data-hex="${s.hex}" data-cs="${s.callsign || ''}">
-            <td class="spotted-photo" data-hex="${s.hex}">${spottedPhotoHtml(s)}</td>
-            <td>${flagHtml(s.country)}<b>${label}</b>${s.registration && s.registration !== label ? ` <span class="muted">${s.registration}</span>` : ''}
-              ${s.link ? ` <a href="${s.link}" target="_blank" rel="noopener" title="plane-alert-db link">↗</a>` : ''}</td>
-            <td>${s.operator || '—'}</td>
-            <td>${s.type || s.icaoType || '—'}</td>
-            <td>${s.category || '—'}</td>
+          const link = /^https?:\/\//i.test(s.link || '') ? esc(s.link) : '';
+          return `<tr data-hex="${esc(s.hex)}" data-cs="${esc(s.callsign || '')}">
+            <td class="spotted-photo" data-hex="${esc(s.hex)}">${spottedPhotoHtml(s)}</td>
+            <td>${flagHtml(s.country)}<b>${label}</b>${s.registration && s.registration !== (s.callsign || s.registration || s.hex.toUpperCase()) ? ` <span class="muted">${esc(s.registration)}</span>` : ''}
+              ${link ? ` <a href="${link}" target="_blank" rel="noopener" title="plane-alert-db link">↗</a>` : ''}</td>
+            <td>${esc(s.operator) || '—'}</td>
+            <td>${esc(s.type || s.icaoType) || '—'}</td>
+            <td>${esc(s.category) || '—'}</td>
             <td>${tags || '—'}</td>
             <td>${s.sessions}×</td>
             <td>${fmt.dateTime(s.firstSeen)}</td>
@@ -2115,11 +2126,16 @@ function hydrateSpotted(rows) {
   });
 }
 
-// Global onerror handler: replace a broken/absent photo with a ✈ placeholder.
-window.imgFallback = (img) => {
-  const cell = img.closest('.spotted-photo') || img.parentElement;
-  if (cell) cell.innerHTML = '<span class="ph-skel ph-none">✈</span>';
-};
+// Replace a broken/absent photo with a ✈ placeholder. Done via a capture-phase
+// listener (image 'error' doesn't bubble) instead of an inline onerror handler,
+// so the strict Content-Security-Policy (no inline scripts) stays intact.
+document.addEventListener('error', (e) => {
+  const img = e.target;
+  if (img && img.tagName === 'IMG' && img.dataset.fallback) {
+    const cell = img.closest('.spotted-photo') || img.parentElement;
+    if (cell) cell.innerHTML = '<span class="ph-skel ph-none">✈</span>';
+  }
+}, true);
 
 $('#spotted-range').addEventListener('change', loadSpotted);
 $('#spotted-pagesize').addEventListener('change', () => {
