@@ -43,7 +43,8 @@ container.
   **Military** is detected even without readsb `dbFlags` — from military ICAO address blocks, air-force
   callsign prefixes (GAF, BAF, RCH, CTM, NATO…) and military-only type designators
 - 📈 **Statistics** with a configurable retention period: aircraft per day, top types, top airlines,
-  categories — and a per-aircraft **sighting history** ("seen before") when you click a plane.
+  categories, and **top destination / departure airports** — and a per-aircraft **sighting history**
+  ("seen before") when you click a plane.
   Settings shows the **on-disk size of the retained log** and a **Purge log now** button to clear it
   and reclaim the space
 - 🌡 **Current-weather widget** in the top bar (temperature, wind, humidity, rain) for the receiver's

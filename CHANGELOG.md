@@ -2,6 +2,18 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.19.0
+- **Statistics page redesign + bar-length bug fix.** The horizontal bars were all rendering nearly
+  full regardless of value (a stray `flex:1` from the per-day chart leaked into them), so magnitudes
+  were unreadable. Rebuilt the bars on a CSS grid so their length is now **truly proportional** to the
+  count, over a recessive track, with tabular-aligned values and hover highlighting. The "aircraft per
+  day" chart no longer overlaps its labels (values on hover, sparse date ticks). Category bars are now
+  coloured by their map colour (airline/military/emergency…).
+- New **Top destinations** and **Top departure airports** stats — the busiest arrival/departure airports
+  among the flights you've tracked. Origin/destination are recorded per sighting from the cross-checked
+  route lookups (new `origin`/`destination` columns, migrated in automatically); the charts fill in as
+  routes resolve.
+
 ## 1.18.2
 - Add a ready-to-use **`cloudflared` service** to `docker-compose.yml` (token-based Cloudflare Tunnel)
   behind an opt-in **compose profile** — `docker compose --profile cloudflared up -d` — so it has no

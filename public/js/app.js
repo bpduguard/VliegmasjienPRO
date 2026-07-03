@@ -1717,27 +1717,50 @@ async function loadStats() {
     <div class="card"><div class="num">${state.aircraft.size}</div><div class="lbl">live right now</div></div>
     <div class="card"><div class="num">${s.topAirlines.length}</div><div class="lbl">airlines spotted</div></div>`;
 
+  // Aircraft per day — vertical bars, value on hover, sparse date labels.
+  const nDays = s.perDay.length;
   const maxDay = Math.max(1, ...s.perDay.map((d) => d.aircraft));
-  $('#chart-perday').innerHTML = s.perDay
-    .map(
-      (d) => `<div class="bar" style="height:${(d.aircraft / maxDay) * 100}%" title="${d.day}: ${d.aircraft} aircraft">
-        <b>${d.aircraft}</b><span>${d.day.slice(5)}</span></div>`
-    )
-    .join('') || '<span class="muted">No data yet</span>';
+  const labelEvery = Math.max(1, Math.ceil(nDays / 8));
+  $('#chart-perday').innerHTML = nDays
+    ? s.perDay
+        .map(
+          (d, i) => `<div class="day-col" title="${esc(d.day)}: ${d.aircraft.toLocaleString()} aircraft · ${d.sightings.toLocaleString()} sightings">
+            <div class="day-val">${d.aircraft.toLocaleString()}</div>
+            <div class="day-track"><div class="day-fill" style="height:${Math.max(2, (d.aircraft / maxDay) * 100)}%"></div></div>
+            <div class="day-x">${i % labelEvery === 0 ? esc(d.day.slice(5)) : ''}</div>
+          </div>`
+        )
+        .join('')
+    : '<span class="muted">No data yet</span>';
 
   hbar('#chart-types', s.topTypes.map((t) => [t.type, t.count]));
   hbar('#chart-airlines', s.topAirlines.map((t) => [t.airline, t.count]));
-  hbar('#chart-categories', s.categories.map((t) => [t.category, t.count]));
+  hbar('#chart-dest', (s.topDestinations || []).map((t) => [t.code, t.count]),
+    { empty: 'No routes resolved yet — this fills in as flights are looked up.' });
+  hbar('#chart-origin', (s.topOrigins || []).map((t) => [t.code, t.count]),
+    { empty: 'No routes resolved yet — this fills in as flights are looked up.' });
+  // Categories are coloured by their map colour (identity), not rank.
+  hbar('#chart-categories', s.categories.map((t) => [t.category, t.count, CLASS_COLORS[t.category] || CLASS_COLORS.unknown]));
 }
-function hbar(sel, rows) {
+
+// Horizontal magnitude bars. rows = [[label, count, colorOverride?], …].
+function hbar(sel, rows, opts = {}) {
+  const el = $(sel);
+  if (!rows.length) { el.innerHTML = `<span class="muted">${esc(opts.empty || 'No data yet')}</span>`; return; }
   const max = Math.max(1, ...rows.map((r) => r[1]));
-  $(sel).innerHTML =
-    rows
-      .map(
-        ([lbl, cnt]) => `<div class="hbar-row"><div class="lbl" title="${lbl}">${lbl}</div>
-        <div class="bar" style="width:${(cnt / max) * 60}%"></div><div class="cnt">${cnt}</div></div>`
-      )
-      .join('') || '<span class="muted">No data yet</span>';
+  el.innerHTML = rows
+    .map(([lbl, cnt, color]) => {
+      const pct = Math.max(1.5, (cnt / max) * 100);
+      const fill = color
+        ? `background:${color}`
+        : 'background:linear-gradient(90deg,#38bdf8,#0ea5e9)';
+      return `<div class="hbar-row" title="${esc(lbl)}: ${Number(cnt).toLocaleString()}">
+        <div class="hbar-label">${esc(lbl)}</div>
+        <div class="hbar-track"><div class="hbar-fill" style="width:${pct}%;${fill}"></div></div>
+        <div class="hbar-val">${Number(cnt).toLocaleString()}</div>
+      </div>`;
+    })
+    .join('');
 }
 $('#stats-days').addEventListener('change', loadStats);
 

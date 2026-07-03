@@ -228,6 +228,16 @@ async function pollOnce() {
       ? cachedAirlineName(ac.flight) || ac.airline || ac.airlineCallsign
       : null;
 
+    // Route origin/destination airport codes (for the stats) — from the cached,
+    // cross-checked route; skip when the two sources disagree.
+    if (ac.flight) {
+      const cr = cachedRoute(ac.flight);
+      if (cr?.route && cr.agreement !== 'conflict') {
+        ac.origin = cr.route.origin?.iata || cr.route.origin?.icao || ac.origin || null;
+        ac.destination = cr.route.destination?.iata || cr.route.destination?.icao || ac.destination || null;
+      }
+    }
+
     // Map pictogram only depends on category/type/callsign — memoize it so the
     // regexes don't re-run for every aircraft on every snapshot.
     const ikey = `${ac.emitterCategory || ''}|${ac.type || ''}|${ac.airlineCallsign || ''}`;

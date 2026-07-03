@@ -84,6 +84,11 @@ export function initDb() {
     CREATE INDEX IF NOT EXISTS idx_tracks_ts ON tracks(ts);
     CREATE INDEX IF NOT EXISTS idx_tracks_hex_ts ON tracks(hex, ts);
   `);
+  // Migrations: add route origin/destination to existing sightings tables (for
+  // the "top destinations / departed from" stats). Idempotent — ignore if present.
+  for (const col of ['origin', 'destination']) {
+    try { db.exec(`ALTER TABLE sightings ADD COLUMN ${col} TEXT`); } catch { /* already exists */ }
+  }
   return db;
 }
 
@@ -222,6 +227,8 @@ export function upsertSighting(ac, now) {
          type = COALESCE(NULLIF(?, ''), type),
          category = COALESCE(NULLIF(?, ''), category),
          airline = COALESCE(NULLIF(?, ''), airline),
+         origin = COALESCE(NULLIF(?, ''), origin),
+         destination = COALESCE(NULLIF(?, ''), destination),
          max_alt = MAX(COALESCE(max_alt, 0), COALESCE(?, 0)),
          max_speed = MAX(COALESCE(max_speed, 0), COALESCE(?, 0)),
          min_dist_km = CASE
@@ -236,6 +243,8 @@ export function upsertSighting(ac, now) {
       ac.type || '',
       ac.classification || '',
       ac.airline || '',
+      ac.origin || '',
+      ac.destination || '',
       Number.isFinite(ac.alt_baro) ? ac.alt_baro : null,
       Number.isFinite(ac.gs) ? Math.round(ac.gs) : null,
       ac.distKm ?? null,
@@ -247,9 +256,9 @@ export function upsertSighting(ac, now) {
   }
   const res = db
     .prepare(
-      `INSERT INTO sightings (hex, callsign, registration, type, category, airline,
+      `INSERT INTO sightings (hex, callsign, registration, type, category, airline, origin, destination,
         first_seen, last_seen, max_alt, max_speed, min_dist_km)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?)`
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
     )
     .run(
       ac.hex,
@@ -258,6 +267,8 @@ export function upsertSighting(ac, now) {
       ac.type || null,
       ac.classification || null,
       ac.airline || null,
+      ac.origin || null,
+      ac.destination || null,
       now,
       now,
       Number.isFinite(ac.alt_baro) ? ac.alt_baro : null,
@@ -317,12 +328,26 @@ export function statsSummary(days = 7) {
        GROUP BY category ORDER BY count DESC`
     )
     .all(since);
+  const topDestinations = db
+    .prepare(
+      `SELECT destination AS code, COUNT(*) AS count FROM sightings
+       WHERE first_seen >= ? AND destination IS NOT NULL AND destination != ''
+       GROUP BY destination ORDER BY count DESC LIMIT 15`
+    )
+    .all(since);
+  const topOrigins = db
+    .prepare(
+      `SELECT origin AS code, COUNT(*) AS count FROM sightings
+       WHERE first_seen >= ? AND origin IS NOT NULL AND origin != ''
+       GROUP BY origin ORDER BY count DESC LIMIT 15`
+    )
+    .all(since);
   const totals = db
     .prepare(
       `SELECT COUNT(*) AS sightings, COUNT(DISTINCT hex) AS aircraft FROM sightings WHERE first_seen >= ?`
     )
     .get(since);
-  return { days, perDay, topTypes, topAirlines, categories, totals };
+  return { days, perDay, topTypes, topAirlines, categories, topDestinations, topOrigins, totals };
 }
 
 // Distinct aircraft seen since `since`, aggregated per hex (latest callsign,
