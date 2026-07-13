@@ -3,6 +3,21 @@ services:
     build: .
     container_name: vliegmasjien-pro
     restart: unless-stopped
+    # Resource guardrails so a worst-case runaway can never take the whole Pi
+    # down — the container gets killed and restarted instead of the OS freezing
+    # or thrashing. The app normally uses well under 300 MB; 768 MB leaves ample
+    # headroom. memswap_limit == mem_limit disables container swap, which on a Pi
+    # means no heavy swapping to (and wearing out) the SD card under pressure.
+    mem_limit: 768m
+    memswap_limit: 768m
+    cpus: 2.0
+    # Let Docker see if the app has hung (visible as "unhealthy" in `docker ps`).
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8390/api/status').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     ports:
       - "8390:8390"
     volumes:

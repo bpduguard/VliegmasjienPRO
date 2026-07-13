@@ -31,6 +31,18 @@ import { VERSION } from './version.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 8390;
 
+// Resilience: a long-running daemon (especially on a Raspberry Pi that's hard to
+// get to) must not fall over on a single stray error — a background fetch
+// rejecting, a client vanishing mid-write, a transient hiccup. Log it loudly and
+// keep serving. Docker's restart policy remains the backstop for anything that
+// genuinely corrupts process state.
+process.on('unhandledRejection', (reason) => {
+  console.error('[guard] unhandled promise rejection:', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[guard] uncaught exception:', err);
+});
+
 loadConfig();
 initDb();
 loadPlaneDbFromDisk();
@@ -100,15 +112,21 @@ function publicSnapshot(s) {
 const sseClients = new Set(); // { res, authed }
 function sseFrame(event, data) { return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`; }
 
+// Writing to a client whose socket has already gone away can throw; never let
+// one dead client break the broadcast to the others (or crash the process).
+function sseWrite(c, frame) {
+  try { c.res.write(frame); } catch { sseClients.delete(c); }
+}
+
 function broadcast(event, data) {
   let full, pub;
   for (const c of sseClients) {
     if (event === 'aircraft') {
-      if (c.authed) { full ??= sseFrame('aircraft', data); c.res.write(full); }
-      else { pub ??= sseFrame('aircraft', publicSnapshot(data)); c.res.write(pub); }
+      if (c.authed) { full ??= sseFrame('aircraft', data); sseWrite(c, full); }
+      else { pub ??= sseFrame('aircraft', publicSnapshot(data)); sseWrite(c, pub); }
     } else if (c.authed) {
       // alerts (and other private events) only go to authenticated clients
-      c.res.write(sseFrame(event, data));
+      sseWrite(c, sseFrame(event, data));
     }
   }
 }
@@ -127,11 +145,13 @@ app.get('/api/stream', (req, res) => {
   res.write(sseFrame('aircraft', isAuth ? snap : publicSnapshot(snap)));
   const client = { res, authed: isAuth };
   sseClients.add(client);
-  const ping = setInterval(() => res.write(': ping\n\n'), 25000);
-  req.on('close', () => {
-    clearInterval(ping);
-    sseClients.delete(client);
-  });
+  const ping = setInterval(() => sseWrite(client, ': ping\n\n'), 25000);
+  const cleanup = () => { clearInterval(ping); sseClients.delete(client); };
+  req.on('close', cleanup);
+  // An abrupt reset (client power-off, network drop) emits 'error' rather than a
+  // clean 'close'; handle it so it can't surface as an uncaught exception.
+  res.on('error', cleanup);
+  req.on('error', cleanup);
 });
 
 // ------------------------------------------------------------------ auth

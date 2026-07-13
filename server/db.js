@@ -9,8 +9,18 @@ let db;
 
 export function initDb() {
   db = new DatabaseSync(path.join(DATA_DIR, 'vliegmasjien.db'));
+  // Durability/wear tuning for the Raspberry Pi's SD card. Under WAL,
+  // `synchronous = NORMAL` is the SQLite-recommended setting: it stops fsync'ing
+  // the disk on *every* commit (only at checkpoints), which drastically cuts
+  // SD-card writes and the synchronous stalls that block Node's event loop —
+  // without any risk of database corruption (at worst the last few seconds of
+  // logging are lost on a hard power cut). `busy_timeout` waits instead of
+  // throwing if a checkpoint briefly holds the file.
   db.exec(`
     PRAGMA journal_mode = WAL;
+    PRAGMA synchronous = NORMAL;
+    PRAGMA busy_timeout = 5000;
+    PRAGMA wal_autocheckpoint = 1000;
     CREATE TABLE IF NOT EXISTS sightings (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       hex TEXT NOT NULL,
@@ -92,14 +102,41 @@ export function initDb() {
   return db;
 }
 
+// Prepared-statement cache. node:sqlite compiles the SQL on every prepare(); the
+// tracker runs the same handful of statements for every aircraft on every poll,
+// so we compile each once and reuse it — meaningful CPU (and therefore power)
+// savings on a Pi. Keyed by the (constant) SQL text.
+const stmtCache = new Map();
+function prep(sql) {
+  let s = stmtCache.get(sql);
+  if (!s) { s = db.prepare(sql); stmtCache.set(sql, s); }
+  return s;
+}
+
+// Run `fn` inside a single transaction. Batching many small writes (e.g. a whole
+// poll's sightings) into one commit turns N disk commits into one — fewer WAL
+// frames and far less SD-card churn. Always rolls back on error and never leaves
+// a transaction dangling.
+export function withTransaction(fn) {
+  db.exec('BEGIN');
+  try {
+    const r = fn();
+    db.exec('COMMIT');
+    return r;
+  } catch (e) {
+    try { db.exec('ROLLBACK'); } catch { /* ignore */ }
+    throw e;
+  }
+}
+
 // --- aircraft database (hex -> reg/type/operator) ---------------------------
 
 export function getAircraftDb(hex) {
-  return db.prepare('SELECT * FROM aircraft_db WHERE hex = ?').get((hex || '').toLowerCase()) || null;
+  return prep('SELECT * FROM aircraft_db WHERE hex = ?').get((hex || '').toLowerCase()) || null;
 }
 
 const upsertAircraftStmt = () =>
-  db.prepare(
+  prep(
     `INSERT INTO aircraft_db (hex, registration, type, type_long, operator, updated)
      VALUES (?,?,?,?,?,?)
      ON CONFLICT(hex) DO UPDATE SET
@@ -149,11 +186,11 @@ export function aircraftDbCount() {
 // --- aircraft photos --------------------------------------------------------
 
 export function getPhoto(hex) {
-  return db.prepare('SELECT * FROM photos WHERE hex = ?').get((hex || '').toLowerCase()) || null;
+  return prep('SELECT * FROM photos WHERE hex = ?').get((hex || '').toLowerCase()) || null;
 }
 
 export function putPhoto(hex, photo) {
-  db.prepare('INSERT OR REPLACE INTO photos (hex, thumb, link, photographer, ts) VALUES (?,?,?,?,?)').run(
+  prep('INSERT OR REPLACE INTO photos (hex, thumb, link, photographer, ts) VALUES (?,?,?,?,?)').run(
     (hex || '').toLowerCase(),
     photo?.thumb || '',
     photo?.link || '',
@@ -215,11 +252,10 @@ export function airportFreqsInBounds(s, w, n, e, limit = 500) {
 const SESSION_GAP_MS = 30 * 60 * 1000;
 
 export function upsertSighting(ac, now) {
-  const row = db
-    .prepare('SELECT id, last_seen FROM sightings WHERE hex = ? ORDER BY last_seen DESC LIMIT 1')
+  const row = prep('SELECT id, last_seen FROM sightings WHERE hex = ? ORDER BY last_seen DESC LIMIT 1')
     .get(ac.hex);
   if (row && now - row.last_seen < SESSION_GAP_MS) {
-    db.prepare(
+    prep(
       `UPDATE sightings SET
          last_seen = ?,
          callsign = COALESCE(NULLIF(?, ''), callsign),
@@ -254,8 +290,7 @@ export function upsertSighting(ac, now) {
     );
     return row.id;
   }
-  const res = db
-    .prepare(
+  const res = prep(
       `INSERT INTO sightings (hex, callsign, registration, type, category, airline, origin, destination,
         first_seen, last_seen, max_alt, max_speed, min_dist_km)
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
@@ -285,7 +320,7 @@ export function aircraftHistory(hex, limit = 50) {
 }
 
 export function logAlert(hex, callsign, kind, message) {
-  db.prepare('INSERT INTO alerts (ts, hex, callsign, kind, message) VALUES (?,?,?,?,?)').run(
+  prep('INSERT INTO alerts (ts, hex, callsign, kind, message) VALUES (?,?,?,?,?)').run(
     Date.now(),
     hex || null,
     callsign || null,
@@ -432,7 +467,7 @@ export function purgeLogs() {
 // --- replay (position time-series) ------------------------------------------
 
 const insertTrackStmt = () =>
-  db.prepare('INSERT INTO tracks (ts, hex, lat, lon, alt, gs, trk, callsign, src) VALUES (?,?,?,?,?,?,?,?,?)');
+  prep('INSERT INTO tracks (ts, hex, lat, lon, alt, gs, trk, callsign, src) VALUES (?,?,?,?,?,?,?,?,?)');
 
 export function insertTracks(rows) {
   if (!rows.length) return 0;

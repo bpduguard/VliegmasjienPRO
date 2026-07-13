@@ -312,6 +312,31 @@ shaped by aircraft type — airliner, heavy/widebody, light single-engine, helic
 glider, drone and on-ground — with colour showing the role; the **Legend** button on the map explains
 them.
 
+## Stability & Raspberry Pi tips
+
+If the **whole Pi hangs** (needs a power-cycle) or **spontaneously reboots**, that's almost never a
+userland app crashing — a crashed container just restarts. A full-system freeze/reboot points at
+**hardware**, in rough order of likelihood:
+
+1. **Power.** The Pi 5 needs the **official 5 V / 5 A (27 W) USB-C supply**. A weaker phone charger or
+   a long/thin cable causes brown-outs under load — the classic "random reboot / hang" symptom,
+   especially when an SDR dongle draws from the same USB. Check `vcgencmd get_throttled` (a non-zero
+   value, or the on-screen lightning bolt, means under-voltage).
+2. **SD card.** Cheap or worn SD cards corrupt under sustained writes and cause I/O hangs. Use a
+   good A1/A2 card (or better, boot from SSD/USB). `dmesg | grep -i mmc` will show I/O errors.
+3. **Cooling.** Without the active cooler the Pi 5 throttles and can lock up under load — check
+   `vcgencmd measure_temp` (keep it under ~80 °C).
+
+**What the app does to help** (as of 1.21.1): SQLite is tuned to write gently to the SD card
+(`synchronous = NORMAL` under WAL, a whole poll's sightings batched into one commit, cached prepared
+statements), so it wears the card far less and stalls the event loop far less. The app also guards
+against stray crashes, and `docker-compose.yml` sets a **memory limit** (with swap disabled, so it
+can't thrash the SD card) and a **healthcheck** (`docker ps` shows `unhealthy` if it hangs). You can
+lower CPU/write volume further by raising the **poll interval** and trimming **log/replay
+retention**, both in *Settings*. To confirm the app isn't the cause, watch
+`docker stats vliegmasjien-pro` (memory should stay well under the limit) and `docker logs` around a
+freeze — if the host dies while the container is healthy and light, it's hardware.
+
 ## Development
 
 ```bash

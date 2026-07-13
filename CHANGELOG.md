@@ -2,6 +2,26 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.21.1
+- **Stability / Raspberry Pi hardening** (no feature or behaviour changes). Aimed at the write
+  pressure and failure modes that can stall or wear out a Pi over long uptimes:
+  - **SQLite now writes far more gently to the SD card.** Enabled `synchronous = NORMAL` under WAL
+    (the SQLite-recommended setting — it stops fsync'ing on every commit, only at checkpoints, with
+    no risk of corruption), added a `busy_timeout`, and **batch a whole poll's sightings into one
+    transaction** instead of one disk commit per aircraft. Together these cut SD-card writes — and
+    the synchronous stalls that block the event loop — dramatically on busy feeds.
+  - **Prepared statements are cached** instead of recompiled for every aircraft on every poll — less
+    CPU (and therefore less power draw, which matters on a marginal supply).
+  - **Process-level crash guards**: a stray unhandled promise rejection or exception (a background
+    lookup, a client vanishing mid-write) is now logged and survived instead of taking the whole app
+    down. SSE writes are guarded and abrupt client disconnects are handled cleanly.
+  - **docker-compose guardrails**: a container **memory limit** (with swap disabled, so nothing
+    thrashes the SD card under pressure) so a worst case can't freeze the whole Pi, plus a
+    **healthcheck** so a hung app shows up as `unhealthy` in `docker ps`.
+  - See the new **Stability & Raspberry Pi tips** section in the README — a full-system hang or
+    spontaneous reboot is almost always **power (use the official 5 V/5 A supply), SD-card health, or
+    cooling**, which these app changes reduce load on but cannot fully substitute for.
+
 ## 1.21.0
 - **New Sky Watch tab** (authenticated) — a stargazing forecast that answers "is tonight (or one of
   the next nights) good for looking at the stars from *here*?" It fuses the weather with real

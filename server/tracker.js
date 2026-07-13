@@ -7,7 +7,7 @@ import {
   planeDbLookup, lookupRoute, cachedAirlineName, maybeAutoRefreshPlaneDb,
   aircraftDbLocal, lookupAircraft, cachedRoute
 } from './enrich.js';
-import { upsertSighting, pruneOldData, insertTracks, pruneTracks } from './db.js';
+import { upsertSighting, pruneOldData, insertTracks, pruneTracks, withTransaction } from './db.js';
 import { notify } from './notify.js';
 import { ensureSbs, stopSbs, sbsSnapshot, sbsStatus } from './sbs.js';
 import { icaoToCountry } from './country.js';
@@ -159,6 +159,9 @@ async function pollOnce() {
   const seen = new Set();
   const trackBuf = []; // replay position points recorded this poll
 
+  // All sighting writes for this poll go into a single transaction — one disk
+  // commit instead of one per aircraft, which is much gentler on the SD card.
+  withTransaction(() => {
   for (const raw of data.aircraft || []) {
     const hex = (raw.hex || '').toLowerCase().replace('~', '');
     if (!hex) continue;
@@ -285,6 +288,7 @@ async function pollOnce() {
     checkAlerts(ac, cfg);
     backgroundRouteLookup(ac);
   }
+  });
 
   // expire aircraft not seen for 60s
   for (const [hex, ac] of aircraft) {
