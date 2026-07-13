@@ -331,8 +331,18 @@ userland app crashing — a crashed container just restarts. A full-system freez
 (`synchronous = NORMAL` under WAL, a whole poll's sightings batched into one commit, cached prepared
 statements), so it wears the card far less and stalls the event loop far less. The app also guards
 against stray crashes, and `docker-compose.yml` sets a **memory limit** (with swap disabled, so it
-can't thrash the SD card) and a **healthcheck** (`docker ps` shows `unhealthy` if it hangs). You can
-lower CPU/write volume further by raising the **poll interval** and trimming **log/replay
+can't thrash the SD card) and a **healthcheck** (`docker ps` shows `unhealthy` if it hangs).
+
+> **Enabling the memory limit on Raspberry Pi OS.** The Pi kernel ships with the memory cgroup
+> **disabled**, so Docker prints `Your kernel does not support memory limit capabilities … Limitation
+> discarded` and the `mem_limit` has no effect (the container still runs fine; the `cpus` limit and
+> healthcheck are unaffected). To activate it, append `cgroup_enable=memory cgroup_memory=1` to the
+> **single line** in `/boot/firmware/cmdline.txt` (older OS: `/boot/cmdline.txt`) and reboot. Verify
+> with `docker run --rm --memory=64m alpine true` (no warning) and `docker stats vliegmasjien-pro`
+> (a 768 MiB limit shows). If you'd rather not, just delete the `mem_limit`/`memswap_limit` lines to
+> silence the warning — you'll keep the CPU limit and healthcheck.
+
+You can lower CPU/write volume further by raising the **poll interval** and trimming **log/replay
 retention**, both in *Settings*. To confirm the app isn't the cause, watch
 `docker stats vliegmasjien-pro` (memory should stay well under the limit) and `docker logs` around a
 freeze — if the host dies while the container is healthy and light, it's hardware.

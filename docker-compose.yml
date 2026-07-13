@@ -8,6 +8,14 @@ services:
     # or thrashing. The app normally uses well under 300 MB; 768 MB leaves ample
     # headroom. memswap_limit == mem_limit disables container swap, which on a Pi
     # means no heavy swapping to (and wearing out) the SD card under pressure.
+    #
+    # NOTE for Raspberry Pi OS: the kernel memory cgroup is OFF by default, so
+    # `mem_limit` is silently discarded with the warning "Your kernel does not
+    # support memory limit capabilities...". The container still runs fine — but
+    # to make the limit actually apply, append to the single line in
+    # /boot/firmware/cmdline.txt (older OS: /boot/cmdline.txt) and reboot:
+    #     cgroup_enable=memory cgroup_memory=1
+    # (`cpus` needs no kernel change.) See README → "Stability & Raspberry Pi tips".
     mem_limit: 768m
     memswap_limit: 768m
     cpus: 2.0

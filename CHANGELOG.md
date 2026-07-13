@@ -17,7 +17,10 @@ The app version is shown in **Settings** and reported by `GET /api/status`.
     down. SSE writes are guarded and abrupt client disconnects are handled cleanly.
   - **docker-compose guardrails**: a container **memory limit** (with swap disabled, so nothing
     thrashes the SD card under pressure) so a worst case can't freeze the whole Pi, plus a
-    **healthcheck** so a hung app shows up as `unhealthy` in `docker ps`.
+    **healthcheck** so a hung app shows up as `unhealthy` in `docker ps`. Note: on Raspberry Pi OS
+    the memory cgroup is off by default, so the limit only applies after adding
+    `cgroup_enable=memory cgroup_memory=1` to `/boot/firmware/cmdline.txt` and rebooting (documented
+    in the README) — until then Docker warns and discards it, harmlessly.
   - See the new **Stability & Raspberry Pi tips** section in the README — a full-system hang or
     spontaneous reboot is almost always **power (use the official 5 V/5 A supply), SD-card health, or
     cooling**, which these app changes reduce load on but cannot fully substitute for.
