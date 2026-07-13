@@ -618,3 +618,61 @@ button.danger:hover { background: rgba(239,68,68,0.12); border-color: var(--dang
 .wx-radar { height: 340px; border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
 .wx-radar-ctl { margin-top: 10px; align-items: center; }
 .wx-disclaimer { font-size: 0.78rem; line-height: 1.5; margin-top: 4px; }
+
+/* ============================== SKY WATCH TAB ============================== */
+.sky-page { max-width: 1000px; }
+.sky-hero { display: flex; gap: 22px; align-items: center; background: linear-gradient(160deg, #0b1430, #131f42); border: 1px solid var(--border); border-radius: 14px; padding: 20px 22px; margin-bottom: 16px; }
+@media (max-width: 640px) { .sky-hero { flex-direction: column; align-items: stretch; } }
+.sky-score { position: relative; width: 120px; height: 120px; flex: 0 0 auto; }
+.sky-ring { width: 120px; height: 120px; }
+.sky-ring-bg { fill: none; stroke: rgba(255,255,255,0.10); stroke-width: 9; }
+.sky-ring-fg { fill: none; stroke-width: 9; stroke-linecap: round; transition: stroke-dasharray .5s; }
+.sky-score-num { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 2rem; font-weight: 700; color: var(--text); }
+.sky-score-num span { font-size: 0.7rem; color: var(--muted); font-weight: 500; }
+.sky-hero-body { flex: 1; }
+.sky-verdict { font-size: 1.25rem; font-weight: 700; margin-bottom: 4px; }
+.sky-window { color: var(--text); margin-bottom: 8px; }
+.sky-reasons { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.sky-chip { background: rgba(255,255,255,0.06); border: 1px solid var(--border); border-radius: 20px; padding: 2px 10px; font-size: 0.78rem; color: var(--muted); }
+.sky-cond { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px 16px; }
+.sky-cond-item { display: flex; gap: 9px; align-items: center; }
+.sky-cond-ico { font-size: 1.3rem; }
+.sky-cond-k { display: block; color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em; }
+.sky-cond-v { display: block; color: var(--text); font-weight: 600; font-size: 0.9rem; }
+
+/* rating colours */
+.sky-exc, .sky-exc-txt { color: #22c55e; }
+.sky-good, .sky-good-txt { color: #38bdf8; }
+.sky-fair, .sky-fair-txt { color: #f59e0b; }
+.sky-poor, .sky-poor-txt { color: #f97316; }
+.sky-bad, .sky-bad-txt { color: #ef4444; }
+.sky-exc .sky-ring-fg { stroke: #22c55e; } .sky-good .sky-ring-fg { stroke: #38bdf8; }
+.sky-fair .sky-ring-fg { stroke: #f59e0b; } .sky-poor .sky-ring-fg { stroke: #f97316; }
+.sky-bad .sky-ring-fg { stroke: #ef4444; }
+.sky-exc-bg { background: #22c55e; } .sky-good-bg { background: #38bdf8; }
+.sky-fair-bg { background: #f59e0b; } .sky-poor-bg { background: #f97316; } .sky-bad-bg { background: #ef4444; }
+
+/* next-nights list */
+.sky-nights { display: flex; flex-direction: column; }
+.sky-night { display: grid; grid-template-columns: 96px 78px 62px 1fr 96px; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--border); }
+.sky-night:first-child { border-top: none; }
+.sky-night-day { color: var(--text); font-weight: 600; font-size: 0.88rem; }
+.sky-night-moon, .sky-night-cloud { color: var(--muted); font-size: 0.82rem; white-space: nowrap; }
+.sky-night-bar { height: 8px; background: var(--bg); border-radius: 5px; overflow: hidden; }
+.sky-night-fill { display: block; height: 100%; border-radius: 5px; }
+.sky-night-rating { text-align: right; font-weight: 600; font-size: 0.82rem; }
+@media (max-width: 560px) { .sky-night { grid-template-columns: 70px 64px 1fr 70px; } .sky-night-cloud { display: none; } }
+
+/* object cards */
+.sky-objects { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+.sky-obj { display: flex; gap: 12px; background: var(--bg2); border: 1px solid var(--border); border-radius: 11px; padding: 12px; }
+.sky-obj-art { flex: 0 0 auto; }
+.sky-art-svg { width: 64px; height: 64px; border-radius: 8px; display: block; }
+.sky-obj-body { min-width: 0; flex: 1; }
+.sky-obj-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.sky-obj-name { font-weight: 600; color: var(--text); }
+.sky-obj-type { flex: 0 0 auto; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent); background: rgba(56,189,248,0.12); border-radius: 5px; padding: 2px 6px; }
+.sky-obj-meta { color: var(--muted); font-size: 0.8rem; margin: 3px 0; }
+.sky-obj-inst { color: var(--accent2); }
+.sky-obj-where { color: var(--text); font-size: 0.85rem; margin: 4px 0; }
+.sky-obj-info { color: var(--muted); font-size: 0.82rem; line-height: 1.45; }

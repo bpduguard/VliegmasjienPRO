@@ -20,6 +20,7 @@
       <button data-tab="zones" class="auth-only">Zones</button>
       <button data-tab="alerts" class="auth-only">Alerts</button>
       <button data-tab="weather" class="auth-only">Weather</button>
+      <button data-tab="skywatch" class="auth-only">Sky Watch</button>
       <button data-tab="settings">Settings</button>
     </nav>
     <button id="auth-btn" title="Log in for full access">🔒 Login</button>
@@ -385,6 +386,37 @@
     </div>
   </main>
 
+  <!-- ============================== SKY WATCH TAB ============================== -->
+  <main id="tab-skywatch" class="tab">
+    <div class="page sky-page">
+      <h2>Sky Watch <span class="muted" style="font-size:0.6em">stargazing forecast for your location</span></h2>
+      <div id="sky-error" class="wx-error hidden"></div>
+
+      <section class="sky-hero" id="sky-hero">
+        <div class="wx-loading">Assessing the sky…</div>
+      </section>
+
+      <section class="wx-card">
+        <h3>Next nights</h3>
+        <div id="sky-nights" class="sky-nights"></div>
+      </section>
+
+      <section class="wx-card">
+        <h3>Best objects tonight <span class="muted" id="sky-obj-note"></span></h3>
+        <div id="sky-objects" class="sky-objects"></div>
+      </section>
+
+      <p class="wx-disclaimer muted">
+        Positions of the Sun, Moon and planets are computed on-device from standard
+        astronomical models (accuracy well under a degree); deep-sky objects use catalogue
+        coordinates. Cloud cover comes from the Open-Meteo forecast; the light-pollution level
+        is the <b>Bortle class</b> you set in Settings. Altitudes and directions are for your
+        exact location. “Where to look” is given as a compass direction and height above the
+        horizon (0° = horizon, 90° = straight up).
+      </p>
+    </div>
+  </main>
+
   <!-- ============================== SETTINGS TAB ============================== -->
   <main id="tab-settings" class="tab">
     <div class="page">
@@ -516,6 +548,30 @@
           <a href="https://openweathermap.org/api" target="_blank" rel="noopener">OpenWeatherMap API key</a>.</p>
         <div class="row wrap">
           <label>OpenWeatherMap key <input id="s-owm" size="36" placeholder="(optional)" /></label>
+        </div>
+      </section>
+
+      <section class="settings-block">
+        <h3>Sky Watch <span class="muted">(stargazing)</span></h3>
+        <p class="muted">Set the light-pollution level at your location on the
+          <a href="https://en.wikipedia.org/wiki/Bortle_scale" target="_blank" rel="noopener">Bortle scale</a>
+          so the <strong>Sky Watch</strong> tab can estimate what's visible. Not sure? Check a light-pollution
+          map (e.g. <a href="https://www.lightpollutionmap.info" target="_blank" rel="noopener">lightpollutionmap.info</a>).
+          Cloud &amp; Moon data are automatic.</p>
+        <div class="row wrap">
+          <label>Light pollution
+            <select id="s-bortle">
+              <option value="1">Bortle 1 — pristine dark sky</option>
+              <option value="2">Bortle 2 — truly dark site</option>
+              <option value="3">Bortle 3 — rural sky</option>
+              <option value="4">Bortle 4 — rural/suburban</option>
+              <option value="5">Bortle 5 — suburban sky</option>
+              <option value="6">Bortle 6 — bright suburban</option>
+              <option value="7">Bortle 7 — suburban/urban</option>
+              <option value="8">Bortle 8 — city sky</option>
+              <option value="9">Bortle 9 — inner city</option>
+            </select>
+          </label>
         </div>
       </section>
 

@@ -29,6 +29,12 @@ container.
   models), the **nearest observed METAR** from aviationweather.gov as a ground-truth cross-check, a
   **live animated rain-radar** mini-map, and **extreme-condition warnings** (heat, wind, heavy rain,
   storms, snow, UV) with an optional notification when severe weather is forecast for today/tomorrow
+- 🔭 **Sky Watch tab** (authenticated) — a stargazing forecast for your location: a 0–100 observing
+  score for tonight and the next few nights (real astronomical-darkness window, cloud cover, Moon
+  phase/brightness, your Bortle light-pollution class), plus the **best objects to see tonight** —
+  Moon, planets and deep-sky objects that are above the horizon during darkness, each with where and
+  when to look, magnitude, and a naked-eye/binoculars/telescope hint. Sun/Moon/planet positions are
+  computed on-device (no external astronomy API)
 - 📍 **Zones**: circles with a radius in km. Get notified when an aircraft *enters* a zone, and see an
   **estimated time of entry** for approaching aircraft
 - 🔔 **Notifications**: **Pushover**, **Discord webhooks** and **browser notifications** — with a
@@ -203,7 +209,7 @@ ingress:
 | [hexdb.io](https://hexdb.io) | second callsign → route source (cross-checked with adsbdb) | no |
 | [planespotters.net](https://www.planespotters.net) | aircraft photos | no |
 | [OurAirports](https://ourairports.com/data/) | airport communication frequencies (map layer) | no |
-| [Open-Meteo](https://open-meteo.com) | current weather at the receiver (top-bar widget) | no |
+| [Open-Meteo](https://open-meteo.com) | current weather, forecast (Weather tab) & cloud cover (Sky Watch) | no |
 | [RainViewer](https://www.rainviewer.com) | rain radar overlay | no |
 | [OpenWeatherMap](https://openweathermap.org) | extra cloud layer (optional) | free key |
 | [CelesTrak](https://celestrak.org) | orbital elements (TLEs) for the ISS/Hubble (Aerospace layer) | no |

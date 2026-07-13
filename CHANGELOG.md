@@ -2,6 +2,30 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.21.0
+- **New Sky Watch tab** (authenticated) — a stargazing forecast that answers "is tonight (or one of
+  the next nights) good for looking at the stars from *here*?" It fuses the weather with real
+  astronomy, all computed on-device (no external astronomy API):
+  - A **tonight verdict** with a 0–100 observing score and a rating (Excellent → Bad), the real
+    **astronomical-dark-sky window** (Sun 18° below the horizon — not just sunset), and the main
+    limiting factors. Correctly reports "no astronomical darkness" on high-latitude summer nights.
+  - A **conditions panel**: cloud cover (from the Open-Meteo forecast over the dark hours), the
+    **Moon** (phase, % illuminated, and how much of the dark window it's above the horizon),
+    humidity, your **Bortle** light-pollution class, and the estimated faintest visible star.
+  - A **5-night outlook** so you can pick the best upcoming night at a glance.
+  - **Best objects tonight**: the Moon, planets (Mercury–Neptune) and a curated deep-sky catalogue
+    (galaxies, nebulae, star clusters, double stars), filtered to what's actually above the horizon
+    during darkness and ranked by how well-placed they are. Each shows **where to look** (compass
+    direction + height above the horizon), **when** it's highest, its magnitude, a naked-eye /
+    binoculars / telescope hint, a short description, and a clean illustration.
+  - Positions of the Sun, Moon and planets come from standard low-precision models (NOAA/Meeus for
+    Sun & Moon; the JPL approximate Keplerian elements for the planets) — accuracy well under a
+    degree, validated against solstice/equinox declinations, Moon-phase geometry and transit
+    altitudes across both hemispheres.
+- New **Bortle light-pollution** setting (Settings → Sky Watch) so the estimate matches your site.
+- New endpoint: `GET /api/skywatch` (auth-only). Object illustrations are drawn locally as SVG, so
+  the tab works offline and hot-links nothing.
+
 ## 1.20.0
 - **New Weather tab** (authenticated only — it reveals the receiver location) that combines every
   weather source into one trustworthy view for the location set in Settings:

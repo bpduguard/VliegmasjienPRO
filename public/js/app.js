@@ -89,6 +89,7 @@ $$('#tabs button').forEach((btn) =>
     if (btn.dataset.tab === 'zones') loadZones();
     if (btn.dataset.tab === 'alerts') loadAlerts();
     if (btn.dataset.tab === 'weather') loadWeatherTab();
+    if (btn.dataset.tab === 'skywatch') loadSkyWatch();
     if (btn.dataset.tab === 'settings') loadSettings();
   })
 );
@@ -2201,6 +2202,7 @@ async function loadSettings() {
   $('#s-notify-emerg').checked = c.notifyEmergency;
   $('#s-notify-passes').checked = c.notifySatellitePasses;
   $('#s-notify-weather').checked = c.notifyExtremeWeather;
+  $('#s-bortle').value = String(c.skywatch?.bortle ?? 4);
   $('#s-owm').value = '';
   $('#s-owm').placeholder = c.weather.hasOwmKey ? 'key configured ✓ (enter to replace)' : '(optional)';
   $('#s-openaip').value = '';
@@ -2327,6 +2329,7 @@ $('#s-save').addEventListener('click', async () => {
     notifyExtremeWeather: $('#s-notify-weather').checked,
     ui: { units: $('#s-units').value }
   };
+  patch.skywatch = { bortle: parseInt($('#s-bortle').value, 10) || 4 };
   if ($('#s-owm').value.trim()) patch.weather = { openWeatherMapKey: $('#s-owm').value.trim() };
   if ($('#s-openaip').value.trim()) patch.openAip = { apiKey: $('#s-openaip').value.trim() };
   await fetch('/api/config', {
@@ -2661,6 +2664,195 @@ function toggleWxRadar() {
   if (!wxRadar) return;
   wxRadar.playing = !wxRadar.playing;
   $('#wx-radar-play').textContent = wxRadar.playing ? '⏸ Pause' : '▶ Play';
+}
+
+// ----------------------------------------------------------------- sky watch tab
+// All timestamps from the server are raw UTC ms; format them in the *receiver's*
+// timezone (utcOffsetSeconds) so times are correct even for a remote viewer.
+function skyTime(ms, offsetSec) {
+  if (ms == null) return '—';
+  const d = new Date(ms + (offsetSec || 0) * 1000);
+  return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
+}
+function skyDayLabel(ms, offsetSec, i) {
+  if (i === 0) return 'Tonight';
+  if (i === 1) return 'Tomorrow';
+  return new Date(ms + (offsetSec || 0) * 1000)
+    .toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+}
+const MOON_EMOJI = {
+  'New Moon': '🌑', 'Waxing crescent': '🌒', 'First quarter': '🌓', 'Waxing gibbous': '🌔',
+  'Full Moon': '🌕', 'Waning gibbous': '🌖', 'Last quarter': '🌗', 'Waning crescent': '🌘'
+};
+const RATING_CLASS = { Excellent: 'exc', Good: 'good', Fair: 'fair', Poor: 'poor', Bad: 'bad' };
+const TYPE_LABEL = {
+  galaxy: 'Galaxy', open: 'Open cluster', globular: 'Globular cluster', nebula: 'Nebula',
+  planetary: 'Planetary nebula', double: 'Double star', planet: 'Planet', moon: 'Moon'
+};
+
+// Deterministic tiny PRNG so illustrations are stable per object.
+function seeded(id) {
+  let s = 0;
+  for (let i = 0; i < id.length; i++) s = (s * 31 + id.charCodeAt(i)) >>> 0;
+  return () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
+}
+// A clean inline-SVG illustration per object type (no external images → works
+// offline, no CSP/privacy issues). Representative, clearly not a photograph.
+function skyArt(o) {
+  const rnd = seeded(o.id);
+  const dots = (n, spread, cx = 32, cy = 32, r0 = 1) => {
+    let s = '';
+    for (let i = 0; i < n; i++) {
+      const a = rnd() * Math.PI * 2, rr = Math.pow(rnd(), spread) * 26;
+      const x = cx + Math.cos(a) * rr, y = cy + Math.sin(a) * rr;
+      s += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(r0 + rnd() * 0.8).toFixed(1)}" fill="#e8eefc" opacity="${(0.5 + rnd() * 0.5).toFixed(2)}"/>`;
+    }
+    return s;
+  };
+  let inner = '';
+  switch (o.type) {
+    case 'galaxy':
+      inner = `<defs><radialGradient id="g-${o.id}"><stop offset="0%" stop-color="#fff7e6"/><stop offset="40%" stop-color="#cdd7ff"/><stop offset="100%" stop-color="#20294a" stop-opacity="0"/></radialGradient></defs>` +
+        `<g transform="rotate(-25 32 32)"><ellipse cx="32" cy="32" rx="27" ry="11" fill="url(#g-${o.id})"/>` +
+        `<ellipse cx="32" cy="32" rx="9" ry="9" fill="#fff3d6"/>` + dots(26, 2.2) + `</g>`;
+      break;
+    case 'globular':
+      inner = dots(120, 3.4, 32, 32, 0.7);
+      break;
+    case 'open':
+      inner = dots(22, 1.1, 32, 32, 1.3);
+      break;
+    case 'nebula':
+      inner = `<defs><radialGradient id="n-${o.id}"><stop offset="0%" stop-color="#ff9ecb"/><stop offset="55%" stop-color="#8a6bff" stop-opacity="0.55"/><stop offset="100%" stop-color="#20294a" stop-opacity="0"/></radialGradient></defs>` +
+        `<ellipse cx="30" cy="34" rx="26" ry="20" fill="url(#n-${o.id})"/>` + dots(16, 1.4);
+      break;
+    case 'planetary':
+      inner = `<defs><radialGradient id="p-${o.id}"><stop offset="0%" stop-color="#20294a" stop-opacity="0"/><stop offset="55%" stop-color="#20294a" stop-opacity="0"/><stop offset="70%" stop-color="#57e6c3"/><stop offset="100%" stop-color="#2a7bff" stop-opacity="0.1"/></radialGradient></defs>` +
+        `<circle cx="32" cy="32" r="20" fill="url(#p-${o.id})"/><circle cx="32" cy="32" r="2.4" fill="#eafcff"/>` + dots(10, 1.2);
+      break;
+    case 'double':
+      inner = dots(12, 1.5) + `<circle cx="26" cy="34" r="4.5" fill="#ffd27f"/><circle cx="39" cy="29" r="3.6" fill="#9ec7ff"/>`;
+      break;
+    case 'planet': {
+      const col = { mercury: '#b7b7ad', venus: '#f4e2a1', mars: '#e2734a', jupiter: '#d9b38c', saturn: '#e6cc8f', uranus: '#9fe8e0', neptune: '#5b7bff' }[o.id] || '#cbd5f5';
+      inner = `<circle cx="32" cy="32" r="17" fill="${col}"/>` +
+        (o.id === 'jupiter' ? `<path d="M15 28 h34 M15 34 h34" stroke="#b98a63" stroke-width="2" opacity="0.5"/>` : '') +
+        (o.id === 'saturn' ? `<g transform="rotate(-18 32 32)"><ellipse cx="32" cy="32" rx="27" ry="8" fill="none" stroke="#e6cc8f" stroke-width="3"/><ellipse cx="32" cy="32" rx="27" ry="8" fill="none" stroke="#8a733f" stroke-width="1"/></g>` : '') +
+        `<circle cx="26" cy="26" r="15" fill="#000" opacity="0.12"/>`;
+      break;
+    }
+    case 'moon': {
+      const illum = (o.moonIllum ?? 50) / 100;
+      const waning = /Waning|Last/.test(o.moonPhase || '');
+      const off = (waning ? -1 : 1) * (1 - illum) * 34;
+      inner = `<defs><clipPath id="m-${o.id}"><circle cx="32" cy="32" r="20"/></clipPath></defs>` +
+        `<circle cx="32" cy="32" r="20" fill="#3a4260"/>` +
+        `<circle cx="${(32 + off).toFixed(1)}" cy="32" r="20" fill="#eef1f7" clip-path="url(#m-${o.id})"/>` +
+        `<g clip-path="url(#m-${o.id})" fill="#c9cfdd" opacity="0.7"><circle cx="26" cy="26" r="3"/><circle cx="38" cy="34" r="4"/><circle cx="30" cy="40" r="2.4"/></g>`;
+      break;
+    }
+    default:
+      inner = dots(20, 1.5);
+  }
+  return `<svg viewBox="0 0 64 64" class="sky-art-svg" aria-hidden="true"><rect width="64" height="64" fill="#0a1024"/>${inner}</svg>`;
+}
+
+async function loadSkyWatch() {
+  if (!isAuthed()) return;
+  const err = $('#sky-error');
+  err.classList.add('hidden');
+  $('#sky-hero').innerHTML = '<div class="wx-loading">Assessing the sky…</div>';
+  try {
+    const res = await fetch('/api/skywatch');
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      err.textContent = j.error === 'no receiver location set'
+        ? 'Set your receiver location in Settings to use Sky Watch.'
+        : `Sky Watch unavailable: ${j.error || res.status}`;
+      err.classList.remove('hidden');
+      $('#sky-hero').innerHTML = '';
+      return;
+    }
+    const d = await res.json();
+    renderSkyHero(d);
+    renderSkyNights(d);
+    renderSkyObjects(d);
+  } catch {
+    err.textContent = 'Sky Watch unavailable — check your connection.';
+    err.classList.remove('hidden');
+    $('#sky-hero').innerHTML = '';
+  }
+}
+
+function renderSkyHero(d) {
+  const t = d.nights[0];
+  const off = d.utcOffsetSeconds;
+  const cls = RATING_CLASS[t.rating] || 'fair';
+  const window = t.hasDark
+    ? `Dark sky (no twilight) from <b>${skyTime(t.darkStart, off)}</b> to <b>${skyTime(t.darkEnd, off)}</b>`
+    : 'No astronomical darkness tonight (sky never fully dark)';
+  const moonUp = t.moonUpFrac > 5 ? `up ${t.moonUpFrac}% of the dark hours` : 'below the horizon';
+  $('#sky-hero').innerHTML =
+    `<div class="sky-score sky-${cls}">` +
+    `<svg viewBox="0 0 120 120" class="sky-ring"><circle cx="60" cy="60" r="52" class="sky-ring-bg"/>` +
+    `<circle cx="60" cy="60" r="52" class="sky-ring-fg" stroke-dasharray="${(t.score / 100 * 326.7).toFixed(1)} 326.7" transform="rotate(-90 60 60)"/></svg>` +
+    `<div class="sky-score-num">${t.score}<span>/100</span></div></div>` +
+    `<div class="sky-hero-body">` +
+    `<div class="sky-verdict sky-${cls}-txt">${esc(t.rating)} conditions tonight</div>` +
+    `<div class="sky-window">${window}</div>` +
+    `<div class="sky-reasons">${(t.reasons || []).map((r) => `<span class="sky-chip">${esc(r)}</span>`).join('')}</div>` +
+    `<div class="sky-cond">` +
+    skyCond('☁️', 'Cloud cover', t.cloud != null ? `${t.cloud}%` : '—') +
+    skyCond(MOON_EMOJI[t.moonPhase] || '🌙', 'Moon', `${t.moonIllum}% · ${esc(t.moonPhase)}`) +
+    skyCond('🌫️', 'Moon in dark sky', moonUp) +
+    skyCond('💧', 'Humidity', t.humidity != null ? `${t.humidity}%` : '—') +
+    skyCond('🏙️', 'Light pollution', `Bortle ${d.bortle} — ${esc(d.bortleLabel)}`) +
+    skyCond('✨', 'Faintest star (est.)', `mag ${d.nelm}`) +
+    `</div></div>`;
+}
+const skyCond = (icon, k, v) =>
+  `<div class="sky-cond-item"><span class="sky-cond-ico">${icon}</span><div><span class="sky-cond-k">${esc(k)}</span><span class="sky-cond-v">${esc(v)}</span></div></div>`;
+
+function renderSkyNights(d) {
+  const box = $('#sky-nights');
+  box.innerHTML = '';
+  d.nights.forEach((n, i) => {
+    const cls = RATING_CLASS[n.rating] || 'fair';
+    const row = document.createElement('div');
+    row.className = 'sky-night';
+    row.innerHTML =
+      `<span class="sky-night-day">${esc(skyDayLabel(n.dateMs, d.utcOffsetSeconds, i))}</span>` +
+      `<span class="sky-night-moon" title="${esc(n.moonPhase)}">${MOON_EMOJI[n.moonPhase] || '🌙'} ${n.moonIllum}%</span>` +
+      `<span class="sky-night-cloud" title="Cloud cover">☁️ ${n.cloud != null ? n.cloud + '%' : '—'}</span>` +
+      `<span class="sky-night-bar"><span class="sky-night-fill sky-${cls}-bg" style="width:${n.score}%"></span></span>` +
+      `<span class="sky-night-rating sky-${cls}-txt">${esc(n.rating)} ${n.score}</span>`;
+    box.appendChild(row);
+  });
+}
+
+function renderSkyObjects(d) {
+  const box = $('#sky-objects');
+  box.innerHTML = '';
+  $('#sky-obj-note').textContent = d.objects.length ? '· sorted by how well-placed they are' : '';
+  if (!d.objects.length) {
+    box.innerHTML = '<p class="muted">Nothing well-placed during tonight’s dark window — try another night.</p>';
+    return;
+  }
+  for (const o of d.objects) {
+    const card = document.createElement('div');
+    card.className = 'sky-obj';
+    const moonExtra = o.type === 'moon' ? '' : ` · mag ${o.mag}`;
+    card.innerHTML =
+      `<div class="sky-obj-art">${skyArt(o)}</div>` +
+      `<div class="sky-obj-body">` +
+      `<div class="sky-obj-head"><span class="sky-obj-name">${esc(o.name)}</span>` +
+      `<span class="sky-obj-type">${esc(TYPE_LABEL[o.type] || o.type)}</span></div>` +
+      `<div class="sky-obj-meta">${esc(o.con)}${moonExtra} · <span class="sky-obj-inst">${esc(o.instrument)}</span></div>` +
+      `<div class="sky-obj-where">🧭 Look <b>${esc(o.dir)}</b>, <b>${o.peakAlt}°</b> up · best around <b>${skyTime(o.bestTimeMs, d.utcOffsetSeconds)}</b></div>` +
+      `<div class="sky-obj-info">${esc(o.info)}</div>` +
+      `</div>`;
+    box.appendChild(card);
+  }
 }
 
 (async function boot() {

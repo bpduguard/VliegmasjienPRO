@@ -19,6 +19,7 @@ import { icaoToCountry } from './country.js';
 import { rangeOutline, clearRange } from './range.js';
 import { getTles, startPassNotifier } from './space.js';
 import { getForecast, weatherWarnings, startWeatherNotifier } from './weather.js';
+import { skyAssessment } from './skywatch.js';
 import {
   authed, requireAuth, isPasswordSet, setPassword, verifyPassword, setAuthCookie, clearAuthCookie,
   isTotpEnabled, verifyTotp, newTotpSecret, otpauthUri, setPendingTotp, getPendingTotp, enableTotp, disableTotp,
@@ -686,6 +687,24 @@ app.get('/api/weather/metar-nearest', requireAuth, async (req, res) => {
     res.json(data);
   } catch (err) {
     res.status(502).json({ error: err.name === 'TimeoutError' ? 'aviationweather.gov timed out' : 'aviationweather.gov unreachable' });
+  }
+});
+
+// Sky Watch: stargazing conditions (dark-sky window, Moon, clouds, observing
+// score) for the next few nights + the best objects visible tonight. Auth-only —
+// it's built from the receiver location. Cached briefly (recomputes hourly-ish).
+let skyCache = { ts: 0, key: '', data: null };
+app.get('/api/skywatch', requireAuth, async (req, res) => {
+  const r = getConfig().receiver;
+  if (r.lat == null || r.lon == null) return res.status(400).json({ error: 'no receiver location set' });
+  const key = `${r.lat.toFixed(3)},${r.lon.toFixed(3)},${getConfig().skywatch?.bortle ?? 4}`;
+  if (skyCache.data && skyCache.key === key && Date.now() - skyCache.ts < 600000) return res.json(skyCache.data);
+  try {
+    const data = await skyAssessment(r.lat, r.lon);
+    skyCache = { ts: Date.now(), key, data };
+    res.json(data);
+  } catch (e) {
+    res.status(502).json({ error: e.message });
   }
 });
 

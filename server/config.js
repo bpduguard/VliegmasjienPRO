@@ -58,6 +58,9 @@ const DEFAULTS = {
   },
   // OpenAIP (controlled-airspace tile overlay) — needs a free API key.
   openAip: { apiKey: process.env.OPENAIP_API_KEY || '' },
+  // Sky Watch: light-pollution level at the receiver on the Bortle scale (1 = pristine
+  // dark sky … 9 = inner city). Used to estimate what's visible for stargazing.
+  skywatch: { bortle: 4 },
   // UI defaults
   ui: { darkMode: true, units: 'metric' }
 };
