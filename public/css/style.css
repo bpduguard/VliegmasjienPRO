@@ -544,3 +544,77 @@ button.danger:hover { background: rgba(239,68,68,0.12); border-color: var(--dang
 /* 2FA enrollment */
 .twofa-qr { display: block; width: 180px; height: 180px; background: #fff; border-radius: 8px; padding: 6px; margin: 6px 0; }
 .twofa-secret { font-family: ui-monospace, monospace; letter-spacing: 1px; color: var(--accent); background: var(--bg2); border: 1px solid var(--border); border-radius: 7px; padding: 6px 9px; display: inline-block; margin-top: 3px; user-select: all; }
+
+/* ============================== WEATHER TAB ============================== */
+.wx-page { max-width: 1000px; }
+.wx-error { background: rgba(239,68,68,0.12); border: 1px solid var(--danger); color: var(--text); border-radius: 9px; padding: 12px 14px; margin-bottom: 14px; }
+.wx-error.hidden { display: none; }
+.wx-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; }
+.wx-card h3 { margin: 0 0 12px; font-size: 1rem; }
+.wx-loading { color: var(--muted); padding: 8px 0; }
+
+/* warnings banner */
+.wx-warnings { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.wx-warn { display: flex; align-items: center; gap: 12px; border-radius: 10px; padding: 10px 14px; border: 1px solid var(--border); background: var(--bg2); }
+.wx-warn-ico { font-size: 1.5rem; line-height: 1; }
+.wx-warn-txt { display: flex; flex-direction: column; gap: 2px; flex: 1; color: var(--text); }
+.wx-warn-detail { color: var(--muted); font-size: 0.88rem; }
+.wx-warn-lvl { text-transform: uppercase; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; padding: 3px 8px; border-radius: 6px; }
+.wx-warn-severe { border-color: var(--danger); background: rgba(239,68,68,0.14); }
+.wx-warn-severe .wx-warn-lvl { background: var(--danger); color: #fff; }
+.wx-warn-warning { border-color: var(--accent2); background: rgba(245,158,11,0.13); }
+.wx-warn-warning .wx-warn-lvl { background: var(--accent2); color: #06243a; }
+.wx-warn-advisory { border-color: var(--accent); background: rgba(56,189,248,0.10); }
+.wx-warn-advisory .wx-warn-lvl { background: var(--accent); color: #06243a; }
+.wx-warn-none { color: var(--muted); justify-content: flex-start; }
+
+/* top row: current + metar */
+.wx-top { display: grid; grid-template-columns: 1.15fr 1fr; gap: 16px; margin-bottom: 16px; }
+@media (max-width: 720px) { .wx-top { grid-template-columns: 1fr; } }
+.wx-now-main { display: flex; align-items: center; gap: 16px; }
+.wx-now-ico { font-size: 3.4rem; line-height: 1; }
+.wx-now-t { display: flex; flex-direction: column; }
+.wx-now-temp { font-size: 2.8rem; font-weight: 700; color: var(--text); line-height: 1; }
+.wx-unit { font-size: 1.1rem; vertical-align: super; color: var(--muted); margin-left: 2px; }
+.wx-now-label { color: var(--text); margin-top: 4px; }
+.wx-hilo { color: var(--muted); font-size: 0.9rem; margin-top: 2px; }
+.wx-now-grid, .wx-metar-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px 14px; margin-top: 16px; }
+.wx-stat { display: flex; flex-direction: column; }
+.wx-stat-k { color: var(--muted); font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.wx-stat-v { color: var(--text); font-weight: 600; }
+
+/* METAR card */
+.wx-metar-head { margin-bottom: 6px; color: var(--text); }
+.wx-fltcat { color: #fff; font-size: 0.68rem; font-weight: 700; padding: 2px 7px; border-radius: 5px; margin-left: 4px; }
+.wx-metar-raw { display: block; margin-top: 12px; font-size: 0.78rem; color: var(--muted); word-break: break-word; white-space: normal; }
+.wx-src { color: var(--muted); font-size: 0.76rem; margin: 12px 0 0; }
+
+/* hourly strip */
+.wx-hourly { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 6px; }
+.wx-hour-day { display: flex; align-items: center; writing-mode: vertical-rl; transform: rotate(180deg); color: var(--muted); font-size: 0.72rem; font-weight: 600; padding: 4px 2px; flex: 0 0 auto; }
+.wx-hour { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 0 0 auto; min-width: 56px; padding: 8px 4px; border-radius: 8px; }
+.wx-hour:hover { background: rgba(255,255,255,0.04); }
+.wx-hour-time { color: var(--muted); font-size: 0.74rem; }
+.wx-hour-ico { font-size: 1.3rem; line-height: 1; }
+.wx-hour-temp { color: var(--text); font-weight: 600; }
+.wx-hour-pop { color: var(--accent); font-size: 0.72rem; min-height: 0.9em; }
+.wx-hour-wind { color: var(--muted); font-size: 0.7rem; text-align: center; }
+
+/* 7-day list */
+.wx-daily { display: flex; flex-direction: column; }
+.wx-day { display: grid; grid-template-columns: 92px 28px 42px 1fr 42px auto; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--border); }
+.wx-day:first-child { border-top: none; }
+.wx-day-name { color: var(--text); font-weight: 600; font-size: 0.86rem; }
+.wx-day-ico { font-size: 1.3rem; text-align: center; }
+.wx-day-lo { color: var(--muted); text-align: right; }
+.wx-day-hi { color: var(--text); font-weight: 600; }
+.wx-day-bar { position: relative; height: 6px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+.wx-day-fill { position: absolute; top: 0; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #38bdf8, #f59e0b); }
+.wx-day-extra { display: flex; gap: 10px; justify-content: flex-end; color: var(--muted); font-size: 0.76rem; white-space: nowrap; }
+.wx-day-pop { color: var(--accent); }
+@media (max-width: 600px) { .wx-day { grid-template-columns: 70px 24px 34px 1fr 34px; } .wx-day-extra { display: none; } }
+
+/* radar mini-map */
+.wx-radar { height: 340px; border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
+.wx-radar-ctl { margin-top: 10px; align-items: center; }
+.wx-disclaimer { font-size: 0.78rem; line-height: 1.5; margin-top: 4px; }

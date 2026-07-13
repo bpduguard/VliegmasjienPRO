@@ -19,6 +19,7 @@
       <button data-tab="spotted">Spotted</button>
       <button data-tab="zones" class="auth-only">Zones</button>
       <button data-tab="alerts" class="auth-only">Alerts</button>
+      <button data-tab="weather" class="auth-only">Weather</button>
       <button data-tab="settings">Settings</button>
     </nav>
     <button id="auth-btn" title="Log in for full access">🔒 Login</button>
@@ -333,6 +334,57 @@
     </div>
   </main>
 
+  <!-- ============================== WEATHER TAB ============================== -->
+  <main id="tab-weather" class="tab">
+    <div class="page wx-page">
+      <h2>Weather <span class="muted" style="font-size:0.6em">at the receiver location</span></h2>
+      <div id="wx-error" class="wx-error hidden"></div>
+
+      <div id="wx-warnings" class="wx-warnings"></div>
+
+      <div class="wx-top">
+        <section class="wx-card wx-now" id="wx-now">
+          <div class="wx-loading">Loading current conditions…</div>
+        </section>
+        <section class="wx-card wx-metar" id="wx-metar-card">
+          <h3>Nearest observation <span class="muted">(METAR)</span></h3>
+          <div id="wx-metar" class="wx-metar-body"><div class="wx-loading">Loading…</div></div>
+          <p class="wx-src">Observed report — aviationweather.gov (NOAA)</p>
+        </section>
+      </div>
+
+      <section class="wx-card">
+        <h3>Today &amp; tomorrow</h3>
+        <div id="wx-hourly" class="wx-hourly"></div>
+      </section>
+
+      <section class="wx-card">
+        <h3>7-day forecast</h3>
+        <div id="wx-daily" class="wx-daily"></div>
+      </section>
+
+      <section class="wx-card">
+        <h3>Rain radar <span class="muted">— RainViewer, live</span></h3>
+        <div id="wx-radar" class="wx-radar"></div>
+        <div class="row wrap wx-radar-ctl">
+          <button id="wx-radar-play" title="Play / pause the radar animation">⏸ Pause</button>
+          <span id="wx-radar-time" class="muted"></span>
+          <label class="toggle" id="wx-owm-toggle-wrap" style="display:none">
+            <input type="checkbox" id="wx-owm-clouds" /> Cloud overlay (OpenWeatherMap)
+          </label>
+        </div>
+      </section>
+
+      <p class="wx-disclaimer muted">
+        Forecast blended from national weather-service models via
+        <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a>.
+        Extreme-weather warnings shown above are <b>derived from this forecast</b> using fixed
+        thresholds — they are guidance, <b>not official government watches or warnings</b>. Always
+        consult your national meteorological service for authoritative alerts.
+      </p>
+    </div>
+  </main>
+
   <!-- ============================== SETTINGS TAB ============================== -->
   <main id="tab-settings" class="tab">
     <div class="page">
@@ -403,6 +455,9 @@
         </div>
         <div class="row wrap">
           <label class="toggle"><input type="checkbox" id="s-notify-passes" /> Notify ~1h before a visible <b>ISS / Hubble</b> pass (only when the sky is dark)</label>
+        </div>
+        <div class="row wrap">
+          <label class="toggle"><input type="checkbox" id="s-notify-weather" /> Notify about <b>extreme weather</b> forecast for today/tomorrow (heat, wind, heavy rain, storms…)</label>
         </div>
       </section>
 

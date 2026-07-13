@@ -18,6 +18,7 @@ import { airportFreqsInBounds, replayBounds, replayFrame, spottedSince, heatmapC
 import { icaoToCountry } from './country.js';
 import { rangeOutline, clearRange } from './range.js';
 import { getTles, startPassNotifier } from './space.js';
+import { getForecast, weatherWarnings, startWeatherNotifier } from './weather.js';
 import {
   authed, requireAuth, isPasswordSet, setPassword, verifyPassword, setAuthCookie, clearAuthCookie,
   isTotpEnabled, verifyTotp, newTotpSecret, otpauthUri, setPendingTotp, getPendingTotp, enableTotp, disableTotp,
@@ -627,6 +628,67 @@ app.get('/api/weather/current', requireAuth, async (req, res) => {
   }
 });
 
+// Full forecast for the Weather tab: current conditions, hourly (48h) and daily
+// (7-day) forecast plus derived extreme-condition warnings. Auth-only — it
+// reveals the receiver location.
+app.get('/api/weather/forecast', requireAuth, async (req, res) => {
+  const r = getConfig().receiver;
+  if (r.lat == null || r.lon == null) return res.status(400).json({ error: 'no receiver location set' });
+  try {
+    const forecast = await getForecast(r.lat, r.lon);
+    res.json({ ...forecast, warnings: weatherWarnings(forecast) });
+  } catch (e) {
+    res.status(502).json({ error: e.message });
+  }
+});
+
+// Nearest observed METAR to the receiver — a ground-truth cross-check of the
+// forecast. Widens the search box until it finds a station (busy airspace has
+// many; remote receivers may need a wide net). Auth-only.
+let nearestMetarCache = { ts: 0, key: '', data: null };
+app.get('/api/weather/metar-nearest', requireAuth, async (req, res) => {
+  const r = getConfig().receiver;
+  if (r.lat == null || r.lon == null) return res.status(400).json({ error: 'no receiver location set' });
+  const key = `${r.lat.toFixed(2)},${r.lon.toFixed(2)}`;
+  if (nearestMetarCache.data && nearestMetarCache.key === key && Date.now() - nearestMetarCache.ts < 300000) {
+    return res.json(nearestMetarCache.data);
+  }
+  const base = process.env.AVWX_BASE || 'https://aviationweather.gov/api/data';
+  const haversineKm = (a, b, c, d) => {
+    const R = 6371, toR = Math.PI / 180;
+    const dLat = (c - a) * toR, dLon = (d - b) * toR;
+    const s = Math.sin(dLat / 2) ** 2 + Math.cos(a * toR) * Math.cos(c * toR) * Math.sin(dLon / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(s));
+  };
+  try {
+    let stations = [];
+    for (const pad of [0.75, 1.75, 3.5]) { // ~80km, ~190km, ~380km latitude bands
+      const s = (r.lat - pad).toFixed(2), n = (r.lat + pad).toFixed(2);
+      const w = (r.lon - pad).toFixed(2), e = (r.lon + pad).toFixed(2);
+      const resp = await extFetch(`${base}/metar?bbox=${s},${w},${n},${e}&format=json`, { signal: AbortSignal.timeout(12000) });
+      if (!resp.ok) continue;
+      const arr = await resp.json();
+      stations = (Array.isArray(arr) ? arr : []).filter((m) => Number.isFinite(m.lat) && Number.isFinite(m.lon));
+      if (stations.length) break;
+    }
+    if (!stations.length) { const data = { station: null }; nearestMetarCache = { ts: Date.now(), key, data }; return res.json(data); }
+    stations.sort((a, b) => haversineKm(r.lat, r.lon, a.lat, a.lon) - haversineKm(r.lat, r.lon, b.lat, b.lon));
+    const m = stations[0];
+    const data = { station: {
+      id: m.icaoId, name: m.name || null, lat: m.lat, lon: m.lon,
+      distKm: Math.round(haversineKm(r.lat, r.lon, m.lat, m.lon)),
+      fltCat: m.fltCat || null, temp: m.temp ?? null, dewp: m.dewp ?? null,
+      wdir: m.wdir ?? null, wspd: m.wspd ?? null, wgst: m.wgst ?? null,
+      visib: m.visib ?? null, altim: m.altim ?? null, obsTime: m.obsTime ?? null,
+      raw: m.rawOb || null
+    } };
+    nearestMetarCache = { ts: Date.now(), key, data };
+    res.json(data);
+  } catch (err) {
+    res.status(502).json({ error: err.name === 'TimeoutError' ? 'aviationweather.gov timed out' : 'aviationweather.gov unreachable' });
+  }
+});
+
 // ------------------------------------------------------------------ range outline
 app.get('/api/range', requireAuth, (req, res) => res.json(rangeOutline()));
 app.post('/api/range/clear', requireAuth, (req, res) => res.json(clearRange()));
@@ -807,4 +869,5 @@ app.listen(PORT, () => {
   console.log(`VliegmasjienPRO listening on http://0.0.0.0:${PORT}`);
   startTracker();
   startPassNotifier();
+  startWeatherNotifier();
 });

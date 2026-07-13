@@ -45,6 +45,9 @@ const DEFAULTS = {
   // Notify ~1h ahead when the ISS or Hubble makes a visible pass (dark sky) over
   // the receiver location.
   notifySatellitePasses: false,
+  // Notify when extreme weather (heat, wind, heavy rain, storms…) is forecast
+  // for today or tomorrow at the receiver location.
+  notifyExtremeWeather: false,
   // plane-alert-db source (same resource planefence/plane-alert uses)
   planeAlertDbUrl: 'https://raw.githubusercontent.com/sdr-enthusiasts/plane-alert-db/main/plane-alert-db.csv',
   planeAlertDbAutoRefreshHours: 168,

@@ -24,6 +24,11 @@ container.
 - 📊 **Live data** per aircraft: altitude, ground speed, vertical rate, track, squawk, signal, distance…
 - 🌦 **Weather overlay** you can toggle: rain radar via RainViewer (no API key needed) + optional
   OpenWeatherMap cloud layer
+- ⛅ **Weather tab** (authenticated) combining every source for the receiver location into one view:
+  **current conditions** and a **7-day + hourly forecast** from Open-Meteo (national weather-service
+  models), the **nearest observed METAR** from aviationweather.gov as a ground-truth cross-check, a
+  **live animated rain-radar** mini-map, and **extreme-condition warnings** (heat, wind, heavy rain,
+  storms, snow, UV) with an optional notification when severe weather is forecast for today/tomorrow
 - 📍 **Zones**: circles with a radius in km. Get notified when an aircraft *enters* a zone, and see an
   **estimated time of entry** for approaching aircraft
 - 🔔 **Notifications**: **Pushover**, **Discord webhooks** and **browser notifications** — with a

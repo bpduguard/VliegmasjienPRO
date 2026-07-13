@@ -88,6 +88,7 @@ $$('#tabs button').forEach((btn) =>
     if (btn.dataset.tab === 'spotted') loadSpotted();
     if (btn.dataset.tab === 'zones') loadZones();
     if (btn.dataset.tab === 'alerts') loadAlerts();
+    if (btn.dataset.tab === 'weather') loadWeatherTab();
     if (btn.dataset.tab === 'settings') loadSettings();
   })
 );
@@ -2199,6 +2200,7 @@ async function loadSettings() {
   $('#s-notify-mil').checked = c.notifyMilitary;
   $('#s-notify-emerg').checked = c.notifyEmergency;
   $('#s-notify-passes').checked = c.notifySatellitePasses;
+  $('#s-notify-weather').checked = c.notifyExtremeWeather;
   $('#s-owm').value = '';
   $('#s-owm').placeholder = c.weather.hasOwmKey ? 'key configured ✓ (enter to replace)' : '(optional)';
   $('#s-openaip').value = '';
@@ -2322,6 +2324,7 @@ $('#s-save').addEventListener('click', async () => {
     notifyMilitary: $('#s-notify-mil').checked,
     notifyEmergency: $('#s-notify-emerg').checked,
     notifySatellitePasses: $('#s-notify-passes').checked,
+    notifyExtremeWeather: $('#s-notify-weather').checked,
     ui: { units: $('#s-units').value }
   };
   if ($('#s-owm').value.trim()) patch.weather = { openWeatherMapKey: $('#s-owm').value.trim() };
@@ -2404,7 +2407,264 @@ async function loadWeather() {
   }
 }
 
+// ----------------------------------------------------------------- weather tab
+// Wind is shown in the user's chosen unit; temperature stays °C (the norm for
+// weather, in both metric and aviation modes).
+function wxWind(kmh, dir) {
+  if (kmh == null) return '—';
+  const aviation = state.units === 'aviation';
+  const v = aviation ? Math.round(kmh / 1.852) : Math.round(kmh);
+  return `${v} ${aviation ? 'kt' : 'km/h'}${dir != null ? ' ' + compass(dir) : ''}`;
+}
+const wxTemp = (c) => (c == null ? '—' : `${Math.round(c)}°`);
+function wxHourLabel(iso) {
+  const d = new Date(iso);
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+function wxDateHeading(iso) {
+  return new Date(iso).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
+}
+const WARN_ORDER = { severe: 0, warning: 1, advisory: 2 };
+
+async function loadWeatherTab() {
+  if (!isAuthed()) return;
+  const err = $('#wx-error');
+  err.classList.add('hidden');
+  try {
+    const [fRes, mRes] = await Promise.all([
+      fetch('/api/weather/forecast'),
+      fetch('/api/weather/metar-nearest').catch(() => null)
+    ]);
+    if (!fRes.ok) {
+      const j = await fRes.json().catch(() => ({}));
+      err.textContent = j.error === 'no receiver location set'
+        ? 'Set your receiver location in Settings to see local weather.'
+        : `Weather unavailable: ${j.error || fRes.status}`;
+      err.classList.remove('hidden');
+      return;
+    }
+    const f = await fRes.json();
+    renderWxWarnings(f.warnings || []);
+    renderWxNow(f.current, f.daily?.[0]);
+    renderWxHourly(f.hourly || []);
+    renderWxDaily(f.daily || []);
+    renderWxMetar(mRes && mRes.ok ? await mRes.json() : { station: null });
+    initWxRadar();
+  } catch (e) {
+    err.textContent = 'Weather unavailable — check your connection.';
+    err.classList.remove('hidden');
+  }
+}
+
+function renderWxWarnings(warnings) {
+  const box = $('#wx-warnings');
+  box.innerHTML = '';
+  if (!warnings.length) {
+    box.innerHTML = '<div class="wx-warn wx-warn-none">✓ No extreme conditions in the forecast.</div>';
+    return;
+  }
+  // dedupe identical kind+level+day already handled server-side; show all, sorted.
+  for (const w of [...warnings].sort((a, b) => (WARN_ORDER[a.level] - WARN_ORDER[b.level]) || a.date.localeCompare(b.date))) {
+    const el = document.createElement('div');
+    el.className = `wx-warn wx-warn-${esc(w.level)}`;
+    el.innerHTML =
+      `<span class="wx-warn-ico">${esc(w.icon)}</span>` +
+      `<span class="wx-warn-txt"><b>${esc(w.title)}</b> · ${esc(w.dayLabel)}` +
+      `<span class="wx-warn-detail">${esc(w.detail)}</span></span>` +
+      `<span class="wx-warn-lvl">${esc(w.level)}</span>`;
+    box.appendChild(el);
+  }
+}
+
+function renderWxNow(c, today) {
+  const el = $('#wx-now');
+  if (!c) { el.innerHTML = '<div class="wx-loading">No data.</div>'; return; }
+  const [icon, label] = wxCondition(c.code, c.isDay);
+  const hiLo = today
+    ? `<span class="wx-hilo">H ${wxTemp(today.tmax)} · L ${wxTemp(today.tmin)}</span>` : '';
+  el.innerHTML =
+    `<div class="wx-now-main">` +
+    `<span class="wx-now-ico">${esc(icon)}</span>` +
+    `<div class="wx-now-t"><span class="wx-now-temp">${wxTemp(c.temp)}<span class="wx-unit">C</span></span>` +
+    `<span class="wx-now-label">${esc(label)}</span>${hiLo}</div></div>` +
+    `<div class="wx-now-grid">` +
+    wxStat('Feels like', wxTemp(c.feels)) +
+    wxStat('Wind', wxWind(c.windKmh, c.windDir)) +
+    wxStat('Gusts', c.gustKmh != null ? wxWind(c.gustKmh) : '—') +
+    wxStat('Humidity', c.humidity != null ? `${Math.round(c.humidity)}%` : '—') +
+    wxStat('Precip', c.precipMm != null ? `${c.precipMm.toFixed(1)} mm` : '—') +
+    wxStat('Cloud', c.cloud != null ? `${Math.round(c.cloud)}%` : '—') +
+    wxStat('Pressure', c.pressure != null ? `${Math.round(c.pressure)} hPa` : '—') +
+    `</div>`;
+}
+const wxStat = (k, v) => `<div class="wx-stat"><span class="wx-stat-k">${esc(k)}</span><span class="wx-stat-v">${esc(v)}</span></div>`;
+
+function renderWxHourly(hourly) {
+  const box = $('#wx-hourly');
+  box.innerHTML = '';
+  const now = Date.now();
+  // next ~36 hours from now (covers rest of today + tomorrow)
+  const upcoming = hourly.filter((h) => new Date(h.time).getTime() >= now - 3600000).slice(0, 36);
+  if (!upcoming.length) { box.innerHTML = '<div class="wx-loading">No hourly data.</div>'; return; }
+  let lastDay = '';
+  for (const h of upcoming) {
+    const dayKey = h.time.slice(0, 10);
+    if (dayKey !== lastDay) {
+      lastDay = dayKey;
+      const sep = document.createElement('div');
+      sep.className = 'wx-hour-day';
+      sep.textContent = wxDateHeading(h.time);
+      box.appendChild(sep);
+    }
+    const [icon] = wxCondition(h.code, h.isDay);
+    const cell = document.createElement('div');
+    cell.className = 'wx-hour';
+    const pop = h.precipProb != null && h.precipProb > 0 ? `<span class="wx-hour-pop">${Math.round(h.precipProb)}%</span>` : '<span class="wx-hour-pop">&nbsp;</span>';
+    cell.innerHTML =
+      `<span class="wx-hour-time">${esc(wxHourLabel(h.time))}</span>` +
+      `<span class="wx-hour-ico">${esc(icon)}</span>` +
+      `<span class="wx-hour-temp">${wxTemp(h.temp)}</span>` +
+      pop +
+      `<span class="wx-hour-wind">${esc(wxWind(h.windKmh))}</span>`;
+    box.appendChild(cell);
+  }
+}
+
+function renderWxDaily(daily) {
+  const box = $('#wx-daily');
+  box.innerHTML = '';
+  if (!daily.length) { box.innerHTML = '<div class="wx-loading">No daily data.</div>'; return; }
+  const lo = Math.min(...daily.map((d) => d.tmin).filter((v) => v != null));
+  const hi = Math.max(...daily.map((d) => d.tmax).filter((v) => v != null));
+  const span = Math.max(1, hi - lo);
+  daily.forEach((d, i) => {
+    const [icon, label] = wxCondition(d.code, 1);
+    const row = document.createElement('div');
+    row.className = 'wx-day';
+    // temperature range bar positioned within the week's min/max
+    const left = ((d.tmin - lo) / span) * 100;
+    const width = ((d.tmax - d.tmin) / span) * 100;
+    const pop = d.precipProb != null && d.precipProb > 0
+      ? `<span class="wx-day-pop">💧${Math.round(d.precipProb)}%</span>` : '';
+    row.innerHTML =
+      `<span class="wx-day-name">${esc(i === 0 ? 'Today' : wxDateHeading(d.date))}</span>` +
+      `<span class="wx-day-ico" title="${esc(label)}">${esc(icon)}</span>` +
+      `<span class="wx-day-lo">${wxTemp(d.tmin)}</span>` +
+      `<span class="wx-day-bar"><span class="wx-day-fill" style="margin-left:${left.toFixed(1)}%;width:${Math.max(6, width).toFixed(1)}%"></span></span>` +
+      `<span class="wx-day-hi">${wxTemp(d.tmax)}</span>` +
+      `<span class="wx-day-extra">${pop}<span class="wx-day-wind">💨${esc(wxWind(d.gustMax))}</span></span>`;
+    box.appendChild(row);
+  });
+}
+
+// METAR wind (aviationweather reports speed/gust in knots). Show in user units,
+// appending the gust when present.
+function metarWind(m) {
+  if (m.wspd == null) return '—';
+  const s = wxWind(m.wspd * 1.852, m.wdir);
+  if (!m.wgst) return s;
+  const aviation = state.units === 'aviation';
+  const g = aviation ? Math.round(m.wgst) : Math.round(m.wgst * 1.852);
+  return `${s} G${g}`;
+}
+function renderWxMetar(data) {
+  const box = $('#wx-metar');
+  const m = data && data.station;
+  if (!m) { box.innerHTML = '<p class="muted">No nearby station reporting.</p>'; return; }
+  const CAT = { VFR: '#22c55e', MVFR: '#3b82f6', IFR: '#ef4444', LIFR: '#a855f7' };
+  const catColor = CAT[m.fltCat] || 'var(--muted)';
+  const age = m.obsTime ? `${Math.max(0, Math.round((Date.now() / 1000 - m.obsTime) / 60))} min ago` : '';
+  box.innerHTML =
+    `<div class="wx-metar-head"><b>${esc(m.id || '—')}</b>` +
+    (m.name ? ` <span class="muted">${esc(m.name)}</span>` : '') +
+    (m.distKm != null ? ` <span class="muted">· ${esc(m.distKm)} km away</span>` : '') +
+    (m.fltCat ? ` <span class="wx-fltcat" style="background:${catColor}">${esc(m.fltCat)}</span>` : '') +
+    `</div>` +
+    `<div class="wx-metar-grid">` +
+    wxStat('Temp', m.temp != null ? `${Math.round(m.temp)}°C` : '—') +
+    wxStat('Dewpoint', m.dewp != null ? `${Math.round(m.dewp)}°C` : '—') +
+    wxStat('Wind', metarWind(m)) +
+    wxStat('Visibility', m.visib != null ? `${m.visib} sm` : '—') +
+    wxStat('Pressure', m.altim != null ? `${Math.round(m.altim)} hPa` : '—') +
+    (age ? wxStat('Observed', age) : '') +
+    `</div>` +
+    (m.raw ? `<code class="wx-metar-raw">${esc(m.raw)}</code>` : '');
+}
+
+// ---- RainViewer animated radar mini-map (created once, reused) --------------
+let wxRadar = null; // { map, frames, layers, idx, timer, playing, cloudLayer }
+async function initWxRadar() {
+  const rcv = state.config?.receiver;
+  const center = (rcv && rcv.lat != null && rcv.lon != null) ? [rcv.lat, rcv.lon] : map.getCenter();
+  if (!wxRadar) {
+    const rmap = L.map('wx-radar', { center, zoom: 7, zoomControl: true, attributionControl: false });
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { subdomains: 'abcd', maxZoom: 12 }).addTo(rmap);
+    if (rcv && rcv.lat != null) {
+      L.circleMarker(center, { radius: 5, color: '#38bdf8', weight: 2, fillColor: '#38bdf8', fillOpacity: 0.7 }).addTo(rmap);
+    }
+    wxRadar = { map: rmap, frames: [], layers: [], idx: 0, timer: null, playing: true, cloudLayer: null };
+    $('#wx-radar-play').addEventListener('click', toggleWxRadar);
+    $('#wx-owm-clouds').addEventListener('change', (e) => {
+      if (!wxRadar) return;
+      if (e.target.checked) {
+        wxRadar.cloudLayer = L.tileLayer('/api/weather/owm/clouds_new/{z}/{x}/{y}', { opacity: 0.45 }).addTo(wxRadar.map);
+      } else if (wxRadar.cloudLayer) {
+        wxRadar.map.removeLayer(wxRadar.cloudLayer); wxRadar.cloudLayer = null;
+      }
+    });
+  } else {
+    wxRadar.map.setView(center, wxRadar.map.getZoom());
+  }
+  setTimeout(() => wxRadar.map.invalidateSize(), 60);
+  if (state.config?.weather?.hasOwmKey) $('#wx-owm-toggle-wrap').style.display = '';
+  await loadWxRadarFrames();
+}
+
+async function loadWxRadarFrames() {
+  try {
+    const rv = await (await fetch('/api/weather/rainviewer')).json();
+    const past = rv.radar?.past || [];
+    const nowcast = rv.radar?.nowcast || [];
+    const frames = [...past, ...nowcast].slice(-16);
+    if (!frames.length || !wxRadar) return;
+    // clear old
+    wxRadar.layers.forEach((l) => wxRadar.map.removeLayer(l));
+    wxRadar.layers = frames.map((fr) =>
+      L.tileLayer(`${rv.host}${fr.path}/256/{z}/{x}/{y}/4/1_1.png`, { opacity: 0, maxZoom: 12 }).addTo(wxRadar.map));
+    wxRadar.frames = frames;
+    wxRadar.idx = past.length ? past.length - 1 : 0;
+    showWxRadarFrame(wxRadar.idx);
+    startWxRadarAnim();
+  } catch { /* ignore */ }
+}
+
+function showWxRadarFrame(i) {
+  if (!wxRadar) return;
+  wxRadar.layers.forEach((l, j) => l.setOpacity(j === i ? 0.72 : 0));
+  const fr = wxRadar.frames[i];
+  if (fr) {
+    const t = new Date(fr.time * 1000);
+    const future = fr.time * 1000 > Date.now();
+    $('#wx-radar-time').textContent = `${future ? 'forecast ' : ''}${t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  }
+}
+function startWxRadarAnim() {
+  if (!wxRadar) return;
+  clearInterval(wxRadar.timer);
+  wxRadar.timer = setInterval(() => {
+    if (!wxRadar || !wxRadar.playing || !wxRadar.frames.length) return;
+    wxRadar.idx = (wxRadar.idx + 1) % wxRadar.frames.length;
+    showWxRadarFrame(wxRadar.idx);
+  }, 700);
+}
+function toggleWxRadar() {
+  if (!wxRadar) return;
+  wxRadar.playing = !wxRadar.playing;
+  $('#wx-radar-play').textContent = wxRadar.playing ? '⏸ Pause' : '▶ Play';
+}
+
 (async function boot() {
+  await loadAuth();
   await loadAuth();
   try {
     state.config = await (await fetch('/api/config')).json();

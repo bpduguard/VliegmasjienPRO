@@ -2,6 +2,29 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.20.0
+- **New Weather tab** (authenticated only — it reveals the receiver location) that combines every
+  weather source into one trustworthy view for the location set in Settings:
+  - **Current conditions** (temperature, feels-like, wind, gusts, humidity, precipitation, cloud,
+    pressure) from **Open-Meteo**, which blends national weather-service models (DWD ICON, ECMWF, GFS,
+    Météo-France…).
+  - **Nearest observed METAR** from **aviationweather.gov (NOAA)** — a ground-truth cross-check of the
+    forecast, with flight category, distance and the raw report. The search box widens automatically
+    until it finds a reporting station.
+  - **Today & tomorrow** hourly strip and a **7-day forecast** with proportional temperature-range bars,
+    rain probability and gust info.
+  - A **live RainViewer rain-radar** mini-map centred on the receiver, animated past→nowcast, with an
+    optional OpenWeatherMap cloud overlay when a key is configured.
+  - **Extreme-condition warnings** (heat, cold, damaging winds, heavy rain, snow, thunderstorms, extreme
+    UV) derived from the trusted forecast with conservative thresholds and escalating severity
+    (advisory / warning / severe). Clearly labelled as **derived guidance, not official government
+    alerts**.
+- New **"Notify about extreme weather"** setting: sends a notification (browser / Pushover / Discord)
+  when a warning- or severe-level condition is forecast for **today or tomorrow** at your location,
+  de-duplicated per day/condition. Backed by a server-side scheduler (checks every 30 min), mirroring
+  the satellite-pass notifier.
+- New endpoints: `GET /api/weather/forecast` and `GET /api/weather/metar-nearest` (both auth-only).
+
 ## 1.19.0
 - **Statistics page redesign + bar-length bug fix.** The horizontal bars were all rendering nearly
   full regardless of value (a stray `flex:1` from the per-day chart leaked into them), so magnitudes
