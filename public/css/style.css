@@ -547,6 +547,10 @@ button.danger:hover { background: rgba(239,68,68,0.12); border-color: var(--dang
 
 /* ============================== WEATHER TAB ============================== */
 .wx-page { max-width: 1000px; }
+.wx-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.wx-head h2 { margin: 0; }
+.wx-head-ctl { display: flex; align-items: center; gap: 10px; }
+#wx-updated { font-size: 0.8rem; white-space: nowrap; }
 .wx-error { background: rgba(239,68,68,0.12); border: 1px solid var(--danger); color: var(--text); border-radius: 9px; padding: 12px 14px; margin-bottom: 14px; }
 .wx-error.hidden { display: none; }
 .wx-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; }

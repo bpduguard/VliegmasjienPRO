@@ -653,6 +653,7 @@ app.get('/api/weather/current', requireAuth, async (req, res) => {
 // (7-day) forecast plus derived extreme-condition warnings. Auth-only — it
 // reveals the receiver location.
 app.get('/api/weather/forecast', requireAuth, async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store'); // always serve current data (server-side cache handles rate)
   const r = getConfig().receiver;
   if (r.lat == null || r.lon == null) return res.status(400).json({ error: 'no receiver location set' });
   try {
@@ -668,6 +669,7 @@ app.get('/api/weather/forecast', requireAuth, async (req, res) => {
 // many; remote receivers may need a wide net). Auth-only.
 let nearestMetarCache = { ts: 0, key: '', data: null };
 app.get('/api/weather/metar-nearest', requireAuth, async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   const r = getConfig().receiver;
   if (r.lat == null || r.lon == null) return res.status(400).json({ error: 'no receiver location set' });
   const key = `${r.lat.toFixed(2)},${r.lon.toFixed(2)}`;
@@ -735,6 +737,11 @@ app.post('/api/range/clear', requireAuth, (req, res) => res.json(clearRange()));
 // RainViewer frame metadata proxy (avoids CORS surprises and centralizes caching).
 let rainviewerCache = { ts: 0, data: null };
 app.get('/api/weather/rainviewer', async (req, res) => {
+  // The frame list changes every ~10 min and RainViewer only keeps ~2h of it —
+  // if a browser or proxy (e.g. a Cloudflare Tunnel) caches this response the
+  // radar shows stale (even day-old) frames. Forbid caching; our own 60 s
+  // in-memory cache still shields the upstream API.
+  res.setHeader('Cache-Control', 'no-store');
   if (Date.now() - rainviewerCache.ts < 60000 && rainviewerCache.data) {
     return res.json(rainviewerCache.data);
   }

@@ -338,7 +338,13 @@
   <!-- ============================== WEATHER TAB ============================== -->
   <main id="tab-weather" class="tab">
     <div class="page wx-page">
-      <h2>Weather <span class="muted" style="font-size:0.6em">at the receiver location</span></h2>
+      <div class="wx-head">
+        <h2>Weather <span class="muted" style="font-size:0.6em">at the receiver location</span></h2>
+        <div class="wx-head-ctl">
+          <span id="wx-updated" class="muted"></span>
+          <button id="wx-refresh" title="Refresh now">↻ Refresh</button>
+        </div>
+      </div>
       <div id="wx-error" class="wx-error hidden"></div>
 
       <div id="wx-warnings" class="wx-warnings"></div>

@@ -2429,14 +2429,18 @@ function wxDateHeading(iso) {
 }
 const WARN_ORDER = { severe: 0, warning: 1, advisory: 2 };
 
+// Cache-busted, no-store fetch so the browser (or a proxy / Cloudflare Tunnel)
+// can never hand back a stale weather/radar response.
+const freshFetch = (url) => fetch(`${url}${url.includes('?') ? '&' : '?'}_=${Date.now()}`, { cache: 'no-store' });
+
 async function loadWeatherTab() {
   if (!isAuthed()) return;
   const err = $('#wx-error');
   err.classList.add('hidden');
   try {
     const [fRes, mRes] = await Promise.all([
-      fetch('/api/weather/forecast'),
-      fetch('/api/weather/metar-nearest').catch(() => null)
+      freshFetch('/api/weather/forecast'),
+      freshFetch('/api/weather/metar-nearest').catch(() => null)
     ]);
     if (!fRes.ok) {
       const j = await fRes.json().catch(() => ({}));
@@ -2453,11 +2457,27 @@ async function loadWeatherTab() {
     renderWxDaily(f.daily || []);
     renderWxMetar(mRes && mRes.ok ? await mRes.json() : { station: null });
     initWxRadar();
+    $('#wx-updated').textContent = `updated ${fmt.time(Date.now())}`;
   } catch (e) {
     err.textContent = 'Weather unavailable — check your connection.';
     err.classList.remove('hidden');
   }
+  startWxAutoRefresh();
 }
+
+// Keep the tab live: refresh every 5 min while it's the visible tab (Open-Meteo
+// updates hourly, RainViewer ~every 10 min, METAR ~hourly). Paused when the tab
+// isn't showing so it costs nothing in the background.
+let wxAutoTimer = null;
+function wxTabVisible() {
+  return !document.hidden && $('#tab-weather').classList.contains('active');
+}
+function startWxAutoRefresh() {
+  if (wxAutoTimer) return;
+  wxAutoTimer = setInterval(() => { if (wxTabVisible()) loadWeatherTab(); }, 5 * 60000);
+}
+document.addEventListener('visibilitychange', () => { if (wxTabVisible()) loadWeatherTab(); });
+$('#wx-refresh').addEventListener('click', () => loadWeatherTab());
 
 function renderWxWarnings(warnings) {
   const box = $('#wx-warnings');
@@ -2625,7 +2645,7 @@ async function initWxRadar() {
 
 async function loadWxRadarFrames() {
   try {
-    const rv = await (await fetch('/api/weather/rainviewer')).json();
+    const rv = await (await freshFetch('/api/weather/rainviewer')).json();
     const past = rv.radar?.past || [];
     const nowcast = rv.radar?.nowcast || [];
     const frames = [...past, ...nowcast].slice(-16);

@@ -2,6 +2,15 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.21.2
+- **Weather tab: fixed stale rain radar + made the whole tab live.** The RainViewer frame list (which
+  only spans ~2 hours) could be served from a browser/proxy cache — including through a Cloudflare
+  Tunnel — leaving the radar animating **old, even day-old, frames**. The radar (and forecast + METAR)
+  responses are now sent `Cache-Control: no-store` and fetched cache-busted, so they're always current.
+- The Weather tab now **auto-refreshes every 5 minutes** while it's the visible tab (and immediately when
+  you switch back to it), with a manual **↻ Refresh** button and an **"updated HH:MM"** timestamp. It
+  costs nothing while the tab isn't showing.
+
 ## 1.21.1
 - **Stability / Raspberry Pi hardening** (no feature or behaviour changes). Aimed at the write
   pressure and failure modes that can stall or wear out a Pi over long uptimes:
