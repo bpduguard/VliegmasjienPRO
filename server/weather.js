@@ -32,7 +32,7 @@ export async function getForecast(lat, lon) {
     `${OPEN_METEO_BASE}?latitude=${lat}&longitude=${lon}` +
     '&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,' +
     'wind_speed_10m,wind_direction_10m,wind_gusts_10m,pressure_msl,cloud_cover,is_day' +
-    '&hourly=temperature_2m,apparent_temperature,precipitation_probability,precipitation,weather_code,' +
+    '&hourly=temperature_2m,apparent_temperature,dew_point_2m,precipitation_probability,precipitation,weather_code,' +
     'wind_speed_10m,wind_gusts_10m,cloud_cover,relative_humidity_2m,is_day' +
     '&daily=weather_code,temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min,' +
     'precipitation_sum,precipitation_probability_max,precipitation_hours,snowfall_sum,' +
@@ -84,6 +84,7 @@ export async function getForecast(lat, lon) {
     time,
     temp: h.temperature_2m?.[i] ?? null,
     feels: h.apparent_temperature?.[i] ?? null,
+    dewPoint: h.dew_point_2m?.[i] ?? null,
     precipProb: h.precipitation_probability?.[i] ?? null,
     precip: h.precipitation?.[i] ?? null,
     code: h.weather_code?.[i] ?? null,

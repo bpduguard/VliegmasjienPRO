@@ -2,6 +2,15 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.21.3
+- **Sky Watch now factors in whether it stays dry and the dew point.** The observing score for each
+  night now penalises **precipitation** during the dark window (rain/snow ends a session — a strong
+  penalty on the worst hourly chance and any accumulation) and **dew/fog on your optics**, derived from
+  the smallest **temperature − dew-point spread** over the window (≤1 °C → "Dew/fog likely", ≤3 °C →
+  "Dew possible"). The tonight panel gains two tiles — **Precipitation** ("Staying dry" or the chance +
+  mm) and **Dew on optics** (likelihood + the °C spread) — and the reasons/verdict reflect both. Pulls a
+  new hourly **dew point** field from the Open-Meteo forecast.
+
 ## 1.21.2
 - **Weather tab: fixed stale rain radar + made the whole tab live.** The RainViewer frame list (which
   only spans ~2 hours) could be served from a browser/proxy cache — including through a Cloudflare

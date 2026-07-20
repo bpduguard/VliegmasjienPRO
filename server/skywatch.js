@@ -297,31 +297,40 @@ function ratingFor(score) {
   return 'Bad';
 }
 
-// Average cloud cover (%) over [startMs,endMs] from the hourly forecast.
-function avgCloud(forecast, startMs, endMs) {
-  if (!forecast?.hourly?.length || startMs == null) return null;
-  let sum = 0, n = 0;
+// Aggregate the hourly forecast over the dark window [startMs,endMs] in a single
+// pass: mean cloud & humidity, the worst precipitation chance / total accumulation
+// (does it stay dry?), and the *smallest* temperature−dew-point spread — a small
+// spread means dew forms on optics and fog/haze is likely.
+function windowWeather(forecast, startMs, endMs) {
+  const none = { cloud: null, humidity: null, precipProb: null, precipMm: null, dewSpread: null };
+  if (!forecast?.hourly?.length || startMs == null) return none;
+  const off = (forecast.utcOffsetSeconds || 0) * 1000;
+  let cSum = 0, cN = 0, hSum = 0, hN = 0;
+  let maxProb = 0, mmSum = 0, hasPrecip = false, minSpread = null;
   for (const h of forecast.hourly) {
-    if (h.cloud == null) continue;
     // h.time is local wall-clock (no zone); treat as UTC then remove the offset.
-    const utc = new Date(h.time + 'Z').getTime() - (forecast.utcOffsetSeconds || 0) * 1000;
-    if (utc >= startMs && utc <= endMs) { sum += h.cloud; n++; }
+    const utc = new Date(h.time + 'Z').getTime() - off;
+    if (utc < startMs || utc > endMs) continue;
+    if (h.cloud != null) { cSum += h.cloud; cN++; }
+    if (h.humidity != null) { hSum += h.humidity; hN++; }
+    if (h.precipProb != null) { maxProb = Math.max(maxProb, h.precipProb); hasPrecip = true; }
+    if (h.precip != null) { mmSum += h.precip; hasPrecip = true; }
+    if (h.temp != null && h.dewPoint != null) {
+      const spread = h.temp - h.dewPoint;
+      if (minSpread == null || spread < minSpread) minSpread = spread;
+    }
   }
-  return n ? Math.round(sum / n) : null;
-}
-function avgHumidity(forecast, startMs, endMs) {
-  if (!forecast?.hourly?.length || startMs == null) return null;
-  let sum = 0, n = 0;
-  for (const h of forecast.hourly) {
-    if (h.humidity == null) continue;
-    const utc = new Date(h.time + 'Z').getTime() - (forecast.utcOffsetSeconds || 0) * 1000;
-    if (utc >= startMs && utc <= endMs) { sum += h.humidity; n++; }
-  }
-  return n ? Math.round(sum / n) : null;
+  return {
+    cloud: cN ? Math.round(cSum / cN) : null,
+    humidity: hN ? Math.round(hSum / hN) : null,
+    precipProb: hasPrecip ? Math.round(maxProb) : null,
+    precipMm: hasPrecip ? Math.round(mmSum * 10) / 10 : null,
+    dewSpread: minSpread == null ? null : Math.round(minSpread * 10) / 10
+  };
 }
 
 // Score a single night (0..100) and explain the main limiter.
-function scoreNight({ hasDark, minSunAlt, cloud, moonIllum, moonUpFrac }) {
+function scoreNight({ hasDark, minSunAlt, cloud, moonIllum, moonUpFrac, precipProb, precipMm, dewSpread }) {
   if (!hasDark) {
     // no astronomical darkness (high-latitude summer) — cap hard
     return { score: Math.max(5, 30 - Math.round((minSunAlt + 18) * 2)), reasons: ['No astronomical darkness tonight'] };
@@ -336,11 +345,26 @@ function scoreNight({ hasDark, minSunAlt, cloud, moonIllum, moonUpFrac }) {
   } else {
     reasons.push('Cloud forecast unavailable');
   }
+  // Precipitation ends a session outright — penalise on the worst hourly chance
+  // (and any accumulation) during the dark window.
+  if (precipProb != null) {
+    const wet = Math.max(precipProb, (precipMm || 0) > 0.1 ? 60 : 0);
+    score -= Math.min(60, wet * 0.6);
+    if (wet >= 50) reasons.push('Precipitation likely');
+    else if (wet >= 20) reasons.push('Showers possible');
+    else reasons.push('Staying dry');
+  }
   // Moon washout: penalty scales with illumination and how long it's up in the dark
   const moonPen = Math.round(moonIllum * moonUpFrac * 45);
   score -= moonPen;
   if (moonIllum > 0.6 && moonUpFrac > 0.3) reasons.push('Bright Moon up');
   else if (moonIllum < 0.15 || moonUpFrac < 0.1) reasons.push('Little/no moonlight');
+  // Dew/fog on optics: a small temperature−dew-point spread fogs lenses & mirrors
+  // and usually means haze. Not sky-blocking, so a lighter penalty than cloud.
+  if (dewSpread != null) {
+    if (dewSpread <= 1) { score -= 14; reasons.push('Dew/fog likely'); }
+    else if (dewSpread <= 3) { score -= 7; reasons.push('Dew possible'); }
+  }
   score = Math.max(0, Math.min(100, Math.round(score)));
   return { score, reasons };
 }
@@ -371,19 +395,24 @@ export async function skyAssessment(lat, lon, nowMs = Date.now(), nights = 5) {
     const wEnd = dw.end ?? noon + 16 * 3600000;
     const moon = moonOverWindow(wStart, wEnd);
     const moonTrack = bodyTrack(moonRaDec, wStart, wEnd, latRad, lonRad);
-    const cloud = avgCloud(forecast, wStart, wEnd);
-    const humidity = avgHumidity(forecast, wStart, wEnd);
+    const w = windowWeather(forecast, wStart, wEnd);
     const { score, reasons } = scoreNight({
-      hasDark: dw.hasDark, minSunAlt: dw.minSunAlt, cloud,
-      moonIllum: moon.illum, moonUpFrac: moonTrack.upFraction
+      hasDark: dw.hasDark, minSunAlt: dw.minSunAlt, cloud: w.cloud,
+      moonIllum: moon.illum, moonUpFrac: moonTrack.upFraction,
+      precipProb: w.precipProb, precipMm: w.precipMm, dewSpread: w.dewSpread
     });
+    // "Dry" once astronomical night exists and precipitation is unlikely/none.
+    const dry = w.precipProb == null ? null
+      : (w.precipProb < 20 && (w.precipMm || 0) <= 0.1);
     const night = {
       dayOffset: i,
       dateMs: noon,
       darkStart: dw.start, darkEnd: dw.end, hasDark: dw.hasDark,
       moonIllum: Math.round(moon.illum * 100), moonPhase: moon.phase,
       moonUpFrac: Math.round(moonTrack.upFraction * 100),
-      cloud, humidity, score, rating: ratingFor(score), reasons
+      cloud: w.cloud, humidity: w.humidity,
+      precipProb: w.precipProb, precipMm: w.precipMm, dewSpread: w.dewSpread, dry,
+      score, rating: ratingFor(score), reasons
     };
     nightList.push(night);
     if (i === 0) tonight = { ...night, wStart, wEnd };

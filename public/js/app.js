@@ -2812,6 +2812,13 @@ function renderSkyHero(d) {
     ? `Dark sky (no twilight) from <b>${skyTime(t.darkStart, off)}</b> to <b>${skyTime(t.darkEnd, off)}</b>`
     : 'No astronomical darkness tonight (sky never fully dark)';
   const moonUp = t.moonUpFrac > 5 ? `up ${t.moonUpFrac}% of the dark hours` : 'below the horizon';
+  const precipLabel = t.precipProb == null ? '—'
+    : t.dry ? 'Staying dry'
+    : `${t.precipProb}% chance${t.precipMm ? ` · ${t.precipMm} mm` : ''}`;
+  const dewLabel = t.dewSpread == null ? '—'
+    : t.dewSpread <= 1 ? `Likely · ${t.dewSpread}°C spread`
+    : t.dewSpread <= 3 ? `Possible · ${t.dewSpread}°C spread`
+    : `Unlikely · ${t.dewSpread}°C spread`;
   $('#sky-hero').innerHTML =
     `<div class="sky-score sky-${cls}">` +
     `<svg viewBox="0 0 120 120" class="sky-ring"><circle cx="60" cy="60" r="52" class="sky-ring-bg"/>` +
@@ -2823,8 +2830,10 @@ function renderSkyHero(d) {
     `<div class="sky-reasons">${(t.reasons || []).map((r) => `<span class="sky-chip">${esc(r)}</span>`).join('')}</div>` +
     `<div class="sky-cond">` +
     skyCond('☁️', 'Cloud cover', t.cloud != null ? `${t.cloud}%` : '—') +
+    skyCond('🌧️', 'Precipitation', precipLabel) +
     skyCond(MOON_EMOJI[t.moonPhase] || '🌙', 'Moon', `${t.moonIllum}% · ${esc(t.moonPhase)}`) +
     skyCond('🌫️', 'Moon in dark sky', moonUp) +
+    skyCond('💦', 'Dew on optics', dewLabel) +
     skyCond('💧', 'Humidity', t.humidity != null ? `${t.humidity}%` : '—') +
     skyCond('🏙️', 'Light pollution', `Bortle ${d.bortle} — ${esc(d.bortleLabel)}`) +
     skyCond('✨', 'Faintest star (est.)', `mag ${d.nelm}`) +
