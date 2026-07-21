@@ -1078,6 +1078,75 @@ function drawSelTrail(color) {
   flushSeg();
 }
 
+// Historical track: the recorded path of a *past* sighting session, drawn when
+// the user clicks a date in the "seen before" list. Its own layer + style so it's
+// clearly distinct from the live trail. Only one shown at a time.
+const histTrackLayer = L.layerGroup().addTo(map);
+let histTrackKey = null; // `${hex}:${from}` currently shown, or null
+
+function clearHistTrack() {
+  histTrackLayer.clearLayers();
+  histTrackKey = null;
+  $$('#d-history .hist-line.active').forEach((r) => r.classList.remove('active'));
+}
+
+async function toggleHistTrack(hex, from, to, row) {
+  const key = `${hex}:${from}`;
+  if (histTrackKey === key) { clearHistTrack(); return; } // clicking the active date hides it
+  clearHistTrack();
+  row.classList.add('active');
+  try {
+    const r = await fetch(`/api/aircraft/${hex}/track?from=${from}&to=${to}`);
+    if (state.selected !== hex) return;
+    if (!r.ok) { row.classList.remove('active'); return; }
+    const { track } = await r.json();
+    const pts = (track || []).filter((p) => p.lat != null && p.lon != null);
+    if (pts.length < 2) {
+      row.classList.remove('active');
+      toast({ kind: 'test', title: 'Historical track',
+        message: 'No recorded track for this session — it is older than the replay retention window (see Settings).' });
+      return;
+    }
+    histTrackKey = key;
+    drawHistTrack(pts);
+  } catch { row.classList.remove('active'); }
+}
+
+function drawHistTrack(track) {
+  histTrackLayer.clearLayers();
+  const pts = track.map((p) => [p.lat, p.lon, p.alt, p.ts]);
+  const color = '#a855f7'; // violet — distinct from any live trail colour
+  let seg = [[pts[0][0], pts[0][1]]];
+  const flush = () => { if (seg.length >= 2) L.polyline(seg, { color, weight: 3, opacity: 0.9 }).addTo(histTrackLayer); };
+  for (let i = 1; i < pts.length; i++) {
+    if (pts[i][3] - pts[i - 1][3] > TRAIL_GAP_MS) {
+      flush();
+      const a = [pts[i - 1][0], pts[i - 1][1]], b = [pts[i][0], pts[i][1]];
+      L.polyline([a, b], { color: '#fbbf24', weight: 2, opacity: 0.85, dashArray: '3 8' })
+        .bindTooltip('Signal gap', { sticky: true }).addTo(histTrackLayer);
+      seg = [[pts[i][0], pts[i][1]]];
+    } else seg.push([pts[i][0], pts[i][1]]);
+  }
+  flush();
+  const start = pts[0], end = pts[pts.length - 1];
+  L.circleMarker([start[0], start[1]], { radius: 5, color: '#22c55e', weight: 2, fillColor: '#0a1024', fillOpacity: 1 })
+    .bindTooltip(`Track start · ${fmt.dateTime(start[3])}`).addTo(histTrackLayer);
+  L.circleMarker([end[0], end[1]], { radius: 5, color: '#ef4444', weight: 2, fillColor: '#0a1024', fillOpacity: 1 })
+    .bindTooltip(`Track end · ${fmt.dateTime(end[3])}`).addTo(histTrackLayer);
+  // Stop following the live plane so the fit doesn't get yanked away, then frame it.
+  state.follow = false; $('#d-follow').classList.remove('active');
+  if (state.autoFollow) { state.autoFollow = false; $('#autofollow-btn').classList.remove('active'); }
+  if (!$('#tab-map').classList.contains('active')) $('#tabs button[data-tab="map"]').click();
+  setTimeout(() => map.fitBounds(L.latLngBounds(pts.map((p) => [p[0], p[1]])), { padding: [40, 40], maxZoom: 11 }), 60);
+}
+
+// Delegated click handler for the "seen before" rows (attached once).
+$('#d-history').addEventListener('click', (e) => {
+  const row = e.target.closest('.hist-line[data-from]');
+  if (!row || !state.selected) return;
+  toggleHistTrack(state.selected, +row.dataset.from, +row.dataset.to, row);
+});
+
 function classifiedVisible(ac) {
   if (state.filter !== 'all') {
     if (state.filter === 'emergency' && !ac.emergency) return false;
@@ -1479,6 +1548,7 @@ $('#airline-filter').addEventListener('input', (e) => {
 async function selectAircraft(hex, pan = false) {
   // A manual pick takes over from auto-follow.
   if (state.autoFollow) { state.autoFollow = false; $('#autofollow-btn').classList.remove('active'); }
+  if (hex !== state.selected) clearHistTrack(); // drop a previous plane's historical track
   state.selected = hex;
   state.follow = false;
   $('#d-follow').classList.remove('active');
@@ -1616,12 +1686,12 @@ async function loadDetailExtras(hex) {
     .then(({ history }) => {
       if (state.selected !== hex) return;
       if (!history?.length) { $('#d-history').textContent = 'First time seen.'; return; }
+      // Rows are clickable (auth-only) to draw that session's recorded track.
+      const clickable = isAuthed();
       $('#d-history').innerHTML = history
         .slice(0, 12)
         .map(
-          (h) => `<div class="hist-line">${fmt.dateTime(h.first_seen)} — ${fmt.dur((h.last_seen - h.first_seen) / 1000)}
-            ${h.callsign ? ' · ' + h.callsign : ''}${h.max_alt ? ' · max ' + fmt.alt(h.max_alt) : ''}
-            ${h.min_dist_km != null ? ' · closest ' + h.min_dist_km.toFixed(1) + ' km' : ''}</div>`
+          (h) => `<div class="hist-line${clickable ? ' hist-clickable' : ''}"${clickable ? ` data-from="${h.first_seen}" data-to="${h.last_seen}"` : ''}>${fmt.dateTime(h.first_seen)} — ${fmt.dur((h.last_seen - h.first_seen) / 1000)}${h.callsign ? ' · ' + esc(h.callsign) : ''}${h.max_alt ? ' · max ' + fmt.alt(h.max_alt) : ''}${h.min_dist_km != null ? ' · closest ' + h.min_dist_km.toFixed(1) + ' km' : ''}${clickable ? '<span class="hist-track-hint">▸ track</span>' : ''}</div>`
         )
         .join('');
     })
@@ -1633,6 +1703,7 @@ $('#d-close').addEventListener('click', () => {
   state.selected = null;
   state.follow = false;
   clearSelTrail();
+  clearHistTrack();
   $('#detail').classList.add('hidden');
   renderAircraft();
 });

@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
 import { loadConfig, getConfig, saveConfig, publicConfig, DATA_DIR } from './config.js';
-import { initDb, aircraftHistory, recentAlerts, statsSummary, aircraftDbCount, bulkImportAircraftDb, logStorageInfo, purgeLogs } from './db.js';
+import { initDb, aircraftHistory, recentAlerts, statsSummary, aircraftDbCount, bulkImportAircraftDb, logStorageInfo, purgeLogs, getAircraftTrack } from './db.js';
 import {
   loadPlaneDbFromDisk, refreshPlaneDb, planeDbMeta, planeDbLookup, planeDbSearch, aircraftDbError, lookupRoute
 } from './enrich.js';
@@ -325,6 +325,20 @@ app.get('/api/aircraft/:hex/history', (req, res) => {
   const history = aircraftHistory(req.params.hex);
   if (!authed(req)) for (const h of history) h.min_dist_km = null; // closest approach reveals the receiver
   res.json({ history });
+});
+
+// Recorded position track for a past sighting session, for drawing on the map.
+// Auth-only: many stored tracks together outline the receiver's coverage. Only
+// goes back as far as the replay retention window; older sessions return [].
+app.get('/api/aircraft/:hex/track', requireAuth, (req, res) => {
+  const from = parseInt(req.query.from, 10);
+  const to = parseInt(req.query.to, 10);
+  if (!Number.isFinite(from) || !Number.isFinite(to) || to < from) {
+    return res.status(400).json({ error: 'from,to (ms) required' });
+  }
+  // pad the window a little so the session's first/last fixes are included
+  const track = getAircraftTrack(req.params.hex, from - 60000, to + 60000, 8000);
+  res.json({ track, retentionDays: getConfig().replayRetentionDays });
 });
 
 // ------------------------------------------------------------------ stats & alerts

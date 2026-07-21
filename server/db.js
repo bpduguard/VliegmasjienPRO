@@ -508,6 +508,15 @@ export function pruneTracks(retentionDays) {
   db.prepare('DELETE FROM tracks WHERE ts < ?').run(cutoff);
 }
 
+// Recorded position track for one aircraft within a time window (a past sighting
+// session). Ordered oldest→newest. Only spans as far back as the replay retention
+// (config.replayRetentionDays); older sightings have no stored track.
+export function getAircraftTrack(hex, from, to, limit = 8000) {
+  return prep(
+    'SELECT ts, lat, lon, alt, gs, trk, callsign FROM tracks WHERE hex = ? AND ts >= ? AND ts <= ? ORDER BY ts LIMIT ?'
+  ).all((hex || '').toLowerCase(), from, to, limit);
+}
+
 // Density heatmap: bin recorded positions (since `sinceMs`) onto a `grid`-degree
 // grid and count how many position reports fell in each cell. Returns the busiest
 // cells (capped) as [latCenter, lonCenter, count] plus the peak count and the

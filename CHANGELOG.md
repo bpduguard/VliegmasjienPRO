@@ -2,6 +2,15 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.22.0
+- **Historical tracks from the "seen before" list.** Click an aircraft, then click any date in its
+  seen-before history and the **recorded flight path for that session** is drawn on the map — a violet
+  track with a green start / red end marker and dashed connectors across signal gaps, auto-framed to
+  fit. Click the same date again to hide it. Recorded tracks go back as far as the **replay retention
+  window** (`replayRetentionDays`, default 3 days); older sessions show a note that no track was kept.
+  New endpoint `GET /api/aircraft/:hex/track?from&to` (auth-only — many stored tracks together would
+  outline the receiver's coverage), so the clickable dates appear only when logged in.
+
 ## 1.21.3
 - **Sky Watch now factors in whether it stays dry and the dew point.** The observing score for each
   night now penalises **precipitation** during the dark window (rain/snow ends a session — a strong
