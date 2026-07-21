@@ -454,7 +454,10 @@
         <div class="row wrap">
           <label>Receiver lat <input id="s-rlat" size="10" /></label>
           <label>Receiver lon <input id="s-rlon" size="10" /></label>
-          <label>History retention (days) <input id="s-retention" type="number" min="1" size="6" /></label>
+        </div>
+        <div class="row wrap">
+          <label title="How long the Spotted list, Statistics and alert log are kept.">History retention (days) <input id="s-retention" type="number" min="1" size="6" /></label>
+          <label title="How far back the map Replay and the per-session historical tracks go. Higher = more SD-card use.">Replay/track retention (days) <input id="s-replay-retention" type="number" min="1" size="6" /></label>
         </div>
         <div class="row wrap">
           <span id="s-storage-meta" class="muted">—</span>

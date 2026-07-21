@@ -2,6 +2,13 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.22.1
+- Added a **Replay / track retention (days)** setting to *Settings → Receiver* (was only configurable
+  in `config.json` before). It controls how far back the map **Replay** and the new per-session
+  **historical tracks** go — higher keeps more, at the cost of more SD-card use. Sits next to the
+  existing History retention field, which is now labelled to clarify it governs Spotted / Statistics /
+  the alert log.
+
 ## 1.22.0
 - **Historical tracks from the "seen before" list.** Click an aircraft, then click any date in its
   seen-before history and the **recorded flight path for that session** is drawn on the map — a violet

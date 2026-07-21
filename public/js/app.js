@@ -2261,6 +2261,7 @@ async function loadSettings() {
   $('#s-rlat').value = c.receiver.lat ?? '';
   $('#s-rlon').value = c.receiver.lon ?? '';
   $('#s-retention').value = c.retentionDays;
+  $('#s-replay-retention').value = c.replayRetentionDays;
   $('#s-units').value = c.ui?.units || 'aviation';
   $('#s-po-enabled').checked = c.pushover.enabled;
   $('#s-po-token').value = c.pushover.token;
@@ -2386,6 +2387,7 @@ $('#s-save').addEventListener('click', async () => {
       lon: parseFloat($('#s-rlon').value) || null
     },
     retentionDays: Math.max(1, parseInt($('#s-retention').value, 10) || 30),
+    replayRetentionDays: Math.max(1, parseInt($('#s-replay-retention').value, 10) || 3),
     pushover: {
       enabled: $('#s-po-enabled').checked,
       token: $('#s-po-token').value.trim(),
