@@ -87,6 +87,20 @@
       </div>
     </div>
 
+    <!-- Altitude colour scale + historical-track time scrubber -->
+    <div id="track-hud" class="track-hud hidden">
+      <div class="hud-legend">
+        <span class="hud-cap">Alt</span>
+        <span id="hud-lo" class="hud-tick">grd</span>
+        <span id="hud-bar" class="hud-bar"></span>
+        <span id="hud-hi" class="hud-tick">40k ft</span>
+      </div>
+      <div class="hud-scrub">
+        <input type="range" id="scrub-range" min="0" max="0" value="0" step="1" title="Scrub through the recorded track" />
+        <span id="scrub-readout" class="scrub-readout muted"></span>
+      </div>
+    </div>
+
     <div id="legend">
       <button id="legend-toggle" title="Icon legend">❔ Legend</button>
       <div id="legend-body" class="hidden">

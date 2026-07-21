@@ -1030,6 +1030,7 @@ function clearSelTrail() {
   selTrailLayer.clearLayers();
   selTrailPoints = new Map();
   selTrailHex = null;
+  refreshTrackHud();
 }
 
 function mergeSelTrail(points) {
@@ -1046,47 +1047,72 @@ function seedSelTrail(hex, fullTrail) {
   if (selTrailHex !== hex) { clearSelTrail(); selTrailHex = hex; }
   mergeSelTrail(fullTrail);
   const ac = state.aircraft.get(hex);
-  if (ac) drawSelTrail(trailColor(ac));
+  if (ac) drawSelTrail();
 }
 
-function trailColor(ac) {
-  return ac.emergency ? CLASS_COLORS.emergency : CLASS_COLORS[ac.classification] || CLASS_COLORS.unknown;
+// ---- altitude-graded track colouring (shared by the live selected trail and the
+// historical tracks). Aviation convention: low altitude = warm, high = cool.
+const ALT_MAX = 40000; // ft — top of the colour scale
+function altColor(alt) {
+  if (alt == null) return '#9aa7bd';
+  const a = Math.max(0, Math.min(ALT_MAX, alt));
+  return `hsl(${Math.round((a / ALT_MAX) * 280)}, 85%, 55%)`;
 }
+const altBand = (alt) => (alt == null ? -1 : Math.round(Math.max(0, Math.min(ALT_MAX, alt)) / ALT_MAX * 24));
+const ALT_GRADIENT = (() => {
+  const s = [];
+  for (let i = 0; i <= 10; i++) s.push(`${altColor((i / 10) * ALT_MAX)} ${i * 10}%`);
+  return `linear-gradient(to right, ${s.join(',')})`;
+})();
 
-// Rebuild the trail polylines: solid segments where points are continuous, and a
-// dashed amber connector (with end dots) across any gap so it's clearly visible.
-function drawSelTrail(color) {
-  selTrailLayer.clearLayers();
-  const pts = [...selTrailPoints.values()].sort((a, b) => a[3] - b[3]);
-  if (pts.length < 1) return;
-  let seg = [[pts[0][0], pts[0][1]]];
-  const flushSeg = () => { if (seg.length >= 2) L.polyline(seg, { color, weight: 2.5, opacity: 0.85 }).addTo(selTrailLayer); };
-  for (let i = 1; i < pts.length; i++) {
-    if (pts[i][3] - pts[i - 1][3] > TRAIL_GAP_MS) {
-      flushSeg();
-      const a = [pts[i - 1][0], pts[i - 1][1]], b = [pts[i][0], pts[i][1]];
+// Draw `pts` ([lat,lon,alt,ts]) into `layer`, one polyline per altitude band so
+// the path reads as a smooth gradient without thousands of layers. A time gap
+// becomes a dashed amber connector with end dots.
+function drawAltTrack(layer, pts, weight) {
+  const P = pts.filter((p) => p[0] != null && p[1] != null);
+  if (!P.length) return;
+  let seg = [[P[0][0], P[0][1]]], band = altBand(P[0][2]), segAlt = P[0][2];
+  const flush = () => { if (seg.length >= 2) L.polyline(seg, { color: altColor(segAlt), weight, opacity: 0.9 }).addTo(layer); };
+  for (let i = 1; i < P.length; i++) {
+    if (P[i][3] - P[i - 1][3] > TRAIL_GAP_MS) {
+      flush();
+      const a = [P[i - 1][0], P[i - 1][1]], b = [P[i][0], P[i][1]];
       L.polyline([a, b], { color: '#fbbf24', weight: 2, opacity: 0.85, dashArray: '3 8' })
-        .bindTooltip('Signal gap', { sticky: true }).addTo(selTrailLayer);
-      for (const e of [a, b]) {
-        L.circleMarker(e, { radius: 3, color: '#fbbf24', weight: 1.5, fillColor: '#1b2238', fillOpacity: 1 }).addTo(selTrailLayer);
-      }
-      seg = [[pts[i][0], pts[i][1]]];
+        .bindTooltip('Signal gap', { sticky: true }).addTo(layer);
+      L.circleMarker(a, { radius: 3, color: '#fbbf24', weight: 1.5, fillColor: '#1b2238', fillOpacity: 1 }).addTo(layer);
+      L.circleMarker(b, { radius: 3, color: '#fbbf24', weight: 1.5, fillColor: '#1b2238', fillOpacity: 1 }).addTo(layer);
+      seg = [[P[i][0], P[i][1]]]; band = altBand(P[i][2]); segAlt = P[i][2];
     } else {
-      seg.push([pts[i][0], pts[i][1]]);
+      seg.push([P[i][0], P[i][1]]);
+      const b = altBand(P[i][2]);
+      if (b !== band) { flush(); seg = [[P[i][0], P[i][1]]]; band = b; segAlt = P[i][2]; }
     }
   }
-  flushSeg();
+  flush();
+}
+
+// The live selected trail, coloured by altitude.
+function drawSelTrail() {
+  selTrailLayer.clearLayers();
+  const pts = [...selTrailPoints.values()].sort((a, b) => a[3] - b[3]);
+  if (pts.length >= 1) drawAltTrack(selTrailLayer, pts, 2.5);
+  refreshTrackHud();
 }
 
 // Historical track: the recorded path of a *past* sighting session, drawn when
 // the user clicks a date in the "seen before" list. Its own layer + style so it's
 // clearly distinct from the live trail. Only one shown at a time.
 const histTrackLayer = L.layerGroup().addTo(map);
-let histTrackKey = null; // `${hex}:${from}` currently shown, or null
+const scrubLayer = L.layerGroup().addTo(map); // the moving scrubber marker
+let histTrackKey = null;   // `${hex}:${from}` currently shown, or null
+let histTrackPts = [];     // raw track objects {lat,lon,alt,ts,gs} for the scrubber
 
 function clearHistTrack() {
   histTrackLayer.clearLayers();
+  histTrackPts = [];
   histTrackKey = null;
+  hideTrackScrub();
+  refreshTrackHud();
   $$('#d-history .hist-line.active').forEach((r) => r.classList.remove('active'));
 }
 
@@ -1114,20 +1140,10 @@ async function toggleHistTrack(hex, from, to, row) {
 
 function drawHistTrack(track) {
   histTrackLayer.clearLayers();
-  const pts = track.map((p) => [p.lat, p.lon, p.alt, p.ts]);
-  const color = '#a855f7'; // violet — distinct from any live trail colour
-  let seg = [[pts[0][0], pts[0][1]]];
-  const flush = () => { if (seg.length >= 2) L.polyline(seg, { color, weight: 3, opacity: 0.9 }).addTo(histTrackLayer); };
-  for (let i = 1; i < pts.length; i++) {
-    if (pts[i][3] - pts[i - 1][3] > TRAIL_GAP_MS) {
-      flush();
-      const a = [pts[i - 1][0], pts[i - 1][1]], b = [pts[i][0], pts[i][1]];
-      L.polyline([a, b], { color: '#fbbf24', weight: 2, opacity: 0.85, dashArray: '3 8' })
-        .bindTooltip('Signal gap', { sticky: true }).addTo(histTrackLayer);
-      seg = [[pts[i][0], pts[i][1]]];
-    } else seg.push([pts[i][0], pts[i][1]]);
-  }
-  flush();
+  histTrackPts = track.filter((p) => p.lat != null && p.lon != null);
+  const pts = histTrackPts.map((p) => [p.lat, p.lon, p.alt, p.ts]);
+  if (!pts.length) return;
+  drawAltTrack(histTrackLayer, pts, 3.5); // coloured by altitude
   const start = pts[0], end = pts[pts.length - 1];
   L.circleMarker([start[0], start[1]], { radius: 5, color: '#22c55e', weight: 2, fillColor: '#0a1024', fillOpacity: 1 })
     .bindTooltip(`Track start · ${fmt.dateTime(start[3])}`).addTo(histTrackLayer);
@@ -1138,7 +1154,43 @@ function drawHistTrack(track) {
   if (state.autoFollow) { state.autoFollow = false; $('#autofollow-btn').classList.remove('active'); }
   if (!$('#tab-map').classList.contains('active')) $('#tabs button[data-tab="map"]').click();
   setTimeout(() => map.fitBounds(L.latLngBounds(pts.map((p) => [p[0], p[1]])), { padding: [40, 40], maxZoom: 11 }), 60);
+  showTrackScrub();
+  refreshTrackHud();
 }
+
+// ---- altitude legend + historical-track time scrubber (one bottom-of-map HUD)
+// The legend shows whenever any trail is drawn; the scrubber only for a
+// historical track (it has a fixed, finite set of timestamped points).
+function refreshTrackHud() {
+  const hud = $('#track-hud');
+  const hasHist = histTrackLayer.getLayers().length > 0;
+  const hasSel = selTrailLayer.getLayers().length > 0;
+  if (!hasHist && !hasSel) { hud.classList.add('hidden'); return; }
+  $('#hud-bar').style.background = ALT_GRADIENT;
+  $('#hud-hi').textContent = state.units === 'metric' ? `${Math.round(ALT_MAX * 0.3048 / 100) / 10} km` : `${ALT_MAX / 1000}k ft`;
+  $('#hud-lo').textContent = 'grd';
+  hud.classList.toggle('has-scrub', hasHist);
+  hud.classList.remove('hidden');
+}
+function showTrackScrub() {
+  const slider = $('#scrub-range');
+  if (histTrackPts.length < 2) return;
+  slider.max = histTrackPts.length - 1;
+  slider.value = histTrackPts.length - 1; // start at the latest point
+  updateTrackScrub(histTrackPts.length - 1);
+}
+function updateTrackScrub(idx) {
+  scrubLayer.clearLayers();
+  const p = histTrackPts[idx];
+  if (!p) return;
+  L.circleMarker([p.lat, p.lon], { radius: 7, color: '#fff', weight: 2, fillColor: altColor(p.alt), fillOpacity: 1 })
+    .addTo(scrubLayer);
+  const parts = [fmt.dateTime(p.ts), fmt.alt(p.alt)];
+  if (p.gs != null) parts.push(fmt.spd(p.gs));
+  $('#scrub-readout').textContent = parts.join(' · ');
+}
+function hideTrackScrub() { scrubLayer.clearLayers(); $('#scrub-readout').textContent = ''; }
+$('#scrub-range').addEventListener('input', (e) => updateTrackScrub(+e.target.value));
 
 // Delegated click handler for the "seen before" rows (attached once).
 $('#d-history').addEventListener('click', (e) => {
@@ -1214,7 +1266,7 @@ function renderAircraft() {
     if (state.selected === ac.hex) {
       if (selTrailHex !== ac.hex) { clearSelTrail(); selTrailHex = ac.hex; }
       mergeSelTrail(ac.trail);
-      drawSelTrail(color);
+      drawSelTrail();
       if (state.follow) map.panTo([ac.lat, ac.lon], { animate: true });
       updateDetailLive(ac);
     }
@@ -2421,6 +2473,7 @@ function applyUnits() {
   renderAircraft();
   if (state.selected) updateDetailLive(state.aircraft.get(state.selected));
   if (typeof loadWeather === 'function') loadWeather(); // wind unit may change
+  refreshTrackHud(); // altitude-legend labels are unit-dependent
 }
 $('#s-browser-perm').addEventListener('click', async () => {
   const perm = await Notification.requestPermission();

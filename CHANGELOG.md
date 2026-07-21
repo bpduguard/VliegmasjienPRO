@@ -2,6 +2,15 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.23.0
+- **Altitude-coloured tracks + a time scrubber.** Both the live selected trail and the historical
+  tracks are now coloured by **altitude** (aviation convention: low = warm, high = cool), drawn as a
+  smooth gradient (one polyline per altitude band, so it stays light) with signal gaps still shown as
+  dashed connectors. A small **altitude legend** appears at the bottom of the map whenever a trail is
+  shown. For a historical track there's also a **time scrubber**: drag it to move a marker along the
+  recorded path and read the exact **time · altitude · speed** at that point. All values respect your
+  metric/aviation unit choice.
+
 ## 1.22.1
 - Added a **Replay / track retention (days)** setting to *Settings → Receiver* (was only configurable
   in `config.json` before). It controls how far back the map **Replay** and the new per-session
