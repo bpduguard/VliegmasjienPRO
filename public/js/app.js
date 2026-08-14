@@ -82,7 +82,9 @@ $$('#tabs button').forEach((btn) =>
     btn.classList.add('active');
     $$('.tab').forEach((t) => t.classList.remove('active'));
     $(`#tab-${btn.dataset.tab}`).classList.add('active');
+    if (btn.dataset.tab !== 'arrivals') stopArrivalsBoard(); // stop the board's timers when leaving it
     if (btn.dataset.tab === 'map') setTimeout(() => { map.invalidateSize(); renderAircraft(); }, 50);
+    if (btn.dataset.tab === 'arrivals') loadArrivals();
     if (btn.dataset.tab === 'stats') loadStats();
     if (btn.dataset.tab === 'watchlist') loadWatchlist();
     if (btn.dataset.tab === 'spotted') loadSpotted();
@@ -492,6 +494,109 @@ $('#arrivals-toggle').addEventListener('change', (e) => {
     if (arrivalsTimer) { clearInterval(arrivalsTimer); arrivalsTimer = null; }
   }
   refreshLayersBtn();
+});
+
+// ----------------------------------------------------------------- arrivals board (FIDS tab)
+// A live airport-style arrivals board. Data (routes + ETA) is refreshed from the
+// server every ~12s; the clock and ETA countdowns tick every second in between so
+// the board feels live without hammering the backend.
+const arrivalsBoardState = { data: [], filter: 'all', dataTimer: null, tickTimer: null };
+const STATUS_CLASS = { 'Landing': 'st-landing', 'Approaching': 'st-appr', 'Descending': 'st-desc', 'En route': 'st-enroute' };
+
+function loadArrivals() {
+  stopArrivalsBoard();
+  fetchArrivalsBoard();
+  arrivalsBoardState.dataTimer = setInterval(fetchArrivalsBoard, 12000);
+  arrivalsBoardState.tickTimer = setInterval(renderArrivalsBoard, 1000);
+}
+function stopArrivalsBoard() {
+  if (arrivalsBoardState.dataTimer) { clearInterval(arrivalsBoardState.dataTimer); arrivalsBoardState.dataTimer = null; }
+  if (arrivalsBoardState.tickTimer) { clearInterval(arrivalsBoardState.tickTimer); arrivalsBoardState.tickTimer = null; }
+}
+async function fetchArrivalsBoard() {
+  try {
+    const d = await (await fetch('/api/arrivals/board')).json();
+    arrivalsBoardState.data = d.arrivals || [];
+    refreshArrDestFilter();
+    renderArrivalsBoard();
+  } catch { /* keep last-known board */ }
+}
+
+// Populate the destination dropdown from the current data, preserving selection.
+function refreshArrDestFilter() {
+  const sel = $('#arr-dest-filter');
+  const dests = new Map(); // code -> label
+  for (const a of arrivalsBoardState.data) {
+    const code = a.destination.iata || a.destination.icao;
+    if (code && !dests.has(code)) dests.set(code, a.destination.name ? `${code} — ${a.destination.name}` : code);
+  }
+  const cur = arrivalsBoardState.filter;
+  const opts = ['<option value="all">All destinations</option>']
+    .concat([...dests.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([code, label]) => `<option value="${esc(code)}">${esc(label)}</option>`));
+  sel.innerHTML = opts.join('');
+  sel.value = [...dests.keys()].includes(cur) || cur === 'all' ? cur : 'all';
+  arrivalsBoardState.filter = sel.value;
+}
+
+function renderArrivalsBoard() {
+  const now = Date.now();
+  $('#arr-clock').textContent = new Date(now).toLocaleTimeString();
+  const filter = arrivalsBoardState.filter;
+  const rows = arrivalsBoardState.data.filter((a) =>
+    filter === 'all' || a.destination.iata === filter || a.destination.icao === filter);
+  $('#arr-count').textContent = `${rows.length} inbound`;
+
+  const empty = $('#arr-empty');
+  if (!rows.length) {
+    $('#arr-rows').innerHTML = '';
+    empty.textContent = arrivalsBoardState.data.length
+      ? 'No inbound flights for this destination right now.'
+      : 'No inbound flights with a known route yet — routes are looked up as airliners are tracked.';
+    empty.classList.remove('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+
+  $('#arr-rows').innerHTML = rows.map((a) => {
+    const eta = a.arrivalMs - now;              // live countdown
+    const mins = Math.round(eta / 60000);
+    const count = eta <= 0 ? 'due' : mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h${String(mins % 60).padStart(2, '0')}`;
+    const from = a.origin ? (a.origin.iata || a.origin.icao || '???') : '???';
+    const fromTitle = esc(a.origin ? [a.origin.name, a.origin.country].filter(Boolean).join(', ') : 'unknown origin');
+    const to = a.destination.iata || a.destination.icao || '???';
+    const toTitle = esc([a.destination.name, a.destination.country].filter(Boolean).join(', ') || 'unknown');
+    const acLine = esc([a.operator, a.typeName || a.type].filter(Boolean).join(' · ') || (a.registration || ''));
+    const prog = a.progress != null ? Math.round(a.progress * 100) : null;
+    const progBar = prog == null
+      ? '<span class="muted">—</span>'
+      : `<div class="arr-prog" title="${prog}% of route flown"><div class="arr-prog-fill" style="width:${prog}%"></div><span class="arr-plane" style="left:${prog}%">✈</span></div>`;
+    const stCls = STATUS_CLASS[a.status] || 'st-enroute';
+    return `<tr data-hex="${esc(a.hex)}" title="Show ${esc(a.callsign)} on the map">
+      <td class="arr-eta"><b>${fmt.time(a.arrivalMs)}</b><span class="arr-count">${count}</span></td>
+      <td class="arr-flight">${esc(a.callsign)}${a.registration ? `<span class="arr-reg">${esc(a.registration)}</span>` : ''}</td>
+      <td class="col-ac"><span class="muted">${acLine || '—'}</span></td>
+      <td class="arr-code" title="${fromTitle}">${esc(from)}</td>
+      <td class="arr-code" title="${toTitle}">${esc(to)}</td>
+      <td class="col-dist">${a.flownKm != null ? esc(fmt.dist(a.flownKm)) : '—'}</td>
+      <td class="col-dist">${esc(fmt.dist(a.toGoKm))}</td>
+      <td class="col-prog">${progBar}</td>
+      <td><span class="arr-status ${stCls}">${esc(a.status)}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+// Row click → jump to the map and select that aircraft (if still live).
+$('#arr-rows').addEventListener('click', (e) => {
+  const tr = e.target.closest('tr[data-hex]');
+  if (!tr) return;
+  const hex = tr.dataset.hex;
+  $('#tabs button[data-tab="map"]').click();
+  if (state.aircraft.has(hex)) selectAircraft(hex, true);
+});
+$('#arr-dest-filter').addEventListener('change', (e) => {
+  arrivalsBoardState.filter = e.target.value;
+  renderArrivalsBoard();
 });
 
 // ----------------------------------------------------------------- aerospace layer

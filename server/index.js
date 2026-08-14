@@ -10,7 +10,7 @@ import {
 } from './enrich.js';
 import { lookupPhoto, extFetch, photoServiceError } from './enrich.js';
 import {
-  startTracker, snapshot, aircraftDetail, trackerStatus, setTrackerBroadcast, arrivalsSnapshot
+  startTracker, snapshot, aircraftDetail, trackerStatus, setTrackerBroadcast, arrivalsSnapshot, arrivalsBoard
 } from './tracker.js';
 import { setBroadcast, notify } from './notify.js';
 import { refreshFrequencies, frequenciesMeta } from './freq.js';
@@ -263,6 +263,8 @@ app.get('/api/aircraft', (req, res) => {
 
 // Arrivals layer: tracked aircraft grouped by their destination airport.
 app.get('/api/arrivals', (req, res) => res.json(arrivalsSnapshot()));
+// Arrivals board (FIDS-style flat list): inbound flights sorted by ETA.
+app.get('/api/arrivals/board', (req, res) => res.json(arrivalsBoard()));
 
 // Heatmap layer (reveals the coverage shape → authenticated only).
 app.get('/api/heatmap', requireAuth, (req, res) => {

@@ -2,6 +2,16 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.24.0
+- **New Arrivals tab — a live airport-style arrivals board (FIDS).** A flat, always-sorted-by-ETA list
+  of every tracked flight with a known, plausible destination route: **flight** (callsign + aircraft +
+  operator), **from** / **to** airport, **ETA** (arrival clock time + a live countdown), **distance
+  flown** and **still to go**, a **progress bar** with a moving plane, and a live **status**
+  (En route / Descending / Approaching / Landing). A destination dropdown filters the board to a single
+  airport, the header clock and countdowns tick every second, and the data refreshes every ~12s.
+  Clicking a row jumps to the map and selects that aircraft. Complements the existing map arrivals
+  layer; backed by a new `GET /api/arrivals/board` endpoint.
+
 ## 1.23.0
 - **Altitude-coloured tracks + a time scrubber.** Both the live selected trail and the historical
   tracks are now coloured by **altitude** (aviation convention: low = warm, high = cool), drawn as a

@@ -72,6 +72,10 @@ container.
   bearing), accumulated over time and persisted; resettable in Settings
 - 🛬 **Arrivals** overlay — groups tracked aircraft by their destination airport and shows, per airport,
   a table of inbound flights with arrival time, time-to-go, the flight, and its departure airport
+- 🛬 **Arrivals board** (own tab) — a live airport-style FIDS: every inbound flight sorted by ETA with
+  from/to airports, arrival time + live countdown, distance flown vs. still to go, a progress bar, and a
+  live status (En route / Descending / Approaching / Landing); filter by destination, click a row to
+  find it on the map
 - 🛰 **Aerospace** overlay — live **ISS** and **Hubble** tracking with ground tracks, propagated with
   satellite.js (SGP4) from **CelesTrak** TLEs. Optional **visible-pass notifications** alert you ~1h
   before the ISS/Hubble makes a pass visible from your location (dark sky), with the time and

@@ -297,6 +297,53 @@ button.danger:hover { background: rgba(239,68,68,0.12); border-color: var(--dang
 .arr-table tr[data-hex]:hover td { background: rgba(56,189,248,0.08); }
 .arr-table td .muted { font-size: 0.74rem; }
 
+/* ---- Arrivals board (FIDS tab) — airport departure-board aesthetic */
+.fids { max-width: 1200px; margin: 0 auto; padding: 16px; }
+.fids-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  background: linear-gradient(180deg, #10192e, #0b1220); border: 1px solid var(--border);
+  border-radius: 12px 12px 0 0; padding: 12px 16px; border-bottom: 2px solid #f5b21833; }
+.fids-title { font-family: ui-monospace, monospace; font-weight: 700; font-size: 1.35rem; letter-spacing: 5px;
+  color: #f5c518; text-shadow: 0 0 12px rgba(245,197,24,0.35); }
+.fids-meta { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+#arr-dest-filter { background: var(--bg2, #0b1220); color: var(--text); border: 1px solid var(--border);
+  border-radius: 8px; padding: 5px 9px; font-size: 0.85rem; }
+.fids-count { color: var(--muted); font-size: 0.85rem; }
+.fids-clock { font-family: ui-monospace, monospace; font-variant-numeric: tabular-nums; color: #f5c518;
+  font-size: 1rem; letter-spacing: 1px; }
+.fids-board { border: 1px solid var(--border); border-top: none; border-radius: 0 0 12px 12px;
+  overflow-x: auto; background: var(--panel); }
+.fids-table { border-collapse: collapse; width: 100%; min-width: 760px; font-size: 0.88rem; }
+.fids-table thead th { position: sticky; top: 0; z-index: 1; background: #0e1730; text-align: left;
+  text-transform: uppercase; letter-spacing: 1px; font-size: 0.68rem; color: var(--muted);
+  font-weight: 700; padding: 9px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.fids-table td { padding: 9px 12px; border-bottom: 1px solid rgba(255,255,255,0.055); vertical-align: middle; }
+.fids-table tr[data-hex] { cursor: pointer; transition: background 0.1s; }
+.fids-table tr[data-hex]:hover td { background: rgba(245,197,24,0.07); }
+.arr-eta { font-family: ui-monospace, monospace; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.arr-eta b { color: #f5c518; font-size: 0.98rem; }
+.arr-count { display: block; font-size: 0.72rem; color: var(--muted); }
+.arr-flight { font-family: ui-monospace, monospace; font-weight: 700; letter-spacing: 1px; color: var(--text); white-space: nowrap; }
+.arr-reg { display: block; font-size: 0.7rem; color: var(--muted); font-weight: 400; letter-spacing: 0; }
+.arr-code { font-family: ui-monospace, monospace; font-weight: 700; font-size: 0.98rem; color: var(--accent); letter-spacing: 1px; }
+.col-dist { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.arr-prog { position: relative; height: 8px; min-width: 90px; background: rgba(255,255,255,0.08);
+  border-radius: 5px; margin-top: 2px; }
+.arr-prog-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px;
+  background: linear-gradient(90deg, #2b7fff, #38bdf8); }
+.arr-plane { position: absolute; top: 50%; transform: translate(-50%, -50%); font-size: 0.72rem; filter: drop-shadow(0 0 2px #000); }
+.arr-status { display: inline-block; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.5px;
+  text-transform: uppercase; padding: 3px 9px; border-radius: 99px; border: 1px solid transparent; white-space: nowrap; }
+.st-landing { color: #22c55e; background: rgba(34,197,94,0.14); border-color: #22c55e55; }
+.st-appr { color: #38bdf8; background: rgba(56,189,248,0.14); border-color: #38bdf855; }
+.st-desc { color: #f5c518; background: rgba(245,197,24,0.14); border-color: #f5c51855; }
+.st-enroute { color: var(--muted); background: rgba(138,160,191,0.12); border-color: #8aa0bf44; }
+.fids-empty { padding: 30px 16px; text-align: center; color: var(--muted); }
+.fids-foot { padding: 10px 4px; font-size: 0.76rem; }
+@media (max-width: 720px) {
+  .fids-table .col-ac, .fids-table .col-prog { display: none; }
+  .fids-table { min-width: 520px; }
+}
+
 /* Leaflet popups are light by default; theme them dark to match. */
 .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: #0f1830; color: var(--text); }
 .leaflet-popup-content-wrapper { border: 1px solid var(--border); }

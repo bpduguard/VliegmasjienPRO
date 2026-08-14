@@ -617,6 +617,69 @@ export function arrivalsSnapshot() {
   return { generatedAt: now, airports };
 }
 
+// A live "arrivals board" (airport FIDS style): a flat list of every tracked
+// aircraft with a plausible, coordinate-bearing destination route — each row with
+// origin/destination, ETA, distance flown vs. still to go, and a live status.
+// Sorted soonest-arriving first. Same plausibility filtering as the arrivals layer.
+export function arrivalsBoard() {
+  const now = Date.now();
+  const rows = [];
+  for (const ac of aircraft.values()) {
+    if (ac.lat == null || ac.lon == null || ac.onGround || !ac.flight) continue;
+    const cr = cachedRoute(ac.flight);
+    const route = cr?.route;
+    const dest = route?.destination;
+    if (!dest || dest.lat == null) continue;
+
+    const toGoKm = haversineKm(ac.lat, ac.lon, dest.lat, dest.lon);
+    const etaRaw = etaSeconds(ac.lat, ac.lon, ac.gs, dest.lat, dest.lon);
+    if (etaRaw == null) continue; // no/!positive groundspeed → can't estimate
+
+    const check = checkRouteGeometry(ac, route, +toGoKm.toFixed(0));
+    if (check.confidence === 'low' || cr.agreement === 'conflict') continue;
+    if (toGoKm < 3) continue;
+
+    const o = route.origin;
+    const hasOrigin = o && o.lat != null;
+    const flownKm = hasOrigin ? haversineKm(o.lat, o.lon, ac.lat, ac.lon) : null;
+    const routeKm = hasOrigin ? haversineKm(o.lat, o.lon, dest.lat, dest.lon) : null;
+    // Progress from flown vs flown+toGo so it's robust to off-corridor deviations.
+    const progress = flownKm != null ? Math.max(0, Math.min(1, flownKm / (flownKm + toGoKm))) : null;
+    const etaSec = Math.round(etaRaw);
+    const vr = ac.baro_rate ?? null;
+
+    rows.push({
+      hex: ac.hex,
+      callsign: ac.flight,
+      registration: ac.registration || null,
+      type: ac.type || null,
+      typeName: ac.typeName || null,
+      operator: ac.airline || ac.operator || null,
+      origin: o ? { iata: o.iata || null, icao: o.icao || null, name: o.name || null, country: o.country || null } : null,
+      destination: { iata: dest.iata || null, icao: dest.icao || null, name: dest.name || null, country: dest.country || null },
+      etaSec, arrivalMs: now + etaSec * 1000,
+      toGoKm: +toGoKm.toFixed(0),
+      flownKm: flownKm != null ? +flownKm.toFixed(0) : null,
+      routeKm: routeKm != null ? +routeKm.toFixed(0) : null,
+      progress,
+      alt: ac.alt_baro ?? null,
+      gs: ac.gs != null ? Math.round(ac.gs) : null,
+      vr: vr != null ? Math.round(vr) : null,
+      status: arrivalStatus(toGoKm, etaSec, vr)
+    });
+  }
+  rows.sort((a, b) => a.etaSec - b.etaSec);
+  return { generatedAt: now, count: rows.length, arrivals: rows };
+}
+
+// A coarse, live-feeling status like a real board shows.
+function arrivalStatus(toGoKm, etaSec, vr) {
+  if (toGoKm < 10 || etaSec < 180) return 'Landing';
+  if (toGoKm < 40 || etaSec < 600) return 'Approaching';
+  if (vr != null && vr < -300) return 'Descending';
+  return 'En route';
+}
+
 // Returns { confidence: 'ok'|'low'|null, issue }. `null` when we can't judge
 // (no route, or aircraft has no position). 'low' means the route is
 // geometrically implausible for this aircraft right now.

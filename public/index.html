@@ -14,6 +14,7 @@
     <div class="brand">✈ <strong>Vliegmasjien</strong>PRO</div>
     <nav id="tabs">
       <button data-tab="map" class="active">Map</button>
+      <button data-tab="arrivals">Arrivals</button>
       <button data-tab="stats">Statistics</button>
       <button data-tab="watchlist" class="auth-only">Watchlist</button>
       <button data-tab="spotted">Spotted</button>
@@ -198,6 +199,42 @@
     <div id="public-footer">
       📡 Self-hosted <strong>ADS-B receiver map</strong> — shows only aircraft currently within radio range.
       <a href="https://github.com/bpduguard/VliegmasjienPRO" target="_blank" rel="noopener">github.com/bpduguard/VliegmasjienPRO</a>
+    </div>
+  </main>
+
+  <!-- ============================== ARRIVALS TAB ============================== -->
+  <main id="tab-arrivals" class="tab">
+    <div class="fids">
+      <div class="fids-head">
+        <div class="fids-title">🛬 ARRIVALS</div>
+        <div class="fids-meta">
+          <select id="arr-dest-filter" title="Filter by destination airport">
+            <option value="all">All destinations</option>
+          </select>
+          <span id="arr-count" class="fids-count">—</span>
+          <span id="arr-clock" class="fids-clock">--:--:--</span>
+        </div>
+      </div>
+      <div class="fids-board">
+        <table class="fids-table">
+          <thead>
+            <tr>
+              <th>ETA</th>
+              <th>Flight</th>
+              <th class="col-ac">Aircraft</th>
+              <th>From</th>
+              <th>To</th>
+              <th class="col-dist">Flown</th>
+              <th class="col-dist">To go</th>
+              <th class="col-prog">Progress</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="arr-rows"></tbody>
+        </table>
+        <div id="arr-empty" class="fids-empty hidden"></div>
+      </div>
+      <div class="fids-foot muted">Live estimate from each aircraft's ADS-B position, ground speed &amp; known route. Flights appear as their routes are looked up.</div>
     </div>
   </main>
 
