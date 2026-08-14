@@ -61,6 +61,17 @@ const DEFAULTS = {
   // Sky Watch: light-pollution level at the receiver on the Bortle scale (1 = pristine
   // dark sky … 9 = inner city). Used to estimate what's visible for stargazing.
   skywatch: { bortle: 4 },
+  // Detection & anomaly layer — anomaly detectors that run on the live
+  // state-vector stream (no extra data source). Each can be toggled off.
+  detections: {
+    enabled: true,
+    squawk: true,            // 7500/7600/7700 + NL 7000/0033, on transition
+    orbit: true,             // loiter/orbit (police, medevac, ISR, survey)
+    emergencyDescent: true,  // > 4000 fpm down above FL200
+    integrity: true,         // ADS-B spoofing / data-integrity checks
+    rarity: true,            // first-time type/operator in your coverage
+    rarityMinTypes: 40       // warm-up: only flag rarity once this many types are known
+  },
   // UI defaults
   ui: { darkMode: true, units: 'metric' }
 };

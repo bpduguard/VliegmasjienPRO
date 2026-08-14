@@ -344,6 +344,35 @@ button.danger:hover { background: rgba(239,68,68,0.12); border-color: var(--dang
   .fids-table { min-width: 520px; }
 }
 
+/* ---- Detection & anomaly layer */
+.det-intro { max-width: 780px; margin-bottom: 12px; }
+.det-filters { align-items: center; gap: 8px; margin-bottom: 12px; }
+.det-chip { background: var(--panel); border: 1px solid var(--border); color: var(--muted);
+  border-radius: 99px; padding: 5px 13px; font-size: 0.85rem; cursor: pointer; }
+.det-chip:hover { color: var(--text); }
+.det-chip.active { background: rgba(168,85,247,0.18); border-color: #a855f7; color: #d8b4fe; font-weight: 600; }
+.det-list { display: flex; flex-direction: column; gap: 8px; max-width: 900px; }
+.det-empty { padding: 30px 6px; }
+.det-card { display: flex; gap: 12px; background: var(--panel); border: 1px solid var(--border);
+  border-left: 4px solid var(--muted); border-radius: 10px; padding: 11px 13px; }
+.det-card[data-hex] { cursor: pointer; }
+.det-card[data-hex]:hover { background: rgba(168,85,247,0.06); }
+.det-card.sev-critical { border-left-color: #ef4444; }
+.det-card.sev-warning { border-left-color: #f5b218; }
+.det-card.sev-info { border-left-color: #38bdf8; }
+.det-ico { font-size: 1.3rem; line-height: 1.4; }
+.det-body { flex: 1; min-width: 0; }
+.det-title { font-weight: 600; color: var(--text); }
+.det-detail { color: var(--muted); font-size: 0.88rem; margin: 2px 0 6px; }
+.det-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; font-size: 0.74rem; color: var(--muted); }
+.det-sev { text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; padding: 1px 7px; border-radius: 99px; }
+.det-sev.sev-critical { color: #ef4444; background: rgba(239,68,68,0.14); }
+.det-sev.sev-warning { color: #f5b218; background: rgba(245,178,24,0.14); }
+.det-sev.sev-info { color: #38bdf8; background: rgba(56,189,248,0.14); }
+.det-ac { font-family: ui-monospace, monospace; color: var(--accent); }
+.det-metric { background: var(--bg2, #0b1220); border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; }
+.det-metric b { color: var(--text); }
+
 /* Leaflet popups are light by default; theme them dark to match. */
 .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: #0f1830; color: var(--text); }
 .leaflet-popup-content-wrapper { border: 1px solid var(--border); }

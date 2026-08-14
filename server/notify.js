@@ -94,7 +94,7 @@ async function sendPushover(po, title, message, url, urlTitle) {
   }
 }
 
-const KIND_COLORS = { zone: 0x3b82f6, watchlist: 0xf59e0b, military: 0x16a34a, emergency: 0xdc2626, test: 0x8b5cf6, weather: 0x0ea5e9 };
+const KIND_COLORS = { zone: 0x3b82f6, watchlist: 0xf59e0b, military: 0x16a34a, emergency: 0xdc2626, test: 0x8b5cf6, weather: 0x0ea5e9, detection: 0xa855f7 };
 
 async function sendDiscord(webhookUrl, title, message, kind, aircraft, url, place, coords) {
   try {

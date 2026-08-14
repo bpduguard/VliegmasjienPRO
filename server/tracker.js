@@ -7,8 +7,9 @@ import {
   planeDbLookup, lookupRoute, cachedAirlineName, maybeAutoRefreshPlaneDb,
   aircraftDbLocal, lookupAircraft, cachedRoute
 } from './enrich.js';
-import { upsertSighting, pruneOldData, insertTracks, pruneTracks, withTransaction } from './db.js';
+import { upsertSighting, pruneOldData, insertTracks, pruneTracks, withTransaction, loadKnownIdentities } from './db.js';
 import { notify } from './notify.js';
+import { runDetections, initDetections, dropDetectState } from './detect.js';
 import { ensureSbs, stopSbs, sbsSnapshot, sbsStatus } from './sbs.js';
 import { icaoToCountry } from './country.js';
 import { isMilitaryAircraft } from './military.js';
@@ -184,6 +185,10 @@ async function pollOnce() {
     ac.track = raw.track ?? ac.track;
     ac.baro_rate = raw.baro_rate ?? raw.geom_rate ?? ac.baro_rate;
     ac.rssi = raw.rssi ?? ac.rssi;
+    // ADS-B position-quality indicators (for the integrity/spoofing detector)
+    ac.nic = raw.nic ?? ac.nic;
+    ac.nacp = raw.nac_p ?? raw.nacp ?? ac.nacp;
+    ac.sil = raw.sil ?? ac.sil;
     ac.messages = raw.messages ?? ac.messages;
     ac.seen = raw.seen ?? 0;
     ac.emitterCategory = raw.category || ac.emitterCategory;
@@ -286,6 +291,7 @@ async function pollOnce() {
     }
 
     checkAlerts(ac, cfg);
+    try { runDetections(ac, cfg, now); } catch (e) { console.warn('[detect] error:', e.message); }
     backgroundRouteLookup(ac);
   }
   });
@@ -296,6 +302,7 @@ async function pollOnce() {
       aircraft.delete(hex);
       zonePresence.delete(hex);
       lastTrackRec.delete(hex);
+      dropDetectState(hex);
     }
   }
 
@@ -733,6 +740,7 @@ let pollTimer = null;
 export function startTracker() {
   detectReceiver();
   initRange();
+  try { initDetections(loadKnownIdentities()); } catch (e) { console.warn('[detect] seed failed:', e.message); }
   maybeAutoRefreshPlaneDb();
   const loop = async () => {
     try {

@@ -333,6 +333,20 @@ export function recentAlerts(limit = 100) {
   return db.prepare('SELECT * FROM alerts ORDER BY ts DESC LIMIT ?').all(limit);
 }
 
+// Distinct aircraft types & operators ever recorded — seeds the rarity detector's
+// "have I seen this before?" sets so first-time flags survive restarts.
+export function loadKnownIdentities() {
+  const types = new Set(
+    db.prepare("SELECT DISTINCT type FROM sightings WHERE type IS NOT NULL AND type <> ''")
+      .all().map((r) => r.type.toUpperCase())
+  );
+  const operators = new Set(
+    db.prepare("SELECT DISTINCT airline FROM sightings WHERE airline IS NOT NULL AND airline <> ''")
+      .all().map((r) => r.airline.trim().toLowerCase())
+  );
+  return { types, operators };
+}
+
 export function statsSummary(days = 7) {
   const since = Date.now() - days * 86400000;
   const perDay = db

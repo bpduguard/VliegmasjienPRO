@@ -20,6 +20,7 @@
       <button data-tab="spotted">Spotted</button>
       <button data-tab="zones" class="auth-only">Zones</button>
       <button data-tab="alerts" class="auth-only">Alerts</button>
+      <button data-tab="detections" class="auth-only">Detections</button>
       <button data-tab="weather" class="auth-only">Weather</button>
       <button data-tab="skywatch" class="auth-only">Sky Watch</button>
       <button data-tab="settings">Settings</button>
@@ -386,6 +387,24 @@
     </div>
   </main>
 
+  <!-- ============================== DETECTIONS TAB ============================== -->
+  <main id="tab-detections" class="tab">
+    <div class="page">
+      <h2>Detection &amp; anomaly layer</h2>
+      <p class="muted det-intro">Anomalies found in the live ADS-B stream — squawk emergencies, loiter/orbit patterns, emergency descents, data-integrity/spoofing signatures and first-in-your-coverage rarities. ADS-B is unauthenticated, so the stream is treated as untrusted input.</p>
+      <div class="row wrap det-filters" id="det-filters">
+        <button class="det-chip active" data-dtype="all">All</button>
+        <button class="det-chip" data-dtype="squawk">🆘 Squawk</button>
+        <button class="det-chip" data-dtype="orbit">🔄 Orbit</button>
+        <button class="det-chip" data-dtype="descent">⚠️ Descent</button>
+        <button class="det-chip" data-dtype="integrity">🛑 Integrity</button>
+        <button class="det-chip" data-dtype="rarity">✨ Rarity</button>
+        <span id="det-count" class="muted"></span>
+      </div>
+      <div id="det-list" class="det-list"></div>
+    </div>
+  </main>
+
   <!-- ============================== WEATHER TAB ============================== -->
   <main id="tab-weather" class="tab">
     <div class="page wx-page">
@@ -550,6 +569,21 @@
         </div>
         <div class="row wrap">
           <label class="toggle"><input type="checkbox" id="s-notify-weather" /> Notify about <b>extreme weather</b> forecast for today/tomorrow (heat, wind, heavy rain, storms…)</label>
+        </div>
+      </section>
+
+      <section class="settings-block">
+        <h3>Detection &amp; anomaly layer</h3>
+        <p class="muted">Anomaly detectors that run on the live ADS-B stream. Detections appear in the <b>Detections</b> tab and fire notifications like any other alert.</p>
+        <div class="row wrap">
+          <label class="toggle"><input type="checkbox" id="s-det-enabled" /> <b>Enable detection layer</b></label>
+        </div>
+        <div class="row wrap">
+          <label class="toggle"><input type="checkbox" id="s-det-squawk" /> Squawk watch (7500/7600/7700 + NL 7000/0033)</label>
+          <label class="toggle"><input type="checkbox" id="s-det-orbit" /> Loiter / orbit</label>
+          <label class="toggle"><input type="checkbox" id="s-det-descent" /> Emergency descent</label>
+          <label class="toggle"><input type="checkbox" id="s-det-integrity" /> ADS-B integrity / spoofing</label>
+          <label class="toggle"><input type="checkbox" id="s-det-rarity" /> Rarity (first-time type/operator)</label>
         </div>
       </section>
 

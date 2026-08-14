@@ -83,8 +83,10 @@ $$('#tabs button').forEach((btn) =>
     $$('.tab').forEach((t) => t.classList.remove('active'));
     $(`#tab-${btn.dataset.tab}`).classList.add('active');
     if (btn.dataset.tab !== 'arrivals') stopArrivalsBoard(); // stop the board's timers when leaving it
+    if (btn.dataset.tab !== 'detections') stopDetections();
     if (btn.dataset.tab === 'map') setTimeout(() => { map.invalidateSize(); renderAircraft(); }, 50);
     if (btn.dataset.tab === 'arrivals') loadArrivals();
+    if (btn.dataset.tab === 'detections') loadDetections();
     if (btn.dataset.tab === 'stats') loadStats();
     if (btn.dataset.tab === 'watchlist') loadWatchlist();
     if (btn.dataset.tab === 'spotted') loadSpotted();
@@ -2177,6 +2179,75 @@ $('#alerts-pagesize').addEventListener('change', () => {
   renderAlerts();
 });
 
+// ----------------------------------------------------------------- detections
+const detState = { data: [], filter: 'all', timer: null };
+const DET_META = {
+  squawk:    { icon: '🆘', label: 'Squawk' },
+  orbit:     { icon: '🔄', label: 'Orbit / loiter' },
+  descent:   { icon: '⚠️', label: 'Emergency descent' },
+  integrity: { icon: '🛑', label: 'Data integrity' },
+  rarity:    { icon: '✨', label: 'Rarity' }
+};
+
+function loadDetections() {
+  stopDetections();
+  fetchDetections();
+  detState.timer = setInterval(fetchDetections, 6000);
+}
+function stopDetections() {
+  if (detState.timer) { clearInterval(detState.timer); detState.timer = null; }
+}
+async function fetchDetections() {
+  try {
+    const { detections } = await (await fetch('/api/detections')).json();
+    detState.data = detections || [];
+    renderDetections();
+  } catch { /* keep last */ }
+}
+function renderDetections() {
+  const now = Date.now();
+  const rows = detState.data.filter((d) => detState.filter === 'all' || d.type === detState.filter);
+  $('#det-count').textContent = rows.length ? `${rows.length} shown` : '';
+  if (!rows.length) {
+    $('#det-list').innerHTML = `<div class="det-empty muted">${detState.data.length
+      ? 'No detections of this type.'
+      : 'No anomalies detected yet. Detectors run continuously on the live stream — squawk emergencies, orbits, emergency descents, spoofing signatures and rarities will appear here.'}</div>`;
+    return;
+  }
+  $('#det-list').innerHTML = rows.map((d) => {
+    const m = DET_META[d.type] || { icon: '•', label: d.type };
+    const metrics = d.metrics
+      ? Object.entries(d.metrics).map(([k, v]) => `<span class="det-metric">${esc(k)}: <b>${esc(String(v))}</b></span>`).join('')
+      : '';
+    const ac = d.callsign || d.registration || (d.hex ? d.hex.toUpperCase() : '');
+    return `<div class="det-card sev-${esc(d.severity)}"${d.hex ? ` data-hex="${esc(d.hex)}"` : ''}>
+      <div class="det-ico">${m.icon}</div>
+      <div class="det-body">
+        <div class="det-title">${esc(d.title)}</div>
+        <div class="det-detail">${esc(d.detail)}</div>
+        <div class="det-meta"><span class="det-sev sev-${esc(d.severity)}">${esc(d.severity)}</span>
+          <span class="det-type">${esc(m.label)}</span>
+          ${ac ? `<span class="det-ac">${esc(ac)}</span>` : ''}
+          <span class="det-time">${fmt.dateTime(d.ts)}</span>${metrics}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+$('#det-filters').addEventListener('click', (e) => {
+  const chip = e.target.closest('.det-chip');
+  if (!chip) return;
+  detState.filter = chip.dataset.dtype;
+  $$('#det-filters .det-chip').forEach((c) => c.classList.toggle('active', c === chip));
+  renderDetections();
+});
+$('#det-list').addEventListener('click', (e) => {
+  const card = e.target.closest('.det-card[data-hex]');
+  if (!card) return;
+  const hex = card.dataset.hex;
+  $('#tabs button[data-tab="map"]').click();
+  if (state.aircraft.has(hex)) selectAircraft(hex, true);
+});
+
 // ----------------------------------------------------------------- spotted
 function spottedSinceMs(range) {
   if (range === 'today') { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); }
@@ -2431,6 +2502,13 @@ async function loadSettings() {
   $('#s-notify-emerg').checked = c.notifyEmergency;
   $('#s-notify-passes').checked = c.notifySatellitePasses;
   $('#s-notify-weather').checked = c.notifyExtremeWeather;
+  const det = c.detections || {};
+  $('#s-det-enabled').checked = det.enabled !== false;
+  $('#s-det-squawk').checked = det.squawk !== false;
+  $('#s-det-orbit').checked = det.orbit !== false;
+  $('#s-det-descent').checked = det.emergencyDescent !== false;
+  $('#s-det-integrity').checked = det.integrity !== false;
+  $('#s-det-rarity').checked = det.rarity !== false;
   $('#s-bortle').value = String(c.skywatch?.bortle ?? 4);
   $('#s-owm').value = '';
   $('#s-owm').placeholder = c.weather.hasOwmKey ? 'key configured ✓ (enter to replace)' : '(optional)';
@@ -2557,6 +2635,14 @@ $('#s-save').addEventListener('click', async () => {
     notifyEmergency: $('#s-notify-emerg').checked,
     notifySatellitePasses: $('#s-notify-passes').checked,
     notifyExtremeWeather: $('#s-notify-weather').checked,
+    detections: {
+      enabled: $('#s-det-enabled').checked,
+      squawk: $('#s-det-squawk').checked,
+      orbit: $('#s-det-orbit').checked,
+      emergencyDescent: $('#s-det-descent').checked,
+      integrity: $('#s-det-integrity').checked,
+      rarity: $('#s-det-rarity').checked
+    },
     ui: { units: $('#s-units').value }
   };
   patch.skywatch = { bortle: parseInt($('#s-bortle').value, 10) || 4 };

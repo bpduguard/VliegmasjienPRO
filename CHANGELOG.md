@@ -2,6 +2,23 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.25.0
+- **New Detection & anomaly layer (phase 1).** A set of anomaly detectors that run entirely on the live
+  ADS-B stream you already ingest — no extra data source — surfaced in a new **Detections** tab and
+  through the normal alert/notification pipeline. ADS-B is unauthenticated, so the stream is treated as
+  untrusted input. Detectors are edge-triggered (fire on a transition/episode, not steady state):
+  - **Squawk watch** — 7500/7600/7700 + NL 7000 (VFR) / 0033 (para) — alerts on the *transition*.
+  - **Loiter / orbit** — > 720° of cumulative turn within a ~3 NM radius (police/medevac/ISR/survey).
+  - **Emergency descent** — sustained < −4000 fpm above FL200 (depressurisation signature).
+  - **ADS-B integrity / spoofing** — impossible kinematics (position jump > Mach 2), reserved/unallocated
+    ICAO address blocks, NIC position-quality collapse, and ground-speed vs. position-delta mismatch.
+  - **Rarity scoring** — first-time aircraft **type** or **operator** in your coverage; self-tunes from
+    your own history (seeded from the sightings DB) and warms up so a fresh install doesn't flag everything.
+  Each detector can be toggled in Settings. The Detections tab filters by category, colour-codes by
+  severity, shows the driving metrics, and links back to the aircraft on the map. New auth-only endpoint
+  `GET /api/detections`. *(Phase 2 — survey-grid, go-around/missed-approach, and the external military
+  feed — is not included yet.)*
+
 ## 1.24.1
 - 🐛 Easter-egg fix: the arcade game only launched on the exact phrase "space invaders", so typing just
   "invaders" did nothing. The search-box trigger now also accepts "invaders" (case-insensitive and

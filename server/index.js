@@ -15,6 +15,7 @@ import {
 import { setBroadcast, notify } from './notify.js';
 import { refreshFrequencies, frequenciesMeta } from './freq.js';
 import { airportFreqsInBounds, replayBounds, replayFrame, spottedSince, heatmapCells } from './db.js';
+import { recentDetectionList } from './detect.js';
 import { icaoToCountry } from './country.js';
 import { rangeOutline, clearRange } from './range.js';
 import { getTles, startPassNotifier } from './space.js';
@@ -259,6 +260,12 @@ app.post('/api/auth/2fa/disable', requireAuth, (req, res) => {
 app.get('/api/aircraft', (req, res) => {
   const snap = snapshot();
   res.json(authed(req) ? snap : publicSnapshot(snap));
+});
+
+// Detection & anomaly feed (auth-only — reveals coverage patterns).
+app.get('/api/detections', requireAuth, (req, res) => {
+  const limit = Math.min(400, Math.max(1, parseInt(req.query.limit, 10) || 200));
+  res.json({ detections: recentDetectionList(limit) });
 });
 
 // Arrivals layer: tracked aircraft grouped by their destination airport.
