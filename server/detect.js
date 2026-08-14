@@ -9,7 +9,7 @@
 // integrity/spoofing · rarity scoring. (Survey-grid, go-around and the external
 // military feed are a later phase.)
 import { haversineKm, bearingDeg, angleDiff } from './geo.js';
-import { notify, underCooldown } from './notify.js';
+import { notify, underCooldown, noteCooldown } from './notify.js';
 
 const NM_KM = 1.852;
 const label = (ac) => ac.flight || ac.registration || ac.hex.toUpperCase();
@@ -22,6 +22,10 @@ export function dropDetectState(hex) { dstate.delete(hex); }
 const recentDetections = [];
 const DET_CAP = 400;
 export function recentDetectionList(limit = 200) { return recentDetections.slice(0, limit); }
+
+// Whether detections should also fire notifications (they always land in the
+// Detections tab feed regardless). Updated each poll from config.
+let notifyOn = true;
 
 // ── learned history for rarity (self-tuning; seeded from the sightings DB) ────
 let known = null; // { types:Set, operators:Set }
@@ -43,13 +47,16 @@ function emit(ac, det) {
     alt: Number.isFinite(ac.alt_baro) ? ac.alt_baro : null
   });
   if (recentDetections.length > DET_CAP) recentDetections.length = DET_CAP;
-  notify({ key, kind: 'detection', title: det.title, message: det.detail, aircraft: ac });
+  // Always in the feed; notify (alert-log / push / SSE toast) only when enabled.
+  if (notifyOn) notify({ key, kind: 'detection', title: det.title, message: det.detail, aircraft: ac });
+  else noteCooldown(key); // keep the same de-dup even when not notifying
 }
 
 // ── entry point, called once per aircraft per poll ───────────────────────────
 export function runDetections(ac, cfg, now) {
   const d = cfg.detections;
   if (!d || d.enabled === false) return;
+  notifyOn = d.notify !== false;
   let st = dstate.get(ac.hex);
   if (!st) { st = { win: [] }; dstate.set(ac.hex, st); }
 

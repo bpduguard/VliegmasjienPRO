@@ -390,7 +390,7 @@
   <!-- ============================== DETECTIONS TAB ============================== -->
   <main id="tab-detections" class="tab">
     <div class="page">
-      <h2>Detection &amp; anomaly layer</h2>
+      <h2>Detections</h2>
       <p class="muted det-intro">Anomalies found in the live ADS-B stream — squawk emergencies, loiter/orbit patterns, emergency descents, data-integrity/spoofing signatures, first-in-your-coverage rarities, survey/patrol grids, go-arounds, and military traffic. ADS-B is unauthenticated, so the stream is treated as untrusted input.</p>
       <div class="row wrap det-filters" id="det-filters">
         <button class="det-chip active" data-dtype="all">All</button>
@@ -576,10 +576,11 @@
       </section>
 
       <section class="settings-block">
-        <h3>Detection &amp; anomaly layer</h3>
-        <p class="muted">Anomaly detectors that run on the live ADS-B stream. Detections appear in the <b>Detections</b> tab and fire notifications like any other alert.</p>
+        <h3>Detections</h3>
+        <p class="muted">Anomaly detectors that run on the live ADS-B stream and populate the <b>Detections</b> tab.</p>
         <div class="row wrap">
-          <label class="toggle"><input type="checkbox" id="s-det-enabled" /> <b>Enable detection layer</b></label>
+          <label class="toggle"><input type="checkbox" id="s-det-enabled" /> <b>Enable anomaly detection</b></label>
+          <label class="toggle"><input type="checkbox" id="s-det-notify" /> Send notifications for detections <span class="muted">(they always appear in the Detections tab)</span></label>
         </div>
         <div class="row wrap">
           <label class="toggle"><input type="checkbox" id="s-det-squawk" /> Squawk watch (7500/7600/7700 + NL 7000/0033)</label>

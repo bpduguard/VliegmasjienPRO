@@ -76,7 +76,7 @@ container.
   from/to airports, arrival time + live countdown, distance flown vs. still to go, a progress bar, and a
   live status (En route / Descending / Approaching / Landing); filter by destination, click a row to
   find it on the map
-- 🛰 **Detection & anomaly layer** — anomaly detectors that run on the live ADS-B stream (no extra data
+- 🛰 **Anomaly detection** — detectors that run on the live ADS-B stream (no extra data
   source): **squawk watch** (7500/7600/7700 + NL 7000/0033, on transition), **loiter/orbit** detection,
   **emergency descent**, **ADS-B integrity/spoofing** checks (impossible kinematics, reserved ICAO
   blocks, NIC collapse, speed/position mismatch), **rarity scoring** (first-time type/operator in

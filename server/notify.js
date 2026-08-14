@@ -17,6 +17,13 @@ export function underCooldown(key) {
   return Date.now() - last < cfg.notifyCooldownMin * 60000;
 }
 
+// Register a key against the cooldown without sending anything — used when a
+// detection is recorded to its feed but notifications are turned off, so the
+// same de-dup still applies.
+export function noteCooldown(key) {
+  if (key) cooldowns.set(key, Date.now());
+}
+
 export async function notify({ key, title, message, kind, aircraft, url }) {
   if (key) {
     if (underCooldown(key)) return false;

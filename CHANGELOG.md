@@ -2,6 +2,17 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.26.1
+- **Detections notifications can be turned off.** A new *Send notifications for detections* toggle in
+  Settings → Detections. When off, detections still appear in the Detections tab but fire no
+  notifications (no toast/browser/Pushover/Discord) and aren't written to the alert log; de-duplication
+  still applies. On by default.
+- **Naming consistency (layer vs tab).** A map overlay is a "layer"; a separate page is a "tab". The
+  anomaly-detection feature lives on a page, so it's no longer called the "Detection & anomaly layer" —
+  the tab page and its Settings section are now titled **Detections** (master switch: *Enable anomaly
+  detection*). Genuine map overlays (arrivals, aerospace, frequencies, range, weather, METAR, airspace)
+  keep the "layer" wording.
+
 ## 1.26.0
 - **Detection & anomaly layer — phase 2.** Three more detectors join the layer:
   - **Survey / patrol grid** — repeated parallel legs on one axis with ~180° reversals and roughly

@@ -2515,6 +2515,7 @@ async function loadSettings() {
   $('#s-det-survey').checked = det.survey !== false;
   $('#s-det-goaround').checked = det.goAround !== false;
   $('#s-det-military').checked = det.military !== false;
+  $('#s-det-notify').checked = det.notify !== false;
   $('#s-milfeed-enabled').checked = c.militaryFeed?.enabled !== false;
   $('#s-bortle').value = String(c.skywatch?.bortle ?? 4);
   $('#s-owm').value = '';
@@ -2651,7 +2652,8 @@ $('#s-save').addEventListener('click', async () => {
       rarity: $('#s-det-rarity').checked,
       survey: $('#s-det-survey').checked,
       goAround: $('#s-det-goaround').checked,
-      military: $('#s-det-military').checked
+      military: $('#s-det-military').checked,
+      notify: $('#s-det-notify').checked
     },
     militaryFeed: { enabled: $('#s-milfeed-enabled').checked },
     ui: { units: $('#s-units').value }
