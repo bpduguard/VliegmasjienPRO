@@ -2,6 +2,11 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.24.1
+- 🐛 Easter-egg fix: the arcade game only launched on the exact phrase "space invaders", so typing just
+  "invaders" did nothing. The search-box trigger now also accepts "invaders" (case-insensitive and
+  whitespace-tolerant), while normal searches are unaffected.
+
 ## 1.24.0
 - **New Arrivals tab — a live airport-style arrivals board (FIDS).** A flat, always-sorted-by-ETA list
   of every tracked flight with a known, plausible destination route: **flight** (callsign + aircraft +

@@ -1,18 +1,21 @@
-// ✦ Easter egg ✦ — type "space invaders" in the search box + Enter and the map
-// turns into a Space Invaders game where the live aircraft are the invaders.
-// Self-contained: it borrows `state` (live aircraft), `planeSvg` and the
-// CLASS_COLORS from app.js via the shared global scope, and posts highscores to
-// /api/invaders/highscores. Quit with Esc.
+// ✦ Easter egg ✦ — type "invaders" (or "space invaders") in the search box +
+// Enter and the map turns into a Space Invaders game where the live aircraft are
+// the invaders. Self-contained: it borrows `state` (live aircraft), `planeSvg`
+// and the CLASS_COLORS from app.js via the shared global scope, and posts
+// highscores to /api/invaders/highscores. Quit with Esc.
 (function () {
   'use strict';
-  const MAGIC = 'space invaders';
+  // Accept a few spellings of the magic phrase (whitespace-normalised) so both
+  // "invaders" and "space invaders" launch the game.
+  const MAGIC = new Set(['invaders', 'space invaders', 'spaceinvaders']);
 
   // ---- wiring: listen for the magic phrase in the airline search box ----------
   function init() {
     const input = document.getElementById('airline-filter');
     if (!input) return;
     input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && input.value.trim().toLowerCase() === MAGIC) {
+      const v = input.value.trim().toLowerCase().replace(/\s+/g, ' ');
+      if (e.key === 'Enter' && MAGIC.has(v)) {
         e.preventDefault();
         input.value = '';
         input.dispatchEvent(new Event('input')); // reset the airline filter
