@@ -391,7 +391,7 @@
   <main id="tab-detections" class="tab">
     <div class="page">
       <h2>Detection &amp; anomaly layer</h2>
-      <p class="muted det-intro">Anomalies found in the live ADS-B stream — squawk emergencies, loiter/orbit patterns, emergency descents, data-integrity/spoofing signatures and first-in-your-coverage rarities. ADS-B is unauthenticated, so the stream is treated as untrusted input.</p>
+      <p class="muted det-intro">Anomalies found in the live ADS-B stream — squawk emergencies, loiter/orbit patterns, emergency descents, data-integrity/spoofing signatures, first-in-your-coverage rarities, survey/patrol grids, go-arounds, and military traffic. ADS-B is unauthenticated, so the stream is treated as untrusted input.</p>
       <div class="row wrap det-filters" id="det-filters">
         <button class="det-chip active" data-dtype="all">All</button>
         <button class="det-chip" data-dtype="squawk">🆘 Squawk</button>
@@ -399,6 +399,9 @@
         <button class="det-chip" data-dtype="descent">⚠️ Descent</button>
         <button class="det-chip" data-dtype="integrity">🛑 Integrity</button>
         <button class="det-chip" data-dtype="rarity">✨ Rarity</button>
+        <button class="det-chip" data-dtype="survey">🗺️ Survey</button>
+        <button class="det-chip" data-dtype="goaround">🛫 Go-around</button>
+        <button class="det-chip" data-dtype="military">🪖 Military</button>
         <span id="det-count" class="muted"></span>
       </div>
       <div id="det-list" class="det-list"></div>
@@ -584,6 +587,12 @@
           <label class="toggle"><input type="checkbox" id="s-det-descent" /> Emergency descent</label>
           <label class="toggle"><input type="checkbox" id="s-det-integrity" /> ADS-B integrity / spoofing</label>
           <label class="toggle"><input type="checkbox" id="s-det-rarity" /> Rarity (first-time type/operator)</label>
+          <label class="toggle"><input type="checkbox" id="s-det-survey" /> Survey / patrol grid</label>
+          <label class="toggle"><input type="checkbox" id="s-det-goaround" /> Go-around / missed approach</label>
+          <label class="toggle"><input type="checkbox" id="s-det-military" /> Military fleet feed</label>
+        </div>
+        <div class="row wrap">
+          <label class="toggle"><input type="checkbox" id="s-milfeed-enabled" /> Fetch the external <b>military fleet list</b> (adsb.lol/adsb.fi) to confirm military traffic</label>
         </div>
       </section>
 

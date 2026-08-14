@@ -2186,7 +2186,10 @@ const DET_META = {
   orbit:     { icon: '🔄', label: 'Orbit / loiter' },
   descent:   { icon: '⚠️', label: 'Emergency descent' },
   integrity: { icon: '🛑', label: 'Data integrity' },
-  rarity:    { icon: '✨', label: 'Rarity' }
+  rarity:    { icon: '✨', label: 'Rarity' },
+  survey:    { icon: '🗺️', label: 'Survey / patrol' },
+  goaround:  { icon: '🛫', label: 'Go-around' },
+  military:  { icon: '🪖', label: 'Military' }
 };
 
 function loadDetections() {
@@ -2509,6 +2512,10 @@ async function loadSettings() {
   $('#s-det-descent').checked = det.emergencyDescent !== false;
   $('#s-det-integrity').checked = det.integrity !== false;
   $('#s-det-rarity').checked = det.rarity !== false;
+  $('#s-det-survey').checked = det.survey !== false;
+  $('#s-det-goaround').checked = det.goAround !== false;
+  $('#s-det-military').checked = det.military !== false;
+  $('#s-milfeed-enabled').checked = c.militaryFeed?.enabled !== false;
   $('#s-bortle').value = String(c.skywatch?.bortle ?? 4);
   $('#s-owm').value = '';
   $('#s-owm').placeholder = c.weather.hasOwmKey ? 'key configured ✓ (enter to replace)' : '(optional)';
@@ -2641,8 +2648,12 @@ $('#s-save').addEventListener('click', async () => {
       orbit: $('#s-det-orbit').checked,
       emergencyDescent: $('#s-det-descent').checked,
       integrity: $('#s-det-integrity').checked,
-      rarity: $('#s-det-rarity').checked
+      rarity: $('#s-det-rarity').checked,
+      survey: $('#s-det-survey').checked,
+      goAround: $('#s-det-goaround').checked,
+      military: $('#s-det-military').checked
     },
+    militaryFeed: { enabled: $('#s-milfeed-enabled').checked },
     ui: { units: $('#s-units').value }
   };
   patch.skywatch = { bortle: parseInt($('#s-bortle').value, 10) || 4 };

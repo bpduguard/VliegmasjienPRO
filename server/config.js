@@ -70,8 +70,14 @@ const DEFAULTS = {
     emergencyDescent: true,  // > 4000 fpm down above FL200
     integrity: true,         // ADS-B spoofing / data-integrity checks
     rarity: true,            // first-time type/operator in your coverage
+    survey: true,            // parallel-leg "mowing the lawn" survey/patrol grids
+    goAround: true,          // low approach then climb-away near an airport
+    military: true,          // aircraft on the adsb.lol/adsb.fi military fleet list
     rarityMinTypes: 40       // warm-up: only flag rarity once this many types are known
   },
+  // Military/state fleet feed — cross-references your traffic against the
+  // pre-classified military endpoint (adsb.lol / adsb.fi). External source.
+  militaryFeed: { enabled: true, url: process.env.MIL_FEED_URL || 'https://api.adsb.lol/v2/mil', refreshMin: 10 },
   // UI defaults
   ui: { darkMode: true, units: 'metric' }
 };

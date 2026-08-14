@@ -225,6 +225,18 @@ export function airportFreqsCount() {
   return db.prepare('SELECT COUNT(*) AS c FROM airport_freqs').get().c;
 }
 
+// Airports (with comm frequencies, i.e. towered/instrument fields) within a
+// radius of a point — the index the go-around detector scans. elev is 0 (the
+// frequency dataset carries no elevation); fine for near-sea-level coverage.
+export function airportsNear(lat, lon, radiusKm = 200) {
+  const dLat = radiusKm / 111;
+  const dLon = radiusKm / (111 * Math.cos((lat * Math.PI) / 180) || 1);
+  return db
+    .prepare('SELECT ident, name, lat, lon FROM airport_freqs WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?')
+    .all(lat - dLat, lat + dLat, lon - dLon, lon + dLon)
+    .map((r) => ({ ident: r.ident, name: r.name, lat: r.lat, lon: r.lon, elev: 0 }));
+}
+
 // Bounding-box query (handles antimeridian-free common case). lon filter is a
 // plain BETWEEN; callers pass normalized west<east bounds.
 export function airportFreqsInBounds(s, w, n, e, limit = 500) {

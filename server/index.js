@@ -10,7 +10,7 @@ import {
 } from './enrich.js';
 import { lookupPhoto, extFetch, photoServiceError } from './enrich.js';
 import {
-  startTracker, snapshot, aircraftDetail, trackerStatus, setTrackerBroadcast, arrivalsSnapshot, arrivalsBoard
+  startTracker, snapshot, aircraftDetail, trackerStatus, setTrackerBroadcast, arrivalsSnapshot, arrivalsBoard, rebuildAirportIndex
 } from './tracker.js';
 import { setBroadcast, notify } from './notify.js';
 import { refreshFrequencies, frequenciesMeta } from './freq.js';
@@ -892,7 +892,9 @@ app.get('/api/frequencies/meta', (req, res) => res.json(frequenciesMeta()));
 
 app.post('/api/frequencies/refresh', requireAuth, async (req, res) => {
   try {
-    res.json(await refreshFrequencies());
+    const result = await refreshFrequencies();
+    rebuildAirportIndex(); // refresh the go-around detector's airport index too
+    res.json(result);
   } catch (e) {
     res.status(502).json({ error: e.message });
   }

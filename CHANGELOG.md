@@ -2,6 +2,22 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.26.0
+- **Detection & anomaly layer — phase 2.** Three more detectors join the layer:
+  - **Survey / patrol grid** — repeated parallel legs on one axis with ~180° reversals and roughly
+    constant spacing (pipeline patrol, aerial photogrammetry, calibration flights). Uses circular
+    statistics on the doubled leg heading so it needs a genuine "mowing the lawn" pattern — straight
+    cruises, zig-zags and orbits don't trip it.
+  - **Go-around / missed approach** — descended low near a towered airport while *not* climbing (the
+    approach), then climbed away > 500 fpm without touching down. The "not climbing while low" gate is
+    what separates it from an ordinary departure. Uses a nearby-airport index built from the frequency
+    database (AGL ≈ MSL for near-sea-level fields; runway alignment is approximated by proximity).
+  - **Military / state fleet feed** — cross-references your traffic against the pre-classified military
+    endpoint published by **adsb.lol / adsb.fi**, hardening the military classification and flagging
+    listed airframes as they enter coverage. External source; on by default, fails soft, toggle in Settings.
+  The Detections tab gains Survey / Go-around / Military filters and Settings toggles for each. Refreshing
+  the frequency database now also rebuilds the go-around airport index.
+
 ## 1.25.0
 - **New Detection & anomaly layer (phase 1).** A set of anomaly detectors that run entirely on the live
   ADS-B stream you already ingest — no extra data source — surfaced in a new **Detections** tab and

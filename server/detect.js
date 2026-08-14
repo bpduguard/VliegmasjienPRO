@@ -58,6 +58,9 @@ export function runDetections(ac, cfg, now) {
   if (d.orbit !== false) detectOrbit(ac, st, now);
   if (d.integrity !== false) detectIntegrity(ac, st, now);
   if (d.rarity !== false) detectRarity(ac, st, cfg);
+  if (d.survey !== false) detectSurvey(ac, st, now);
+  if (d.goAround !== false) detectGoAround(ac, st);
+  if (d.military !== false) detectMilitary(ac, st);
 
   // Update the kinematic baseline last, so integrity checks compared against the
   // *previous* fix this poll.
@@ -263,4 +266,166 @@ function detectRarity(ac, st, cfg) {
       metrics: { operator: o }, key: `det:rarop:${ok}`
     });
   }
+}
+
+// ── 6. survey-grid detection ("mowing the lawn") ─────────────────────────────
+// Repeated parallel legs on one axis with ~180° reversals and roughly constant
+// spacing → pipeline patrol, aerial photogrammetry, calibration flights. Built
+// from a long, down-sampled window; analysed on a throttle to stay cheap.
+const SURVEY_WINDOW_MS = 30 * 60000;
+const SURVEY_ADD_MS = 12000;     // down-sample: one point every ~12 s
+const SURVEY_RUN_MS = 20000;     // re-analyse at most every ~20 s per aircraft
+const SURVEY_MIN_LEG_KM = 1.2;
+function enuKm(lat, lon, refLat, refLon) {
+  const kLon = 111.320 * Math.cos((refLat * Math.PI) / 180);
+  return { e: (lon - refLon) * kLon, n: (lat - refLat) * 110.574 };
+}
+function buildLegs(pts) {
+  const legs = [];
+  let cur = null, prev = null;
+  const closeLeg = () => {
+    if (cur && cur.len >= SURVEY_MIN_LEG_KM && cur.pts.length >= 2) {
+      const cx = cur.pts.reduce((s, p) => s + p.lat, 0) / cur.pts.length;
+      const cy = cur.pts.reduce((s, p) => s + p.lon, 0) / cur.pts.length;
+      legs.push({ heading: (Math.atan2(cur.sx, cur.cyc) * 180 / Math.PI + 360) % 360, lat: cx, lon: cy, len: cur.len });
+    }
+    cur = null;
+  };
+  for (const p of pts) {
+    if (prev) {
+      const dkm = haversineKm(prev.lat, prev.lon, p.lat, p.lon);
+      if (dkm < 0.15) continue; // too close for a stable bearing
+      const b = bearingDeg(prev.lat, prev.lon, p.lat, p.lon);
+      if (!cur) {
+        cur = { sx: Math.sin(b * Math.PI / 180), cyc: Math.cos(b * Math.PI / 180), pts: [prev, p], len: dkm };
+      } else {
+        const mean = (Math.atan2(cur.sx, cur.cyc) * 180 / Math.PI + 360) % 360;
+        if (angleDiff(b, mean) < 40) {
+          cur.sx += Math.sin(b * Math.PI / 180); cur.cyc += Math.cos(b * Math.PI / 180);
+          cur.pts.push(p); cur.len += dkm;
+        } else {
+          closeLeg();
+          cur = { sx: Math.sin(b * Math.PI / 180), cyc: Math.cos(b * Math.PI / 180), pts: [prev, p], len: dkm };
+        }
+      }
+    }
+    prev = p;
+  }
+  closeLeg();
+  return legs;
+}
+// Pure analysis (exported for tests): given the window points, decide whether
+// they describe a parallel-leg survey grid.
+export function _surveyVerdict(pts) {
+  if (!pts || pts.length < 12) return { isSurvey: false, legs: 0 };
+  const legs = buildLegs(pts);
+  if (legs.length < 4) return { isSurvey: false, legs: legs.length };
+
+  // 1) do all legs share one axis? circular stats on the doubled heading, so
+  //    opposite directions (a leg and its reverse) map together.
+  let sx = 0, cy = 0;
+  for (const l of legs) { const a2 = 2 * l.heading * Math.PI / 180; sx += Math.sin(a2); cy += Math.cos(a2); }
+  const R = Math.hypot(sx, cy) / legs.length;      // 1 = perfectly parallel axis
+  const axis = ((Math.atan2(sx, cy) * 180 / Math.PI) / 2 + 360) % 180;
+  if (R < 0.9) return { isSurvey: false, legs: legs.length, R: +R.toFixed(2) };
+
+  // 2) do consecutive legs reverse (~180°)?
+  let alt = 0;
+  for (let i = 1; i < legs.length; i++) if (angleDiff(legs[i].heading, legs[i - 1].heading) > 140) alt++;
+  if (alt < (legs.length - 1) * 0.6) return { isSurvey: false, legs: legs.length };
+
+  // 3) roughly constant spacing between the parallel lines
+  const refLat = legs[0].lat, refLon = legs[0].lon;
+  const perp = (axis + 90) * Math.PI / 180;
+  const offs = legs.map((l) => { const { e, n } = enuKm(l.lat, l.lon, refLat, refLon); return e * Math.sin(perp) + n * Math.cos(perp); })
+    .sort((a, b) => a - b);
+  const clusters = [];                              // merge lines within 0.15 km
+  for (const o of offs) { if (!clusters.length || Math.abs(o - clusters[clusters.length - 1]) > 0.15) clusters.push(o); }
+  if (clusters.length < 3) return { isSurvey: false, legs: legs.length, lines: clusters.length };
+  const gaps = [];
+  for (let i = 1; i < clusters.length; i++) gaps.push(clusters[i] - clusters[i - 1]);
+  const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+  const cv = Math.sqrt(gaps.reduce((a, g) => a + (g - mean) ** 2, 0) / gaps.length) / (mean || 1);
+  if (mean < 0.1 || mean > 6 || cv > 0.6) return { isSurvey: false, legs: legs.length, spacingKm: +mean.toFixed(2), cv: +cv.toFixed(2) };
+
+  return { isSurvey: true, legs: legs.length, lines: clusters.length, spacingNm: +(mean / NM_KM).toFixed(1), axisDeg: Math.round(axis) };
+}
+function detectSurvey(ac, st, now) {
+  if (!Number.isFinite(ac.lat) || !Number.isFinite(ac.lon) || ac.onGround) return;
+  const s = st.survey || (st.survey = { pts: [], lastAdd: 0, lastRun: 0, active: false });
+  if (now - s.lastAdd >= SURVEY_ADD_MS) { s.pts.push({ ts: now, lat: ac.lat, lon: ac.lon }); s.lastAdd = now; }
+  while (s.pts.length && now - s.pts[0].ts > SURVEY_WINDOW_MS) s.pts.shift();
+  if (now - s.lastRun < SURVEY_RUN_MS) return;
+  s.lastRun = now;
+
+  const v = _surveyVerdict(s.pts);
+  if (!v.isSurvey) { s.active = false; return; }
+  if (!s.active) {
+    s.active = true;
+    emit(ac, {
+      type: 'survey', severity: 'warning',
+      title: `🗺️ Survey / patrol pattern — ${label(ac)}`,
+      detail: `Flying ${v.legs} parallel legs on a ${v.axisDeg}°/${(v.axisDeg + 180) % 360}° axis, ~${v.spacingNm} NM apart — pipeline patrol / aerial survey / calibration signature.`,
+      metrics: { legs: v.legs, spacingNm: v.spacingNm, axisDeg: v.axisDeg },
+      key: `det:survey:${ac.hex}`
+    });
+  }
+}
+
+// ── 7. go-around / missed approach ───────────────────────────────────────────
+// Descended low near an airport while NOT climbing (the approach), then climbed
+// away (> 500 fpm) without touching down. The "not climbing while low" gate is
+// what separates this from an ordinary departure (which climbs from the ground).
+// AGL uses the airport elevation when known, else assumes sea level. Runway
+// alignment is approximated by proximity to a towered airport.
+let airportIndex = []; // [{ ident, name, lat, lon, elev }]
+export function initGoAround(airports) { airportIndex = airports || []; }
+function nearestAirport(lat, lon) {
+  let best = null, bestKm = Infinity;
+  for (const a of airportIndex) {
+    const dk = haversineKm(lat, lon, a.lat, a.lon);
+    if (dk < bestKm) { bestKm = dk; best = a; }
+  }
+  return best ? { airport: best, distKm: bestKm } : null;
+}
+function detectGoAround(ac, st) {
+  if (!airportIndex.length || !Number.isFinite(ac.lat) || !Number.isFinite(ac.alt_baro)) return;
+  const g = st.ga || (st.ga = { phase: 'idle', minAlt: Infinity, airport: null });
+  const near = nearestAirport(ac.lat, ac.lon);
+  if (!near || near.distKm > 15) { g.phase = 'idle'; g.minAlt = Infinity; return; }
+  const agl = ac.alt_baro - (near.airport.elev || 0);
+  const vr = Number.isFinite(ac.baro_rate) ? ac.baro_rate : 0;
+
+  if (ac.onGround || agl > 4000) { g.phase = 'idle'; g.minAlt = Infinity; return; } // landed / climbed out
+
+  // On approach: low near the field and not climbing.
+  if (near.distKm <= 8 && agl < 1800 && vr < 300) {
+    g.phase = 'approach'; g.airport = near.airport;
+    g.minAlt = Math.min(g.minAlt, agl);
+  }
+  // Go-around: was on approach, got low, and is now climbing away without landing.
+  if (g.phase === 'approach' && vr > 500 && g.minAlt < 1500 && agl > g.minAlt + 200 && near.distKm < 12) {
+    const ap = g.airport, lowAgl = Math.round(g.minAlt);
+    g.phase = 'idle'; g.minAlt = Infinity;
+    emit(ac, {
+      type: 'goaround', severity: 'warning',
+      title: `🛫 Possible go-around — ${label(ac)}`,
+      detail: `Descended to ~${lowAgl} ft near ${ap.ident}${ap.name ? ` (${ap.name})` : ''} then climbed away at ${Math.round(vr)} fpm — missed approach / go-around.`,
+      metrics: { airport: ap.ident, lowFt: lowAgl, climbFpm: Math.round(vr) },
+      key: `det:goaround:${ac.hex}`
+    });
+  }
+}
+
+// ── 8. military / state fleet (from the adsb.lol/adsb.fi feed) ────────────────
+function detectMilitary(ac, st) {
+  if (st.milDone || !ac.milConfirmed) return;
+  st.milDone = true;
+  emit(ac, {
+    type: 'military', severity: 'warning',
+    title: `🪖 Military aircraft — ${label(ac)}`,
+    detail: `${label(ac)}${ac.type ? ` (${ac.typeName || ac.type})` : ''} is on the military/state fleet list.`,
+    metrics: { hex: ac.hex, type: ac.type || null },
+    key: `det:mil:${ac.hex}`
+  });
 }

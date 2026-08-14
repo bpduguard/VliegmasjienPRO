@@ -7,9 +7,10 @@ import {
   planeDbLookup, lookupRoute, cachedAirlineName, maybeAutoRefreshPlaneDb,
   aircraftDbLocal, lookupAircraft, cachedRoute
 } from './enrich.js';
-import { upsertSighting, pruneOldData, insertTracks, pruneTracks, withTransaction, loadKnownIdentities } from './db.js';
+import { upsertSighting, pruneOldData, insertTracks, pruneTracks, withTransaction, loadKnownIdentities, airportsNear } from './db.js';
 import { notify } from './notify.js';
-import { runDetections, initDetections, dropDetectState } from './detect.js';
+import { runDetections, initDetections, dropDetectState, initGoAround } from './detect.js';
+import { isMilitaryHex, startMilFeed } from './milfeed.js';
 import { ensureSbs, stopSbs, sbsSnapshot, sbsStatus } from './sbs.js';
 import { icaoToCountry } from './country.js';
 import { isMilitaryAircraft } from './military.js';
@@ -197,6 +198,9 @@ async function pollOnce() {
     ac.registration = raw.r || ac.registration;
     ac.type = raw.t || ac.type;
     ac.military = !!((raw.dbFlags ?? 0) & 1) || ac.military || false;
+    // Military/state fleet feed (adsb.lol/adsb.fi) — authoritative hex list.
+    ac.milConfirmed = isMilitaryHex(hex);
+    if (ac.milConfirmed) ac.military = true;
     ac.emergency =
       (raw.emergency && raw.emergency !== 'none') || EMERGENCY_SQUAWKS.has(ac.squawk || '');
 
@@ -737,10 +741,27 @@ async function detectReceiver() {
 }
 
 let pollTimer = null;
+// (Re)build the go-around detector's nearby-airport index from the frequency DB.
+// Called at startup and whenever the frequency dataset is (re)loaded.
+export function rebuildAirportIndex() {
+  const r = getConfig().receiver;
+  if (r.lat == null) return;
+  try {
+    const a = airportsNear(r.lat, r.lon, 200);
+    initGoAround(a);
+    console.log(`[detect] go-around airport index: ${a.length} airports`);
+  } catch (e) { console.warn('[detect] airport index failed:', e.message); }
+}
+
 export function startTracker() {
   detectReceiver();
   initRange();
   try { initDetections(loadKnownIdentities()); } catch (e) { console.warn('[detect] seed failed:', e.message); }
+  // Airport index for the go-around detector; the receiver may be auto-detected a
+  // moment after start, so build it now and again shortly after.
+  rebuildAirportIndex();
+  setTimeout(rebuildAirportIndex, 12000);
+  startMilFeed();
   maybeAutoRefreshPlaneDb();
   const loop = async () => {
     try {
