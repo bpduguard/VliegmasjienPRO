@@ -2,6 +2,16 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.26.3
+- **Emergency-descent detector: far fewer false positives.** It no longer trusts the raw reported
+  vertical rate (a single spiky `baro_rate` sample would fire on an aircraft in level cruise). Instead it
+  measures the *observed* altitude loss over a ~15–30 s window — which also smooths sparse-coverage
+  jitter — and only alerts on a sustained > 4000 fpm loss above FL200, corroborated by the reported rate.
+  A stuck/spiky vertical rate with no real altitude change no longer triggers it.
+- **Squawk detections now explain the code.** Each squawk alert spells out what the code means, e.g.
+  *"7700 is the general emergency code — the crew is declaring an emergency (mayday / pan-pan)"*, and
+  likewise for 7500 (hijack), 7600 (radio failure), 0033 (NL parachute ops) and 7000 (VFR conspicuity).
+
 ## 1.26.2
 - **Far fewer false positives from the integrity detector.** The ADS-B integrity/spoofing checks are
   only as trustworthy as the coverage they run on, so they now run only on fixes worth trusting:

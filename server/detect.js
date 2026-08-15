@@ -61,7 +61,7 @@ export function runDetections(ac, cfg, now) {
   if (!st) { st = { win: [] }; dstate.set(ac.hex, st); }
 
   if (d.squawk !== false) detectSquawk(ac, st);
-  if (d.emergencyDescent !== false) detectEmergencyDescent(ac, st);
+  if (d.emergencyDescent !== false) detectEmergencyDescent(ac, st, now);
   if (d.orbit !== false) detectOrbit(ac, st, now);
   if (d.integrity !== false) detectIntegrity(ac, st, now);
   if (d.rarity !== false) detectRarity(ac, st, cfg);
@@ -73,11 +73,16 @@ export function runDetections(ac, cfg, now) {
 
 // ── 1. squawk watch (transition-based) ───────────────────────────────────────
 const SQUAWK_WATCH = {
-  '7500': { label: 'Unlawful interference (hijack)', severity: 'critical' },
-  '7600': { label: 'Radio failure', severity: 'critical' },
-  '7700': { label: 'General emergency', severity: 'critical' },
-  '0033': { label: 'Parachute dropping (NL)', severity: 'warning' },
-  '7000': { label: 'VFR conspicuity (NL)', severity: 'info' }
+  '7500': { label: 'Unlawful interference (hijack)', severity: 'critical',
+    desc: 'the international hijack code — the crew is signalling unlawful interference (the aircraft has been seized).' },
+  '7600': { label: 'Radio failure', severity: 'critical',
+    desc: 'the radio-failure code — the crew has lost two-way radio contact with air traffic control.' },
+  '7700': { label: 'General emergency', severity: 'critical',
+    desc: 'the general emergency code — the crew is declaring an emergency (mayday / pan-pan).' },
+  '0033': { label: 'Parachute dropping (NL)', severity: 'warning',
+    desc: 'the Dutch code for parachute-dropping operations in progress below the aircraft.' },
+  '7000': { label: 'VFR conspicuity (NL)', severity: 'info',
+    desc: 'the European VFR conspicuity code — the default squawk for VFR flights not assigned a discrete code.' }
 };
 function detectSquawk(ac, st) {
   const sq = ac.squawk || null;
@@ -93,28 +98,44 @@ function detectSquawk(ac, st) {
   emit(ac, {
     type: 'squawk', severity: w.severity,
     title: `🆘 Squawk ${sq} — ${w.label}`,
-    detail: `${label(ac)} is squawking ${sq} (${w.label})${prev ? ` — changed from ${prev}` : ''}.`,
+    detail: `${label(ac)}${prev ? ` changed squawk from ${prev} to ${sq}` : ` is squawking ${sq}`} — ${sq} is ${w.desc}`,
     metrics: { squawk: sq, prev: prev || null },
     key: `det:squawk:${ac.hex}:${sq}`
   });
 }
 
 // ── 2. emergency descent (depressurisation signature) ────────────────────────
-function detectEmergencyDescent(ac, st) {
-  const vr = ac.baro_rate, alt = ac.alt_baro;
-  const active = Number.isFinite(vr) && Number.isFinite(alt) && !ac.onGround
-    && vr < -4000 && alt > 20000; // > 4000 fpm down, above FL200
-  if (active && !st.descent) {
-    st.descent = true;
+// Reported vertical rate (baro_rate) is spiky — a single bad sample would fire on
+// a plane in normal cruise. So we judge the *observed* altitude loss over a short
+// window instead (which also smooths out sparse-coverage jitter), and only treat
+// it as an emergency when it's sustained and the reported rate agrees.
+const EDESC_WINDOW_MS = 30000;    // look back ~30 s
+const EDESC_MIN_SPAN_MS = 15000;  // need ≥ ~15 s of altitude history to judge a rate
+function detectEmergencyDescent(ac, st, now) {
+  const alt = ac.alt_baro;
+  if (!Number.isFinite(alt) || ac.onGround) { st.edesc = null; st.edescActive = false; return; }
+  const w = st.edesc || (st.edesc = []);
+  const last = w[w.length - 1];
+  if (!last || last.alt !== alt) w.push({ ts: now, alt }); // distinct altitude samples
+  while (w.length > 1 && now - w[0].ts > EDESC_WINDOW_MS) w.shift();
+  const span = now - w[0].ts;
+  if (w.length < 2 || span < EDESC_MIN_SPAN_MS) return;
+
+  const obsFpm = (alt - w[0].alt) / (span / 60000); // observed ft/min over the window
+  const vr = Number.isFinite(ac.baro_rate) ? ac.baro_rate : null;
+  // Sustained > 4000 fpm loss above FL200, corroborated by the reported rate.
+  const active = obsFpm < -4000 && alt > 20000 && (vr == null || vr < -2000);
+  if (active && !st.edescActive) {
+    st.edescActive = true;
     emit(ac, {
       type: 'descent', severity: 'critical',
       title: `⚠️ Emergency descent — ${label(ac)}`,
-      detail: `Descending ${Math.abs(Math.round(vr))} fpm through FL${Math.round(alt / 100)} — rapid-descent / cabin-depressurisation signature.`,
-      metrics: { vr: Math.round(vr), alt },
+      detail: `Losing ~${Math.abs(Math.round(obsFpm))} fpm through FL${Math.round(alt / 100)}, sustained over ${Math.round(span / 1000)} s — rapid-descent / cabin-depressurisation signature.`,
+      metrics: { fpm: Math.round(obsFpm), alt, overSec: Math.round(span / 1000) },
       key: `det:descent:${ac.hex}`
     });
-  } else if (st.descent && (!Number.isFinite(vr) || vr > -2000 || (Number.isFinite(alt) && alt < 18000) || ac.onGround)) {
-    st.descent = false; // episode ended
+  } else if (st.edescActive && (obsFpm > -2000 || alt < 18000)) {
+    st.edescActive = false; // episode ended
   }
 }
 
