@@ -2,6 +2,19 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.26.2
+- **Far fewer false positives from the integrity detector.** The ADS-B integrity/spoofing checks are
+  only as trustworthy as the coverage they run on, so they now run only on fixes worth trusting:
+  - **Trusted sources only** — direct ADS-B (1090/UAT) and ADS-R. MLAT, TIS-B, ADS-C and Mode-S are
+    skipped, since their jitter/latency was the main cause of phantom "teleports" and speed mismatches.
+  - **Position-quality gate** — fixes with low NIC/NACp are skipped rather than judged.
+  - **Distinct fixes with the real elapsed time** — a stale position repeated across polls (common in
+    thin coverage) no longer looks like a jump the instant a fresh fix arrives; the baseline keeps the
+    timestamp of when the position actually last changed. This was the single biggest false-positive source.
+  - **Confirmation before alerting** — impossible kinematics now needs two consecutive impossible fixes
+    (a one-off decode glitch that snaps back is ignored); the speed/position mismatch needs a short
+    interval and three sustained fixes; and a NIC collapse needs two consecutive low fixes.
+
 ## 1.26.1
 - **Detections notifications can be turned off.** A new *Send notifications for detections* toggle in
   Settings → Detections. When off, detections still appear in the Detections tab but fire no

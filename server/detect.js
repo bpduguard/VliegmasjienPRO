@@ -68,12 +68,7 @@ export function runDetections(ac, cfg, now) {
   if (d.survey !== false) detectSurvey(ac, st, now);
   if (d.goAround !== false) detectGoAround(ac, st);
   if (d.military !== false) detectMilitary(ac, st);
-
-  // Update the kinematic baseline last, so integrity checks compared against the
-  // *previous* fix this poll.
-  if (Number.isFinite(ac.lat) && Number.isFinite(ac.lon)) {
-    st.lastKin = { ts: now, lat: ac.lat, lon: ac.lon };
-  }
+  // (the integrity detector manages its own trusted kinematic baseline)
 }
 
 // ── 1. squawk watch (transition-based) ───────────────────────────────────────
@@ -189,34 +184,77 @@ function detectIntegrity(ac, st, now) {
     });
   }
 
-  const prev = st.lastKin;
-  if (prev && Number.isFinite(ac.lat) && Number.isFinite(ac.lon)) {
-    const dt = (now - prev.ts) / 1000; // seconds
-    if (dt > 1 && dt < 120) {
-      const dkm = haversineKm(prev.lat, prev.lon, ac.lat, ac.lon);
-      const impliedKt = (dkm / NM_KM) / (dt / 3600);
-      // (b) impossible kinematics — a position jump implying > ~Mach 2
-      if (dkm > 5 && impliedKt > 1500) {
+  // The kinematic/quality checks are only as good as the ADS-B we receive, so we
+  // deliberately run them ONLY on trustworthy fixes. Interpolated/rebroadcast
+  // sources (MLAT, TIS-B, ADS-C) and low position-quality fixes are exactly what
+  // produce apparent "teleports" and speed mismatches in sparse coverage — skip
+  // them rather than cry wolf.
+  const goodPos = Number.isFinite(ac.lat) && Number.isFinite(ac.lon)
+    && DIRECT_ADSB.has(ac.source || '')
+    && (ac.nic == null || ac.nic >= 5) && (ac.nacp == null || ac.nacp >= 5);
+
+  // (d) NIC (navigation integrity) collapse — a good fix (≥7) followed by two
+  // consecutive very-low fixes (≤1), so a single sparse-coverage dropout is ignored.
+  const nic = Number.isFinite(ac.nic) ? ac.nic : null;
+  if (nic != null && DIRECT_ADSB.has(ac.source || '') && !ac.onGround) {
+    if (nic >= 7) { st.nicGood = nic; st.nicLow = 0; st.nicFired = false; }
+    else if (nic <= 1 && st.nicGood) {
+      st.nicLow = (st.nicLow || 0) + 1;
+      if (st.nicLow >= 2 && !st.nicFired) {
+        st.nicFired = true;
         emit(ac, {
-          type: 'integrity', severity: 'critical',
-          title: `🛑 Impossible kinematics — ${label(ac)}`,
-          detail: `Position jumped ${dkm.toFixed(0)} km in ${dt.toFixed(0)} s (~${Math.round(impliedKt)} kt, faster than Mach 2) — likely spoofed or corrupt ADS-B.`,
-          metrics: { jumpKm: +dkm.toFixed(0), impliedKt: Math.round(impliedKt), dtSec: Math.round(dt) },
-          key: `det:jump:${ac.hex}`
+          type: 'integrity', severity: 'warning',
+          title: `📉 Position-quality drop — ${label(ac)}`,
+          detail: `Navigation integrity (NIC) fell from ${st.nicGood} to ${nic} and stayed there — possible GPS loss, jamming or spoofing.`,
+          metrics: { nicFrom: st.nicGood, nicTo: nic }, key: `det:nic:${ac.hex}`
         });
-        st.gsMiss = 0; st.gsMissActive = false;
-      } else if (Number.isFinite(ac.gs) && ac.gs > 40 && dkm > 0.2) {
-        // (c) ground-speed vs. position-delta mismatch (needs two consecutive)
+      }
+    }
+  }
+
+  if (!goodPos) return;
+  const base = st.kin;
+  // Only compare *distinct* fixes. A stale/duplicate position repeated across polls
+  // (common when reception is spotty) must keep the baseline — including its
+  // timestamp — untouched, otherwise a fresh fix after a gap looks like a teleport.
+  // That stale-position case was the #1 false-positive source.
+  if (base && base.lat === ac.lat && base.lon === ac.lon) return;
+  if (base) {
+    const dt = (now - base.ts) / 1000;
+    if (dt > 1 && dt < 300) {
+      const dkm = haversineKm(base.lat, base.lon, ac.lat, ac.lon);
+      const impliedKt = (dkm / NM_KM) / (dt / 3600);
+      // (b) impossible kinematics — a jump implying > ~Mach 2. Require TWO
+      // consecutive impossible fixes and don't advance the trusted baseline onto a
+      // suspect position, so a one-off decode glitch that snaps back is rejected.
+      if (dkm > 5 && impliedKt > 1500) {
+        st.kinAnom = (st.kinAnom || 0) + 1;
+        if (st.kinAnom >= 2) {
+          emit(ac, {
+            type: 'integrity', severity: 'critical',
+            title: `🛑 Impossible kinematics — ${label(ac)}`,
+            detail: `Position jumped ${dkm.toFixed(0)} km in ${dt.toFixed(0)} s (~${Math.round(impliedKt)} kt, faster than Mach 2) across two fixes — likely spoofed or corrupt ADS-B.`,
+            metrics: { jumpKm: +dkm.toFixed(0), impliedKt: Math.round(impliedKt), dtSec: Math.round(dt) },
+            key: `det:jump:${ac.hex}`
+          });
+          st.kinAnom = 0; st.kin = { ts: now, lat: ac.lat, lon: ac.lon };
+        }
+        return; // hold the baseline pending confirmation (or after firing)
+      }
+      st.kinAnom = 0;
+      // (c) ground-speed vs. position-delta mismatch — only over a short interval
+      // (so a turn during a gap can't cause it) and only when sustained (3 fixes).
+      if (Number.isFinite(ac.gs) && ac.gs > 60 && dt <= 20 && dkm > 0.3) {
         const ratio = impliedKt / ac.gs;
-        const mismatch = (ratio > 2.2 || ratio < 0.45) && Math.abs(impliedKt - ac.gs) > 200;
+        const mismatch = (ratio > 2.5 || ratio < 0.4) && Math.abs(impliedKt - ac.gs) > 250;
         if (mismatch) {
           st.gsMiss = (st.gsMiss || 0) + 1;
-          if (st.gsMiss >= 2 && !st.gsMissActive) {
+          if (st.gsMiss >= 3 && !st.gsMissActive) {
             st.gsMissActive = true;
             emit(ac, {
               type: 'integrity', severity: 'info',
               title: `⚠️ Speed / position mismatch — ${label(ac)}`,
-              detail: `Reported ground speed ${Math.round(ac.gs)} kt but position moved ~${Math.round(impliedKt)} kt over ${dt.toFixed(0)} s.`,
+              detail: `Reported ground speed ${Math.round(ac.gs)} kt but position moved ~${Math.round(impliedKt)} kt over ${dt.toFixed(0)} s across several fixes.`,
               metrics: { gs: Math.round(ac.gs), impliedKt: Math.round(impliedKt) },
               key: `det:gsmiss:${ac.hex}`
             });
@@ -225,21 +263,14 @@ function detectIntegrity(ac, st, now) {
       }
     }
   }
-
-  // (d) navigation-integrity (NIC) degradation while airborne
-  const nic = Number.isFinite(ac.nic) ? ac.nic : null;
-  if (nic != null) {
-    if (st.nic != null && st.nic >= 7 && nic <= 1 && !ac.onGround) {
-      emit(ac, {
-        type: 'integrity', severity: 'warning',
-        title: `📉 Position-quality drop — ${label(ac)}`,
-        detail: `Navigation integrity (NIC) fell from ${st.nic} to ${nic} — possible GPS loss, jamming or spoofing.`,
-        metrics: { nicFrom: st.nic, nicTo: nic }, key: `det:nic:${ac.hex}`
-      });
-    }
-    st.nic = nic;
-  }
+  st.kin = { ts: now, lat: ac.lat, lon: ac.lon }; // advance the trusted baseline
 }
+// ADS-B sources whose positions are precise enough to reason about kinematically:
+// direct ADS-B (1090 or UAT) and ADS-R (a rebroadcast of real ADS-B). Excluded —
+// MLAT (multilaterated, jittery), TIS-B (radar-derived, coarse), ADS-C and Mode-S
+// — because their jitter/latency is what causes false integrity hits in the first
+// place, especially where coverage is thin.
+const DIRECT_ADSB = new Set(['adsb', 'adsr', 'uat']);
 
 // ── 5. rarity scoring (first time in your coverage) ──────────────────────────
 // Self-tuning: learns from what it sees and only starts flagging once a baseline
