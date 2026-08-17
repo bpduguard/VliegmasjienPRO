@@ -2,6 +2,20 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.26.4
+- **Detections wait for anomalies to persist before flagging them — much less noise.** A new
+  **Confirmation time** (Settings → Detections, default 30 s) sets how long a pattern must hold before
+  it's reported:
+  - **Squawk** — an emergency code must persist a few seconds (capped at 8 s), so a single garbled
+    Mode-S sweep showing a one-frame 7500/7700 no longer raises a false alarm.
+  - **Emergency descent** — the descent rate is now averaged over the confirmation window itself, so
+    only a descent *sustained* that long counts; a brief step-down is diluted and ignored.
+  - **Loiter/orbit** and **survey/patrol** — must hold the pattern for the confirmation time across
+    analysis passes before flagging.
+  - **Impossible kinematics** — now needs three consecutive impossible fixes (was two).
+  Raise the confirmation time if you still see noise (fewer false positives, slightly slower to alert);
+  lower it to catch things faster.
+
 ## 1.26.3
 - **Emergency-descent detector: far fewer false positives.** It no longer trusts the raw reported
   vertical rate (a single spiky `baro_rate` sample would fire on an aircraft in level cruise). Instead it

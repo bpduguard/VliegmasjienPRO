@@ -74,6 +74,7 @@ const DEFAULTS = {
     goAround: true,          // low approach then climb-away near an airport
     military: true,          // aircraft on the adsb.lol/adsb.fi military fleet list
     notify: true,            // send notifications for detections (always shown in the Detections tab)
+    confirmSeconds: 30,      // how long a pattern must persist before it's flagged (noise control)
     rarityMinTypes: 40       // warm-up: only flag rarity once this many types are known
   },
   // Military/state fleet feed — cross-references your traffic against the

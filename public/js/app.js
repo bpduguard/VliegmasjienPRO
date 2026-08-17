@@ -2516,6 +2516,7 @@ async function loadSettings() {
   $('#s-det-goaround').checked = det.goAround !== false;
   $('#s-det-military').checked = det.military !== false;
   $('#s-det-notify').checked = det.notify !== false;
+  $('#s-det-confirm').value = det.confirmSeconds ?? 30;
   $('#s-milfeed-enabled').checked = c.militaryFeed?.enabled !== false;
   $('#s-bortle').value = String(c.skywatch?.bortle ?? 4);
   $('#s-owm').value = '';
@@ -2653,7 +2654,8 @@ $('#s-save').addEventListener('click', async () => {
       survey: $('#s-det-survey').checked,
       goAround: $('#s-det-goaround').checked,
       military: $('#s-det-military').checked,
-      notify: $('#s-det-notify').checked
+      notify: $('#s-det-notify').checked,
+      confirmSeconds: Math.max(0, Math.min(600, parseInt($('#s-det-confirm').value, 10) || 30))
     },
     militaryFeed: { enabled: $('#s-milfeed-enabled').checked },
     ui: { units: $('#s-units').value }

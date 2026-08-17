@@ -583,6 +583,10 @@
           <label class="toggle"><input type="checkbox" id="s-det-notify" /> Send notifications for detections <span class="muted">(they always appear in the Detections tab)</span></label>
         </div>
         <div class="row wrap">
+          <label>Confirmation time (s) <input id="s-det-confirm" type="number" min="0" max="600" size="6" /></label>
+          <span class="muted">How long a pattern must persist before it's flagged. Higher = fewer false positives, slightly slower to alert.</span>
+        </div>
+        <div class="row wrap">
           <label class="toggle"><input type="checkbox" id="s-det-squawk" /> Squawk watch (7500/7600/7700 + NL 7000/0033)</label>
           <label class="toggle"><input type="checkbox" id="s-det-orbit" /> Loiter / orbit</label>
           <label class="toggle"><input type="checkbox" id="s-det-descent" /> Emergency descent</label>

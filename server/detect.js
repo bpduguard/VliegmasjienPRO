@@ -26,6 +26,17 @@ export function recentDetectionList(limit = 200) { return recentDetections.slice
 // Whether detections should also fire notifications (they always land in the
 // Detections tab feed regardless). Updated each poll from config.
 let notifyOn = true;
+// How long a condition must hold before it's flagged (noise control), in ms.
+let confirmMs = 30000;
+
+// True once `cond` has been continuously true for `dwellMs`. Resets the moment
+// the condition lapses, so only *sustained* anomalies fire.
+function heldFor(st, tag, cond, dwellMs, now) {
+  const k = '_since_' + tag;
+  if (!cond) { st[k] = 0; return false; }
+  if (!st[k]) { st[k] = now; return false; }
+  return now - st[k] >= dwellMs;
+}
 
 // ── learned history for rarity (self-tuning; seeded from the sightings DB) ────
 let known = null; // { types:Set, operators:Set }
@@ -57,10 +68,11 @@ export function runDetections(ac, cfg, now) {
   const d = cfg.detections;
   if (!d || d.enabled === false) return;
   notifyOn = d.notify !== false;
+  confirmMs = Math.max(0, (d.confirmSeconds ?? 30)) * 1000;
   let st = dstate.get(ac.hex);
   if (!st) { st = { win: [] }; dstate.set(ac.hex, st); }
 
-  if (d.squawk !== false) detectSquawk(ac, st);
+  if (d.squawk !== false) detectSquawk(ac, st, now);
   if (d.emergencyDescent !== false) detectEmergencyDescent(ac, st, now);
   if (d.orbit !== false) detectOrbit(ac, st, now);
   if (d.integrity !== false) detectIntegrity(ac, st, now);
@@ -84,22 +96,30 @@ const SQUAWK_WATCH = {
   '7000': { label: 'VFR conspicuity (NL)', severity: 'info',
     desc: 'the European VFR conspicuity code — the default squawk for VFR flights not assigned a discrete code.' }
 };
-function detectSquawk(ac, st) {
+const SQUAWK_MAX_CONFIRM_MS = 8000; // don't delay an emergency code more than this
+function detectSquawk(ac, st, now) {
   const sq = ac.squawk || null;
-  if (sq === st.squawk) return;           // no change — nothing to do
-  const prev = st.squawk;                 // undefined on first observation
+  const seenBefore = st.squawk !== undefined;   // have we observed this aircraft's code yet?
+  const firstObs = seenBefore ? st.firstObs : null;
+  if (!seenBefore) st.firstObs = sq;            // remember the code it had when first seen
   st.squawk = sq;
-  if (sq == null) return;
-  const w = SQUAWK_WATCH[sq];
-  if (!w) return;
-  // On the very first observation of an aircraft we don't know its previous code,
-  // so only alert benign/info codes (7000) on a *real* transition we witnessed.
-  if (prev === undefined && w.severity === 'info') return;
+  const w = sq ? SQUAWK_WATCH[sq] : null;
+  if (!w) { st.sqTrack = null; st.sqAlerted = null; return; } // not a watched code
+  // Info codes (7000) only alert on a transition we actually witnessed, not on a
+  // plane that was already squawking it when we first saw it.
+  if (!seenBefore && w.severity === 'info') { st.sqTrack = null; return; }
+  if (st.sqAlerted === sq) return;              // already flagged this code
+  // Require the code to persist a few seconds so a single garbled Mode-S sweep
+  // (a one-frame 7500/7700 glitch) can't raise a false alarm.
+  if (st.sqTrack !== sq) { st.sqTrack = sq; st.sqSince = now; return; }
+  if (now - st.sqSince < Math.min(confirmMs, SQUAWK_MAX_CONFIRM_MS)) return;
+  st.sqAlerted = sq;
+  const prev = (firstObs && firstObs !== sq) ? firstObs : null;
   emit(ac, {
     type: 'squawk', severity: w.severity,
     title: `🆘 Squawk ${sq} — ${w.label}`,
     detail: `${label(ac)}${prev ? ` changed squawk from ${prev} to ${sq}` : ` is squawking ${sq}`} — ${sq} is ${w.desc}`,
-    metrics: { squawk: sq, prev: prev || null },
+    metrics: { squawk: sq, prev },
     key: `det:squawk:${ac.hex}:${sq}`
   });
 }
@@ -109,21 +129,22 @@ function detectSquawk(ac, st) {
 // a plane in normal cruise. So we judge the *observed* altitude loss over a short
 // window instead (which also smooths out sparse-coverage jitter), and only treat
 // it as an emergency when it's sustained and the reported rate agrees.
-const EDESC_WINDOW_MS = 30000;    // look back ~30 s
-const EDESC_MIN_SPAN_MS = 15000;  // need ≥ ~15 s of altitude history to judge a rate
 function detectEmergencyDescent(ac, st, now) {
   const alt = ac.alt_baro;
   if (!Number.isFinite(alt) || ac.onGround) { st.edesc = null; st.edescActive = false; return; }
   const w = st.edesc || (st.edesc = []);
   const last = w[w.length - 1];
   if (!last || last.alt !== alt) w.push({ ts: now, alt }); // distinct altitude samples
-  while (w.length > 1 && now - w[0].ts > EDESC_WINDOW_MS) w.shift();
+  // The rate is measured over the confirmation window itself, so only a descent
+  // *sustained* for that long averages out steep — a brief step-down is diluted
+  // and ignored. (Floor of 12 s so a 0 s setting still needs some evidence.)
+  const windowMs = Math.max(12000, confirmMs);
+  while (w.length > 1 && now - w[0].ts > windowMs + 5000) w.shift();
   const span = now - w[0].ts;
-  if (w.length < 2 || span < EDESC_MIN_SPAN_MS) return;
+  if (w.length < 2 || span < windowMs * 0.8) return; // not enough sustained history yet
 
-  const obsFpm = (alt - w[0].alt) / (span / 60000); // observed ft/min over the window
+  const obsFpm = (alt - w[0].alt) / (span / 60000); // average ft/min over the window
   const vr = Number.isFinite(ac.baro_rate) ? ac.baro_rate : null;
-  // Sustained > 4000 fpm loss above FL200, corroborated by the reported rate.
   const active = obsFpm < -4000 && alt > 20000 && (vr == null || vr < -2000);
   if (active && !st.edescActive) {
     st.edescActive = true;
@@ -169,7 +190,8 @@ function detectOrbit(ac, st, now) {
   for (const p of win) { const dk = haversineKm(clat, clon, p.lat, p.lon); if (dk > radius) radius = dk; }
 
   const orbiting = Math.abs(signedTurn) > ORBIT_TURN_DEG && radius < ORBIT_RADIUS_KM;
-  if (orbiting && !st.orbit) {
+  // Must keep orbiting for the confirmation dwell before flagging.
+  if (heldFor(st, 'orbit', orbiting, confirmMs, now) && !st.orbit) {
     st.orbit = true;
     emit(ac, {
       type: 'orbit', severity: 'warning',
@@ -245,12 +267,12 @@ function detectIntegrity(ac, st, now) {
     if (dt > 1 && dt < 300) {
       const dkm = haversineKm(base.lat, base.lon, ac.lat, ac.lon);
       const impliedKt = (dkm / NM_KM) / (dt / 3600);
-      // (b) impossible kinematics — a jump implying > ~Mach 2. Require TWO
+      // (b) impossible kinematics — a jump implying > ~Mach 2. Require THREE
       // consecutive impossible fixes and don't advance the trusted baseline onto a
-      // suspect position, so a one-off decode glitch that snaps back is rejected.
+      // suspect position, so an odd decode glitch that snaps back is rejected.
       if (dkm > 5 && impliedKt > 1500) {
         st.kinAnom = (st.kinAnom || 0) + 1;
-        if (st.kinAnom >= 2) {
+        if (st.kinAnom >= 3) {
           emit(ac, {
             type: 'integrity', severity: 'critical',
             title: `🛑 Impossible kinematics — ${label(ac)}`,
@@ -418,8 +440,11 @@ function detectSurvey(ac, st, now) {
   s.lastRun = now;
 
   const v = _surveyVerdict(s.pts);
-  if (!v.isSurvey) { s.active = false; return; }
-  if (!s.active) {
+  // The pattern must read as a survey grid across passes spanning the confirmation
+  // dwell before flagging — one lucky analysis pass isn't enough.
+  if (!v.isSurvey) { s.since = 0; s.active = false; return; }
+  if (!s.since) s.since = now;
+  if (now - s.since >= confirmMs && !s.active) {
     s.active = true;
     emit(ac, {
       type: 'survey', severity: 'warning',
