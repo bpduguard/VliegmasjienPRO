@@ -80,7 +80,7 @@ container.
   source): **squawk watch** (7500/7600/7700 + NL 7000/0033, on transition), **loiter/orbit** detection,
   **emergency descent**, **ADS-B integrity/spoofing** checks (impossible kinematics, reserved ICAO
   blocks, NIC collapse, speed/position mismatch), **rarity scoring** (first-time type/operator in
-  your coverage, self-tuning), **survey/patrol-grid** detection (parallel-leg "mowing the lawn"),
+  your coverage — permanent, all-time memory), **survey/patrol-grid** detection (parallel-leg "mowing the lawn"),
   **go-around / missed-approach** detection, and a **military fleet feed** (cross-references adsb.lol/
   adsb.fi's military list). Surfaced in a dedicated **Detections** tab and the normal alert pipeline
 - 🛰 **Aerospace** overlay — live **ISS** and **Hubble** tracking with ground tracks, propagated with

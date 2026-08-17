@@ -1947,7 +1947,8 @@ async function loadStats() {
     <div class="card"><div class="num">${s.totals.aircraft.toLocaleString()}</div><div class="lbl">unique aircraft</div></div>
     <div class="card"><div class="num">${s.totals.sightings.toLocaleString()}</div><div class="lbl">sightings</div></div>
     <div class="card"><div class="num">${state.aircraft.size}</div><div class="lbl">live right now</div></div>
-    <div class="card"><div class="num">${s.topAirlines.length}</div><div class="lbl">airlines spotted</div></div>`;
+    <div class="card"><div class="num">${(s.firstSeen?.totalOperators ?? 0).toLocaleString()}</div><div class="lbl">operators (all-time)</div></div>
+    <div class="card"><div class="num">${(s.firstSeen?.totalTypes ?? 0).toLocaleString()}</div><div class="lbl">types (all-time)</div></div>`;
 
   // Aircraft per day — vertical bars, value on hover, sparse date labels.
   const nDays = s.perDay.length;
@@ -1973,6 +1974,22 @@ async function loadStats() {
     { empty: 'No routes resolved yet — this fills in as flights are looked up.' });
   // Categories are coloured by their map colour (identity), not rank.
   hbar('#chart-categories', s.categories.map((t) => [t.category, t.count, CLASS_COLORS[t.category] || CLASS_COLORS.unknown]));
+
+  // "New to your coverage" — first-ever sightings that fall in the selected period.
+  const fs = s.firstSeen || {};
+  fsList('#fs-operators', fs.newOperators || [], 'name');
+  fsList('#fs-types', fs.newTypes || [], 'type');
+}
+
+// A dated list of "first seen this period" entries (operators or types).
+function fsList(sel, rows, key) {
+  const el = $(sel);
+  el.innerHTML = rows.length
+    ? rows.map((r) => `<div class="fs-row" title="First seen ${esc(new Date(r.first_seen).toLocaleString())}">
+        <span class="fs-name">${esc(r[key] || '—')}</span>
+        <span class="fs-meta">${esc(new Date(r.first_seen).toLocaleDateString())}${r.count > 1 ? ` · ${Number(r.count).toLocaleString()}×` : ''}</span>
+      </div>`).join('')
+    : '<span class="muted">Nothing new in this period.</span>';
 }
 
 // Horizontal magnitude bars. rows = [[label, count, colorOverride?], …].

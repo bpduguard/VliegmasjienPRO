@@ -93,11 +93,41 @@ export function initDb() {
     );
     CREATE INDEX IF NOT EXISTS idx_tracks_ts ON tracks(ts);
     CREATE INDEX IF NOT EXISTS idx_tracks_hex_ts ON tracks(hex, ts);
+    -- Permanent "have I ever seen this in my coverage?" ledgers for the rarity
+    -- detector and the Statistics tab. Deliberately NOT part of the retention
+    -- prune or the log purge, so first-seen memory is genuinely all-time (not just
+    -- the last N days of sightings). One row per aircraft type / operator.
+    CREATE TABLE IF NOT EXISTS known_types (
+      type TEXT PRIMARY KEY,
+      first_seen INTEGER NOT NULL,
+      last_seen INTEGER NOT NULL,
+      count INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS known_operators (
+      operator TEXT PRIMARY KEY,   -- normalized (lower-cased, trimmed) key
+      name TEXT,                   -- display name
+      first_seen INTEGER NOT NULL,
+      last_seen INTEGER NOT NULL,
+      count INTEGER NOT NULL DEFAULT 0
+    );
   `);
   // Migrations: add route origin/destination to existing sightings tables (for
   // the "top destinations / departed from" stats). Idempotent — ignore if present.
   for (const col of ['origin', 'destination']) {
     try { db.exec(`ALTER TABLE sightings ADD COLUMN ${col} TEXT`); } catch { /* already exists */ }
+  }
+  // First-run backfill: seed the known-identity ledgers from existing sightings so
+  // upgrading users don't get flooded with "first-time" flags for planes they've
+  // already seen. Only when the ledgers are still empty.
+  if (db.prepare('SELECT COUNT(*) AS n FROM known_operators').get().n === 0) {
+    db.exec(`
+      INSERT OR IGNORE INTO known_types (type, first_seen, last_seen, count)
+        SELECT UPPER(type), MIN(first_seen), MAX(last_seen), COUNT(*) FROM sightings
+        WHERE type IS NOT NULL AND type <> '' GROUP BY UPPER(type);
+      INSERT OR IGNORE INTO known_operators (operator, name, first_seen, last_seen, count)
+        SELECT LOWER(TRIM(airline)), airline, MIN(first_seen), MAX(last_seen), COUNT(*) FROM sightings
+        WHERE airline IS NOT NULL AND airline <> '' GROUP BY LOWER(TRIM(airline));
+    `);
   }
   return db;
 }
@@ -345,18 +375,35 @@ export function recentAlerts(limit = 100) {
   return db.prepare('SELECT * FROM alerts ORDER BY ts DESC LIMIT ?').all(limit);
 }
 
-// Distinct aircraft types & operators ever recorded — seeds the rarity detector's
-// "have I seen this before?" sets so first-time flags survive restarts.
+// The permanent known-identity sets — seeds the rarity detector's "have I ever
+// seen this?" check. Read from the dedicated ledgers, so it's all-time memory
+// independent of the sightings retention window.
 export function loadKnownIdentities() {
-  const types = new Set(
-    db.prepare("SELECT DISTINCT type FROM sightings WHERE type IS NOT NULL AND type <> ''")
-      .all().map((r) => r.type.toUpperCase())
-  );
-  const operators = new Set(
-    db.prepare("SELECT DISTINCT airline FROM sightings WHERE airline IS NOT NULL AND airline <> ''")
-      .all().map((r) => r.airline.trim().toLowerCase())
-  );
+  const types = new Set(db.prepare('SELECT type FROM known_types').all().map((r) => r.type));
+  const operators = new Set(db.prepare('SELECT operator FROM known_operators').all().map((r) => r.operator));
   return { types, operators };
+}
+
+// Record a sighting of an aircraft type in the permanent ledger; returns true if
+// it's the first time ever. Called once per sighting session per aircraft.
+export function recordKnownType(type, now) {
+  const t = (type || '').trim().toUpperCase();
+  if (!t) return false;
+  const upd = prep('UPDATE known_types SET last_seen = ?, count = count + 1 WHERE type = ?').run(now, t);
+  if (upd.changes) return false;
+  prep('INSERT OR IGNORE INTO known_types (type, first_seen, last_seen, count) VALUES (?,?,?,1)').run(t, now, now);
+  return true;
+}
+export function recordKnownOperator(name, now) {
+  const disp = (name || '').trim();
+  const key = disp.toLowerCase();
+  if (!key) return false;
+  const upd = prep(
+    "UPDATE known_operators SET last_seen = ?, count = count + 1, name = COALESCE(NULLIF(?, ''), name) WHERE operator = ?"
+  ).run(now, disp, key);
+  if (upd.changes) return false;
+  prep('INSERT OR IGNORE INTO known_operators (operator, name, first_seen, last_seen, count) VALUES (?,?,?,?,1)').run(key, disp, now, now);
+  return true;
 }
 
 export function statsSummary(days = 7) {
@@ -408,7 +455,20 @@ export function statsSummary(days = 7) {
       `SELECT COUNT(*) AS sightings, COUNT(DISTINCT hex) AS aircraft FROM sightings WHERE first_seen >= ?`
     )
     .get(since);
-  return { days, perDay, topTypes, topAirlines, categories, topDestinations, topOrigins, totals };
+  // "New to your coverage" — operators/types whose all-time first sighting falls
+  // inside the selected period, plus the all-time distinct totals.
+  const newOperators = db
+    .prepare('SELECT name, first_seen, count FROM known_operators WHERE first_seen >= ? ORDER BY first_seen DESC LIMIT 25')
+    .all(since);
+  const newTypes = db
+    .prepare('SELECT type, first_seen, count FROM known_types WHERE first_seen >= ? ORDER BY first_seen DESC LIMIT 25')
+    .all(since);
+  const firstSeen = {
+    newOperators, newTypes,
+    totalOperators: db.prepare('SELECT COUNT(*) AS n FROM known_operators').get().n,
+    totalTypes: db.prepare('SELECT COUNT(*) AS n FROM known_types').get().n
+  };
+  return { days, perDay, topTypes, topAirlines, categories, topDestinations, topOrigins, totals, firstSeen };
 }
 
 // Distinct aircraft seen since `since`, aggregated per hex (latest callsign,

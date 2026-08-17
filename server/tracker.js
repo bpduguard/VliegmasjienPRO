@@ -7,7 +7,7 @@ import {
   planeDbLookup, lookupRoute, cachedAirlineName, maybeAutoRefreshPlaneDb,
   aircraftDbLocal, lookupAircraft, cachedRoute
 } from './enrich.js';
-import { upsertSighting, pruneOldData, insertTracks, pruneTracks, withTransaction, loadKnownIdentities, airportsNear } from './db.js';
+import { upsertSighting, pruneOldData, insertTracks, pruneTracks, withTransaction, loadKnownIdentities, airportsNear, recordKnownType, recordKnownOperator } from './db.js';
 import { notify } from './notify.js';
 import { runDetections, initDetections, dropDetectState, initGoAround } from './detect.js';
 import { isMilitaryHex, startMilFeed } from './milfeed.js';
@@ -290,6 +290,10 @@ async function pollOnce() {
     // persist sighting
     try {
       upsertSighting(ac, now);
+      // Permanent "ever seen" ledgers (once per session per field, as identity
+      // enriches). Feeds the rarity detector's all-time memory + the stats tab.
+      if (ac.type && !ac._recType) { ac._recType = true; recordKnownType(ac.type, now); }
+      if (ac.operator && !ac._recOp) { ac._recOp = true; recordKnownOperator(ac.operator, now); }
     } catch (e) {
       console.warn('[db] sighting failed:', e.message);
     }

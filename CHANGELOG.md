@@ -2,6 +2,18 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.27.0
+- **Rarity memory is now permanent + surfaced in Statistics.** The rarity detector's "have I seen this
+  operator/type before?" memory used to be re-derived from the sightings table, so it only reached back
+  as far as the history-retention window (default 30 days) and forgot older operators on restart. It now
+  lives in dedicated `known_operators` / `known_types` ledgers (with first-seen, last-seen and a sighting
+  count) that are **never pruned or purged** — so "first time in your coverage" means genuinely all-time.
+  On upgrade the ledgers are backfilled from your existing sightings, so you won't get a flood of
+  first-time flags for aircraft you've already seen.
+- The **Statistics tab** uses this data: two new all-time cards (**distinct operators** and **types**
+  ever seen) and a **"New to your coverage"** section listing the operators and types whose first-ever
+  sighting falls in the selected period, with the date.
+
 ## 1.26.4
 - **Detections wait for anomalies to persist before flagging them — much less noise.** A new
   **Confirmation time** (Settings → Detections, default 30 s) sets how long a pattern must hold before

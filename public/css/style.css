@@ -532,6 +532,12 @@ button.danger:hover { background: rgba(239,68,68,0.12); border-color: var(--dang
 .stat-block h3 { margin: 0 0 14px; font-size: 0.95rem; color: var(--text); font-weight: 600; }
 .stat-block h3 .muted { font-weight: normal; }
 
+/* "New to your coverage" first-seen lists */
+.fs-list { display: flex; flex-direction: column; gap: 2px; max-height: 260px; overflow-y: auto; }
+.fs-row { display: flex; align-items: baseline; gap: 10px; padding: 4px 2px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.fs-name { flex: 1; min-width: 0; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fs-meta { color: var(--muted); font-size: 0.78rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
 /* aircraft-per-day (vertical bars) */
 .daychart { display: flex; align-items: stretch; gap: 3px; height: 190px; }
 .day-col { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; }
