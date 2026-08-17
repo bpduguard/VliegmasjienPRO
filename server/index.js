@@ -16,6 +16,7 @@ import { setBroadcast, notify } from './notify.js';
 import { refreshFrequencies, frequenciesMeta } from './freq.js';
 import { airportFreqsInBounds, replayBounds, replayFrame, spottedSince, heatmapCells } from './db.js';
 import { recentDetectionList } from './detect.js';
+import { webcamsInBounds } from './webcams.js';
 import { icaoToCountry } from './country.js';
 import { rangeOutline, clearRange } from './range.js';
 import { getTles, startPassNotifier } from './space.js';
@@ -67,7 +68,9 @@ app.use((req, res, next) => {
     "img-src 'self' data: https:",
     "font-src 'self'",
     "connect-src 'self'",
-    "worker-src 'self'"
+    "worker-src 'self'",
+    // Airport-webcam layer embeds third-party live players in an iframe.
+    "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://webcams.windy.com https://*.windy.com"
   ].join('; '));
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
@@ -266,6 +269,17 @@ app.get('/api/aircraft', (req, res) => {
 app.get('/api/detections', requireAuth, (req, res) => {
   const limit = Math.min(400, Math.max(1, parseInt(req.query.limit, 10) || 200));
   res.json({ detections: recentDetectionList(limit) });
+});
+
+// Airport webcams within the given map bounds (built-in list + Windy Webcams API).
+app.get('/api/webcams', async (req, res) => {
+  const n = parseFloat(req.query.n), s = parseFloat(req.query.s);
+  const e = parseFloat(req.query.e), w = parseFloat(req.query.w);
+  if ([n, s, e, w].some((v) => !Number.isFinite(v))) {
+    return res.status(400).json({ error: 'n, s, e, w bounds required' });
+  }
+  try { res.json(await webcamsInBounds({ n, s, e, w })); }
+  catch (err) { res.status(502).json({ error: err.message, airports: [] }); }
 });
 
 // Arrivals layer: tracked aircraft grouped by their destination airport.

@@ -68,6 +68,7 @@
           <label class="menu-item auth-only"><input type="checkbox" id="rings-toggle" /> <span>⊚ Distance rings</span></label>
           <label class="menu-item auth-only"><input type="checkbox" id="range-toggle" /> <span>📡 Range outline</span></label>
           <label class="menu-item"><input type="checkbox" id="arrivals-toggle" /> <span>🛬 Arrivals</span></label>
+          <label class="menu-item"><input type="checkbox" id="webcam-toggle" /> <span>📷 Airport webcams</span></label>
           <label class="menu-item"><input type="checkbox" id="airspace-toggle" /> <span>🛫 Airspace (OpenAIP)</span></label>
           <label class="menu-item"><input type="checkbox" id="metar-toggle" /> <span>🌬 Aviation weather (METAR)</span></label>
           <label class="menu-item"><input type="checkbox" id="space-toggle" /> <span>🛰 Aerospace (ISS, Hubble)</span></label>
@@ -101,6 +102,22 @@
         <input type="range" id="scrub-range" min="0" max="0" value="0" step="1" title="Scrub through the recorded track" />
         <span id="scrub-readout" class="scrub-readout muted"></span>
       </div>
+    </div>
+
+    <!-- Airport webcam viewer (opened by clicking a 📷 marker) -->
+    <div id="webcam-panel" class="webcam-panel hidden">
+      <div class="wc-head">
+        <span id="wc-title" class="wc-title">Webcam</span>
+        <div class="wc-nav">
+          <button id="wc-prev" title="Previous feed">◀</button>
+          <span id="wc-count" class="wc-count">1/1</span>
+          <button id="wc-next" title="Next feed">▶</button>
+          <a id="wc-open" href="#" target="_blank" rel="noopener noreferrer" title="Open feed in a new tab" class="wc-open">↗</a>
+          <button id="wc-close" title="Close">✕</button>
+        </div>
+      </div>
+      <div class="wc-body"><iframe id="wc-frame" title="Airport webcam" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen referrerpolicy="no-referrer"></iframe></div>
+      <div id="wc-feedtitle" class="wc-feedtitle muted"></div>
     </div>
 
     <div id="legend">
@@ -695,6 +712,17 @@
           Toggle both from the map's <strong>Layers</strong> menu.</p>
         <div class="row wrap">
           <label>OpenAIP API key <input id="s-openaip" size="36" placeholder="(optional)" /></label>
+        </div>
+      </section>
+
+      <section class="settings-block">
+        <h3>Airport webcams</h3>
+        <p class="muted">The <strong>📷 Airport webcams</strong> layer shows airports with live webcam feeds — the
+          feed plays inside the app, with a switcher when an airport has several. A small built-in list works
+          out of the box; add a free <a href="https://api.windy.com/webcams" target="_blank" rel="noopener">Windy Webcams API</a>
+          key to auto-discover webcams at airports across the map. Toggle it from the map's <strong>Layers</strong> menu.</p>
+        <div class="row wrap">
+          <label>Windy Webcams API key <input id="s-windy" size="36" placeholder="(optional)" /></label>
         </div>
       </section>
 

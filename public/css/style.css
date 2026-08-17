@@ -273,6 +273,36 @@ button.danger:hover { background: rgba(239,68,68,0.12); border-color: var(--dang
   background: #f59e0b; color: #06243a; font-weight: 700; font-size: 10px;
   border-radius: 8px; padding: 0 5px; min-width: 14px; text-align: center;
 }
+/* airport webcam markers + viewer panel */
+.webcam-pin {
+  display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; cursor: pointer;
+  padding: 2px 6px; background: rgba(13, 20, 38, 0.9); border: 1px solid #a855f7;
+  border-radius: 11px; font-size: 12px; line-height: 16px; color: var(--text);
+}
+.webcam-pin .webcam-code { font-weight: 700; }
+.webcam-pin .webcam-badge {
+  background: #a855f7; color: #f5f3ff; font-weight: 700; font-size: 10px;
+  border-radius: 8px; padding: 0 5px; min-width: 14px; text-align: center;
+}
+.webcam-pin:hover { border-color: #c084fc; box-shadow: 0 0 8px rgba(168,85,247,0.4); }
+.webcam-panel {
+  position: absolute; right: 12px; bottom: 12px; z-index: 1200; width: min(520px, calc(100vw - 24px));
+  background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.6); backdrop-filter: blur(8px);
+}
+.webcam-panel.hidden { display: none; }
+.wc-head { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.wc-title { flex: 1; min-width: 0; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wc-nav { display: flex; align-items: center; gap: 6px; }
+.wc-nav button, .wc-open { background: transparent; border: 1px solid var(--border); color: var(--text);
+  border-radius: 7px; padding: 3px 9px; cursor: pointer; font-size: 0.9rem; text-decoration: none; line-height: 1.4; }
+.wc-nav button:hover, .wc-open:hover { background: rgba(168,85,247,0.15); border-color: #a855f7; }
+.wc-count { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 0.82rem; min-width: 30px; text-align: center; }
+.wc-body { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000; }
+.wc-body iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.wc-feedtitle { padding: 7px 12px; font-size: 0.82rem; }
+@media (max-width: 560px) { .webcam-panel { right: 12px; left: 12px; width: auto; } }
+
 /* aerospace (satellite) markers */
 .sat-pin {
   display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;

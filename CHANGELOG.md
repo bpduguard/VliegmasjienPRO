@@ -2,6 +2,19 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.28.0
+- **New Airport webcams map layer.** Toggle **📷 Airport webcams** in the Layers menu to see airports
+  with live webcam feeds; clicking a marker plays the feed **inside the app**, with a **◀ ▶ switcher**
+  when an airport has several. Two sources, merged and clustered per airport:
+  - a small **built-in / user-curated list** that works with no key (`config.webcams.custom` — each entry
+    is `{ icao, name, lat, lon, feeds:[{ title, embed }] }`, where `embed` is any iframe URL such as a
+    YouTube live embed), and
+  - the **Windy Webcams API** (optional free key from api.windy.com, added in *Settings → Airport
+    webcams*) for automatic discovery of webcams at airports across the map.
+  The key stays server-side (a proxy fetches Windy); results are cached. The Content-Security-Policy now
+  allows embedding YouTube and Windy webcam players. *(The two shipped built-in feeds are examples —
+  replace/extend them with feeds you know work via `config.webcams.custom`.)*
+
 ## 1.27.0
 - **Rarity memory is now permanent + surfaced in Statistics.** The rarity detector's "have I seen this
   operator/type before?" memory used to be re-derived from the sightings table, so it only reached back

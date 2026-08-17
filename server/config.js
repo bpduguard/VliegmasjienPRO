@@ -58,6 +58,11 @@ const DEFAULTS = {
   },
   // OpenAIP (controlled-airspace tile overlay) — needs a free API key.
   openAip: { apiKey: process.env.OPENAIP_API_KEY || '' },
+  // Airport webcams layer. windyKey enables dynamic discovery via the Windy
+  // Webcams API (free key from api.windy.com). `custom` is a user-editable list of
+  // known airport feeds — { icao, name, lat, lon, feeds:[{ title, embed }] } — that
+  // works with no key; `embed` is an iframe URL (e.g. a YouTube live embed).
+  webcams: { windyKey: process.env.WINDY_WEBCAMS_KEY || '', custom: [] },
   // Sky Watch: light-pollution level at the receiver on the Bortle scale (1 = pristine
   // dark sky … 9 = inner city). Used to estimate what's visible for stargazing.
   skywatch: { bortle: 4 },
@@ -122,6 +127,9 @@ export function loadConfig() {
   if (fileCfg.weather?.openWeatherMapKey === undefined && process.env.OWM_API_KEY) {
     config.weather.openWeatherMapKey = process.env.OWM_API_KEY;
   }
+  if (fileCfg.webcams?.windyKey === undefined && process.env.WINDY_WEBCAMS_KEY) {
+    config.webcams.windyKey = process.env.WINDY_WEBCAMS_KEY;
+  }
   return config;
 }
 
@@ -145,6 +153,7 @@ export function publicConfig() {
     pushover: { ...c.pushover, token: c.pushover.token ? '••••' : '', user: c.pushover.user ? '••••' : '' },
     discord: { ...c.discord, webhookUrl: c.discord.webhookUrl ? '••••' : '' },
     weather: { hasOwmKey: !!c.weather.openWeatherMapKey },
-    openAip: { hasKey: !!c.openAip?.apiKey }
+    openAip: { hasKey: !!c.openAip?.apiKey },
+    webcams: { hasWindyKey: !!c.webcams?.windyKey }
   };
 }

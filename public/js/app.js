@@ -306,7 +306,8 @@ $('#labels-toggle').addEventListener('change', (e) => {
 function refreshLayersBtn() {
   const anyOn = $('#weather-toggle').checked || $('#freq-toggle').checked || $('#rings-toggle').checked
     || $('#range-toggle').checked || $('#arrivals-toggle').checked || $('#space-toggle').checked
-    || $('#heatmap-toggle').checked || $('#airspace-toggle').checked || $('#metar-toggle').checked;
+    || $('#heatmap-toggle').checked || $('#airspace-toggle').checked || $('#metar-toggle').checked
+    || $('#webcam-toggle').checked;
   $('#layers-btn').classList.toggle('has-active', anyOn);
 }
 $('#layers-btn').addEventListener('click', (e) => {
@@ -494,6 +495,85 @@ $('#arrivals-toggle').addEventListener('change', (e) => {
     map.removeLayer(arrivalsLayer);
     arrivalsLayer.clearLayers();
     if (arrivalsTimer) { clearInterval(arrivalsTimer); arrivalsTimer = null; }
+  }
+  refreshLayersBtn();
+});
+
+// ----------------------------------------------------------------- airport webcams layer
+// Markers at airports/locations with known webcam feeds; clicking embeds the live
+// feed in-app with a switcher when a location has several. Built-in list + Windy.
+const webcamLayer = L.layerGroup();
+let webcamTimer = null;
+let wcFeeds = [], wcIdx = 0; // the currently-open location's feeds + selected index
+
+async function drawWebcams() {
+  const b = map.getBounds();
+  try {
+    const url = `/api/webcams?n=${b.getNorth()}&s=${b.getSouth()}&e=${b.getEast()}&w=${b.getWest()}`;
+    const data = await (await fetch(url)).json();
+    webcamLayer.clearLayers();
+    for (const ap of data.airports || []) {
+      if (ap.lat == null || ap.lon == null) continue;
+      const n = ap.feeds.length;
+      const label = esc(ap.icao || ap.name || '📷');
+      const icon = L.divIcon({
+        className: 'webcam-icon',
+        html: `<div class="webcam-pin"><span class="webcam-code">📷 ${label}</span>${n > 1 ? `<span class="webcam-badge">${n}</span>` : ''}</div>`,
+        iconSize: [64, 22], iconAnchor: [32, 11]
+      });
+      L.marker([ap.lat, ap.lon], { icon, zIndexOffset: 900 })
+        .addTo(webcamLayer)
+        .on('click', () => openWebcam(ap));
+    }
+    if (!data.airports?.length && !state.webcamHinted) {
+      state.webcamHinted = true;
+      toast({ kind: 'test', title: 'Airport webcams',
+        message: data.hasKey
+          ? 'No webcams found in this area. Pan/zoom to a covered airport.'
+          : 'Showing built-in feeds only. Add a free Windy Webcams API key in Settings → Airport webcams to discover more.' });
+    }
+  } catch { /* ignore */ }
+}
+
+function openWebcam(ap) {
+  wcFeeds = ap.feeds || [];
+  wcIdx = 0;
+  if (!wcFeeds.length) return;
+  $('#wc-title').textContent = ap.name ? `📷 ${ap.name}${ap.icao ? ` (${ap.icao})` : ''}` : '📷 Webcam';
+  $('#webcam-panel').classList.remove('hidden');
+  showWebcamFeed();
+}
+function showWebcamFeed() {
+  const f = wcFeeds[wcIdx];
+  if (!f) return;
+  $('#wc-frame').src = f.embed;
+  $('#wc-open').href = f.embed;
+  $('#wc-count').textContent = `${wcIdx + 1}/${wcFeeds.length}`;
+  $('#wc-feedtitle').textContent = f.title || '';
+  const multi = wcFeeds.length > 1;
+  $('#wc-prev').style.visibility = multi ? 'visible' : 'hidden';
+  $('#wc-next').style.visibility = multi ? 'visible' : 'hidden';
+  $('#wc-count').style.visibility = multi ? 'visible' : 'hidden';
+}
+function closeWebcam() {
+  $('#webcam-panel').classList.add('hidden');
+  $('#wc-frame').src = 'about:blank'; // stop the stream
+}
+$('#wc-prev').addEventListener('click', () => { wcIdx = (wcIdx - 1 + wcFeeds.length) % wcFeeds.length; showWebcamFeed(); });
+$('#wc-next').addEventListener('click', () => { wcIdx = (wcIdx + 1) % wcFeeds.length; showWebcamFeed(); });
+$('#wc-close').addEventListener('click', closeWebcam);
+
+$('#webcam-toggle').addEventListener('change', (e) => {
+  state.webcamOn = e.target.checked;
+  if (state.webcamOn) {
+    webcamLayer.addTo(map);
+    drawWebcams();
+    map.on('moveend', drawWebcams);
+  } else {
+    map.off('moveend', drawWebcams);
+    map.removeLayer(webcamLayer);
+    webcamLayer.clearLayers();
+    closeWebcam();
   }
   refreshLayersBtn();
 });
@@ -2540,6 +2620,8 @@ async function loadSettings() {
   $('#s-owm').placeholder = c.weather.hasOwmKey ? 'key configured ✓ (enter to replace)' : '(optional)';
   $('#s-openaip').value = '';
   $('#s-openaip').placeholder = c.openAip?.hasKey ? 'key configured ✓ (enter to replace)' : '(optional)';
+  $('#s-windy').value = '';
+  $('#s-windy').placeholder = c.webcams?.hasWindyKey ? 'key configured ✓ (enter to replace)' : '(optional)';
   const meta = await (await fetch('/api/planedb/meta')).json();
   $('#s-padb-meta').textContent = meta.rows
     ? `${meta.rows.toLocaleString()} aircraft in DB, updated ${meta.updatedAt ? fmt.dateTime(meta.updatedAt) : '(bundled)'}`
@@ -2680,6 +2762,7 @@ $('#s-save').addEventListener('click', async () => {
   patch.skywatch = { bortle: parseInt($('#s-bortle').value, 10) || 4 };
   if ($('#s-owm').value.trim()) patch.weather = { openWeatherMapKey: $('#s-owm').value.trim() };
   if ($('#s-openaip').value.trim()) patch.openAip = { apiKey: $('#s-openaip').value.trim() };
+  if ($('#s-windy').value.trim()) patch.webcams = { windyKey: $('#s-windy').value.trim() };
   await fetch('/api/config', {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch)
   });
