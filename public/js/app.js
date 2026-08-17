@@ -615,9 +615,10 @@ $('#wc-add-btn').addEventListener('click', async () => {
     title: $('#wc-add-title').value.trim(), embed: $('#wc-add-embed').value.trim()
   };
   const r = await fetch('/api/webcams/custom', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-  if (!r.ok) { $('#wc-add-msg').textContent = (await r.json().catch(() => ({}))).error || 'Failed to add.'; return; }
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) { $('#wc-add-msg').textContent = data.error || 'Failed to add.'; return; }
   ['#wc-add-icao', '#wc-add-name', '#wc-add-lat', '#wc-add-lon', '#wc-add-title', '#wc-add-embed'].forEach((s) => ($(s).value = ''));
-  $('#wc-add-msg').textContent = '✓ Feed added.';
+  $('#wc-add-msg').textContent = data.warning || '✓ Feed added.';
   loadWebcamCustom();
   if (state.webcamOn) drawWebcams();
 });

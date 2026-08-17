@@ -16,7 +16,7 @@ import { setBroadcast, notify } from './notify.js';
 import { refreshFrequencies, frequenciesMeta } from './freq.js';
 import { airportFreqsInBounds, replayBounds, replayFrame, spottedSince, heatmapCells, airportByIdent } from './db.js';
 import { recentDetectionList } from './detect.js';
-import { webcamsInBounds } from './webcams.js';
+import { webcamsInBounds, normalizeEmbed, isEmbeddableHost } from './webcams.js';
 import { icaoToCountry } from './country.js';
 import { rangeOutline, clearRange } from './range.js';
 import { getTles, startPassNotifier } from './space.js';
@@ -287,16 +287,20 @@ app.post('/api/webcams/custom', requireAuth, (req, res) => {
   if (!String(name || '').trim() && !String(icao || '').trim()) {
     return res.status(400).json({ error: 'An airport name or ICAO is required.' });
   }
+  const finalEmbed = normalizeEmbed(String(embed).trim());
   const entry = {
     id: crypto.randomUUID(),
     icao: String(icao || '').trim().toUpperCase() || null,
     name: String(name || '').trim() || null,
     lat: la, lon: lo,
-    feeds: [{ title: String(title || '').trim() || 'Webcam', embed: String(embed).trim() }]
+    feeds: [{ title: String(title || '').trim() || 'Webcam', embed: finalEmbed }]
   };
   const custom = [...(getConfig().webcams?.custom || []), entry];
   saveConfig({ webcams: { custom } });
-  res.json({ entry, custom });
+  // Warn (don't block) when the host can't play inline under the app's CSP.
+  const warning = isEmbeddableHost(finalEmbed) ? null
+    : 'Saved — but this host is outside the app\'s embed allow-list (YouTube / Windy), so the browser will likely block it from playing inside the app. Use a YouTube or Windy embed URL for inline playback.';
+  res.json({ entry, custom, warning });
 });
 app.delete('/api/webcams/custom/:id', requireAuth, (req, res) => {
   const custom = (getConfig().webcams?.custom || []).filter((e) => e.id !== req.params.id);

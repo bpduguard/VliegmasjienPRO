@@ -9,19 +9,51 @@ import { getConfig } from './config.js';
 import { airportsNear } from './db.js';
 import { haversineKm } from './geo.js';
 
-// Best-effort built-in feeds. These are examples — verify/extend them via
-// config.webcams.custom (same shape). YouTube "live_stream?channel=" embeds
-// follow whatever the channel is currently streaming (or show "offline").
-export const BUILTIN_WEBCAMS = [
-  {
-    icao: 'EHAM', name: 'Amsterdam Schiphol', lat: 52.3086, lon: 4.7639,
-    feeds: [{ title: 'Schiphol spotter live', embed: 'https://www.youtube.com/embed/live_stream?channel=UCM6Dc3sTvI-mv9DdN2S-4pw' }]
-  },
-  {
-    icao: 'EHLE', name: 'Lelystad', lat: 52.4603, lon: 5.5272,
-    feeds: [{ title: 'Aviodrome / Lelystad', embed: 'https://www.youtube.com/embed/live_stream?channel=UCw3sMbwZ3rZQ0V1a1o0d0Vg' }]
-  }
-];
+// Built-in feeds ship empty on purpose: a webcam only plays inline if its source
+// allows embedding, and hard-coding feeds that later break (or don't allow it)
+// just produces the confusing "clicking play opens a new tab" behaviour. Add your
+// own via Settings → Airport webcams (config.webcams.custom), and/or a Windy key.
+export const BUILTIN_WEBCAMS = [];
+
+// Only these hosts are allowed by the app's Content-Security-Policy frame-src, so
+// only these can actually play inline; anything else the browser will block.
+export function isEmbeddableHost(url) {
+  try {
+    const h = new URL(url).hostname.replace(/^www\./, '');
+    return h === 'youtube.com' || h === 'youtube-nocookie.com' || h === 'm.youtube.com' || h === 'windy.com' || h.endsWith('.windy.com');
+  } catch { return false; }
+}
+
+// Turn common YouTube share links into a proper embeddable iframe URL (so a
+// pasted watch/short/live link plays inline instead of linking out), and make
+// YouTube embeds start muted-autoplay. Non-YouTube URLs pass through untouched.
+export function normalizeEmbed(raw) {
+  const url = String(raw || '').trim();
+  if (!url) return url;
+  const ytParams = (embedUrl) => {
+    try {
+      const u = new URL(embedUrl);
+      for (const [k, v] of [['autoplay', '1'], ['mute', '1'], ['playsinline', '1']]) {
+        if (!u.searchParams.has(k)) u.searchParams.set(k, v);
+      }
+      return u.toString();
+    } catch { return embedUrl; }
+  };
+  try {
+    const u = new URL(url);
+    const host = u.hostname.replace(/^www\./, '');
+    if (host === 'youtu.be') {
+      const id = u.pathname.slice(1).split('/')[0];
+      return id ? ytParams(`https://www.youtube.com/embed/${id}`) : url;
+    }
+    if (host === 'youtube.com' || host === 'm.youtube.com' || host === 'youtube-nocookie.com') {
+      if (u.pathname === '/watch' && u.searchParams.get('v')) return ytParams(`https://www.youtube.com/embed/${u.searchParams.get('v')}`);
+      if (u.pathname.startsWith('/live/')) return ytParams(`https://www.youtube.com/embed/${u.pathname.split('/')[2]}`);
+      if (u.pathname.startsWith('/embed/')) return ytParams(url);
+    }
+    return url;
+  } catch { return url; }
+}
 
 const WINDY_BASE = process.env.WINDY_WEBCAMS_BASE || 'https://api.windy.com/webcams/api/v3';
 const CLUSTER_KM = 2.5;   // feeds within this radius = one map marker (one airport)
@@ -70,14 +102,14 @@ export async function webcamsInBounds({ n, s, e, w }) {
     if (!Number.isFinite(a.lat) || !Number.isFinite(a.lon) || !inB(a.lat, a.lon)) continue;
     for (const f of a.feeds || []) {
       if (!f?.embed) continue;
-      points.push({ title: f.title || a.name, lat: a.lat, lon: a.lon, embed: f.embed, image: f.image || null, source: 'builtin', airport: { icao: a.icao || null, name: a.name || null } });
+      points.push({ title: f.title || a.name, lat: a.lat, lon: a.lon, embed: normalizeEmbed(f.embed), image: f.image || null, source: 'builtin', airport: { icao: a.icao || null, name: a.name || null } });
     }
   }
 
   // 2) Windy (query the centre with a radius covering the view)
   const cLat = (n + s) / 2, cLon = (e + w) / 2;
   const radius = Math.min(250, Math.max(20, haversineKm(cLat, cLon, n, e) || 50));
-  for (const wc of await fetchWindy(cLat, cLon, radius)) if (inB(wc.lat, wc.lon)) points.push(wc);
+  for (const wc of await fetchWindy(cLat, cLon, radius)) if (inB(wc.lat, wc.lon)) points.push({ ...wc, embed: normalizeEmbed(wc.embed) });
 
   // cluster feeds that share a location into one marker (one airport)
   const clusters = [];

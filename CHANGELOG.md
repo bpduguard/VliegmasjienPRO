@@ -2,6 +2,15 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.28.2
+- **Webcam feeds now play inline instead of opening a new tab** — for feeds whose source allows
+  embedding. Pasted YouTube links (`watch?v=`, `youtu.be/…`, `/live/…`) are auto-converted to proper
+  `/embed/` URLs with muted-autoplay, so they start playing inside the app. Adding a feed from a host
+  the browser can't embed (anything outside YouTube / Windy) now saves with a clear warning instead of
+  silently linking out. Removed the two placeholder built-in feeds (invalid IDs) that caused the
+  "clicking play opens a new tab" confusion — populate the layer via Settings → Airport webcams and/or a
+  Windy key. (A feed that opens a new tab means its owner disabled embedding — no app can override that.)
+
 ## 1.28.1
 - **Manage custom webcam feeds from Settings** (no more editing `config.json`). *Settings → Airport
   webcams* now has an add/remove editor: enter an ICAO and hit **Look up ✈** to autofill the airport
