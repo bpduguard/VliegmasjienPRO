@@ -14,7 +14,7 @@ import {
 } from './tracker.js';
 import { setBroadcast, notify } from './notify.js';
 import { refreshFrequencies, frequenciesMeta } from './freq.js';
-import { airportFreqsInBounds, replayBounds, replayFrame, spottedSince, heatmapCells } from './db.js';
+import { airportFreqsInBounds, replayBounds, replayFrame, spottedSince, heatmapCells, airportByIdent } from './db.js';
 import { recentDetectionList } from './detect.js';
 import { webcamsInBounds } from './webcams.js';
 import { icaoToCountry } from './country.js';
@@ -269,6 +269,46 @@ app.get('/api/aircraft', (req, res) => {
 app.get('/api/detections', requireAuth, (req, res) => {
   const limit = Math.min(400, Math.max(1, parseInt(req.query.limit, 10) || 200));
   res.json({ detections: recentDetectionList(limit) });
+});
+
+// Manage the user-curated custom webcam feeds (config.webcams.custom).
+app.get('/api/webcams/custom', requireAuth, (req, res) => {
+  res.json({ custom: getConfig().webcams?.custom || [] });
+});
+app.post('/api/webcams/custom', requireAuth, (req, res) => {
+  const { icao, name, lat, lon, title, embed } = req.body || {};
+  const la = parseFloat(lat), lo = parseFloat(lon);
+  if (!embed || !/^https:\/\//i.test(String(embed).trim())) {
+    return res.status(400).json({ error: 'A valid https embed (iframe) URL is required.' });
+  }
+  if (!Number.isFinite(la) || !Number.isFinite(lo) || Math.abs(la) > 90 || Math.abs(lo) > 180) {
+    return res.status(400).json({ error: 'Valid latitude/longitude are required.' });
+  }
+  if (!String(name || '').trim() && !String(icao || '').trim()) {
+    return res.status(400).json({ error: 'An airport name or ICAO is required.' });
+  }
+  const entry = {
+    id: crypto.randomUUID(),
+    icao: String(icao || '').trim().toUpperCase() || null,
+    name: String(name || '').trim() || null,
+    lat: la, lon: lo,
+    feeds: [{ title: String(title || '').trim() || 'Webcam', embed: String(embed).trim() }]
+  };
+  const custom = [...(getConfig().webcams?.custom || []), entry];
+  saveConfig({ webcams: { custom } });
+  res.json({ entry, custom });
+});
+app.delete('/api/webcams/custom/:id', requireAuth, (req, res) => {
+  const custom = (getConfig().webcams?.custom || []).filter((e) => e.id !== req.params.id);
+  saveConfig({ webcams: { custom } });
+  res.json({ ok: true, custom });
+});
+
+// Look up an airport by ICAO to autofill a custom feed's name/coords.
+app.get('/api/airports/lookup', requireAuth, (req, res) => {
+  const a = airportByIdent(req.query.ident);
+  if (!a) return res.status(404).json({ error: 'Airport not found (is the frequency database loaded?)' });
+  res.json(a);
 });
 
 // Airport webcams within the given map bounds (built-in list + Windy Webcams API).

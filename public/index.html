@@ -724,6 +724,23 @@
         <div class="row wrap">
           <label>Windy Webcams API key <input id="s-windy" size="36" placeholder="(optional)" /></label>
         </div>
+        <h4 class="wc-sub">Custom feeds</h4>
+        <p class="muted">Add your own airport webcam feeds. <b>Embed URL</b> is an iframe URL — e.g. a YouTube
+          <em>Share → Embed</em> link (<code>https://www.youtube.com/embed/…</code>) or a Windy webcam embed.
+          Multiple feeds at the same airport are grouped with a switcher. (YouTube and Windy embeds are
+          allowed by the app's security policy; other hosts may be blocked by your browser.)</p>
+        <div id="wc-custom-list" class="wc-custom-list"></div>
+        <div class="row wrap wc-add">
+          <input id="wc-add-icao" size="6" placeholder="ICAO" />
+          <button id="wc-add-lookup" type="button">Look up ✈</button>
+          <input id="wc-add-name" size="18" placeholder="Airport name" />
+          <input id="wc-add-lat" size="9" placeholder="Lat" />
+          <input id="wc-add-lon" size="9" placeholder="Lon" />
+          <input id="wc-add-title" size="16" placeholder="Feed title" />
+          <input id="wc-add-embed" size="34" placeholder="Embed URL (iframe)" />
+          <button id="wc-add-btn" type="button" class="primary">+ Add feed</button>
+        </div>
+        <div id="wc-add-msg" class="muted"></div>
       </section>
 
       <div class="row">

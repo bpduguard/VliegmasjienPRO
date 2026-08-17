@@ -578,6 +578,57 @@ $('#webcam-toggle').addEventListener('change', (e) => {
   refreshLayersBtn();
 });
 
+// Settings: manage custom webcam feeds
+async function loadWebcamCustom() {
+  try {
+    const { custom } = await (await fetch('/api/webcams/custom')).json();
+    $('#wc-custom-list').innerHTML = (custom && custom.length)
+      ? custom.map((e) => {
+          const f = (e.feeds && e.feeds[0]) || {};
+          const ap = [e.icao, e.name].filter(Boolean).join(' · ') || '—';
+          return `<div class="wc-custom-row">
+            <span class="wc-c-ap">${esc(ap)}</span>
+            <span class="wc-c-title">${esc(f.title || '')}</span>
+            <span class="wc-c-embed muted" title="${esc(f.embed || '')}">${esc(f.embed || '')}</span>
+            ${e.id ? `<button class="wc-c-del" data-id="${esc(e.id)}">delete</button>` : ''}
+          </div>`;
+        }).join('')
+      : '<span class="muted">No custom feeds yet.</span>';
+  } catch { /* not authed / offline */ }
+}
+$('#wc-add-lookup').addEventListener('click', async () => {
+  const ident = $('#wc-add-icao').value.trim();
+  if (!ident) return;
+  try {
+    const r = await fetch(`/api/airports/lookup?ident=${encodeURIComponent(ident)}`);
+    if (!r.ok) { $('#wc-add-msg').textContent = 'Airport not found — load the frequency database (below) or enter coordinates manually.'; return; }
+    const a = await r.json();
+    $('#wc-add-name').value = a.name || '';
+    $('#wc-add-lat').value = a.lat; $('#wc-add-lon').value = a.lon;
+    $('#wc-add-msg').textContent = `Found ${a.ident} — ${a.name}`;
+  } catch { /* ignore */ }
+});
+$('#wc-add-btn').addEventListener('click', async () => {
+  const body = {
+    icao: $('#wc-add-icao').value.trim(), name: $('#wc-add-name').value.trim(),
+    lat: $('#wc-add-lat').value.trim(), lon: $('#wc-add-lon').value.trim(),
+    title: $('#wc-add-title').value.trim(), embed: $('#wc-add-embed').value.trim()
+  };
+  const r = await fetch('/api/webcams/custom', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  if (!r.ok) { $('#wc-add-msg').textContent = (await r.json().catch(() => ({}))).error || 'Failed to add.'; return; }
+  ['#wc-add-icao', '#wc-add-name', '#wc-add-lat', '#wc-add-lon', '#wc-add-title', '#wc-add-embed'].forEach((s) => ($(s).value = ''));
+  $('#wc-add-msg').textContent = '✓ Feed added.';
+  loadWebcamCustom();
+  if (state.webcamOn) drawWebcams();
+});
+$('#wc-custom-list').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.wc-c-del');
+  if (!btn) return;
+  await fetch(`/api/webcams/custom/${btn.dataset.id}`, { method: 'DELETE' });
+  loadWebcamCustom();
+  if (state.webcamOn) drawWebcams();
+});
+
 // ----------------------------------------------------------------- arrivals board (FIDS tab)
 // A live airport-style arrivals board. Data (routes + ETA) is refreshed from the
 // server every ~12s; the clock and ETA countdowns tick every second in between so
@@ -2580,6 +2631,7 @@ $$('#spotted-table th[data-sort]').forEach((th) =>
 async function loadSettings() {
   const c = await (await fetch('/api/config')).json();
   state.config = c;
+  loadWebcamCustom();
   $('#s-src-mode').value = c.source?.mode || 'json';
   $('#s-sbs-host').value = c.source?.sbsHost || '';
   $('#s-sbs-port').value = c.source?.sbsPort || 30003;

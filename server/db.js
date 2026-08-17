@@ -255,6 +255,13 @@ export function airportFreqsCount() {
   return db.prepare('SELECT COUNT(*) AS c FROM airport_freqs').get().c;
 }
 
+// Look up a single airport by ICAO/ident (for autofilling custom webcam feeds).
+export function airportByIdent(ident) {
+  const r = db.prepare('SELECT ident, name, lat, lon FROM airport_freqs WHERE ident = ?')
+    .get((ident || '').trim().toUpperCase());
+  return r ? { ident: r.ident, name: r.name, lat: r.lat, lon: r.lon } : null;
+}
+
 // Airports (with comm frequencies, i.e. towered/instrument fields) within a
 // radius of a point — the index the go-around detector scans. elev is 0 (the
 // frequency dataset carries no elevation); fine for near-sea-level coverage.

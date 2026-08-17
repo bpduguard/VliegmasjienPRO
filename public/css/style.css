@@ -303,6 +303,17 @@ button.danger:hover { background: rgba(239,68,68,0.12); border-color: var(--dang
 .wc-feedtitle { padding: 7px 12px; font-size: 0.82rem; }
 @media (max-width: 560px) { .webcam-panel { right: 12px; left: 12px; width: auto; } }
 
+.wc-sub { margin: 14px 0 4px; font-size: 0.9rem; color: var(--text); }
+.wc-custom-list { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; }
+.wc-custom-row { display: flex; align-items: center; gap: 10px; padding: 5px 8px; background: var(--bg2, #0b1220);
+  border: 1px solid var(--border); border-radius: 8px; font-size: 0.84rem; }
+.wc-c-ap { font-weight: 600; color: var(--text); white-space: nowrap; }
+.wc-c-title { color: var(--muted); white-space: nowrap; }
+.wc-c-embed { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.76rem; }
+.wc-c-del { background: transparent; border: 1px solid var(--border); color: #f87171; border-radius: 6px; padding: 2px 9px; cursor: pointer; }
+.wc-c-del:hover { background: rgba(248,113,113,0.12); border-color: #f87171; }
+.wc-add { align-items: center; gap: 6px; }
+
 /* aerospace (satellite) markers */
 .sat-pin {
   display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;

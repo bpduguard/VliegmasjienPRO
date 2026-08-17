@@ -2,6 +2,13 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.28.1
+- **Manage custom webcam feeds from Settings** (no more editing `config.json`). *Settings → Airport
+  webcams* now has an add/remove editor: enter an ICAO and hit **Look up ✈** to autofill the airport
+  name and coordinates from the frequency database (or type them in), give the feed a title and an
+  embed URL, and add it. Feeds are listed with a delete button, and the map layer refreshes live.
+  Backed by `GET/POST/DELETE /api/webcams/custom` and `GET /api/airports/lookup` (all auth-only).
+
 ## 1.28.0
 - **New Airport webcams map layer.** Toggle **📷 Airport webcams** in the Layers menu to see airports
   with live webcam feeds; clicking a marker plays the feed **inside the app**, with a **◀ ▶ switcher**
