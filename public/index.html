@@ -68,7 +68,10 @@
           <label class="menu-item auth-only"><input type="checkbox" id="rings-toggle" /> <span>⊚ Distance rings</span></label>
           <label class="menu-item auth-only"><input type="checkbox" id="range-toggle" /> <span>📡 Range outline</span></label>
           <label class="menu-item"><input type="checkbox" id="arrivals-toggle" /> <span>🛬 Arrivals</span></label>
-          <label class="menu-item"><input type="checkbox" id="webcam-toggle" /> <span>📷 Airport webcams</span></label>
+          <label class="menu-item"><input type="checkbox" id="webcam-toggle" /> <span>📷 Webcams</span></label>
+          <div id="webcam-opts" class="menu-sub hidden">
+            <label><input type="checkbox" id="webcam-airports-only" /> Airports only</label>
+          </div>
           <label class="menu-item"><input type="checkbox" id="airspace-toggle" /> <span>🛫 Airspace (OpenAIP)</span></label>
           <label class="menu-item"><input type="checkbox" id="metar-toggle" /> <span>🌬 Aviation weather (METAR)</span></label>
           <label class="menu-item"><input type="checkbox" id="space-toggle" /> <span>🛰 Aerospace (ISS, Hubble)</span></label>
@@ -716,11 +719,12 @@
       </section>
 
       <section class="settings-block">
-        <h3>Airport webcams</h3>
-        <p class="muted">The <strong>📷 Airport webcams</strong> layer shows airports with live webcam feeds — the
-          feed plays inside the app, with a switcher when an airport has several. A small built-in list works
-          out of the box; add a free <a href="https://api.windy.com/webcams" target="_blank" rel="noopener">Windy Webcams API</a>
-          key to auto-discover webcams at airports across the map. Toggle it from the map's <strong>Layers</strong> menu.</p>
+        <h3>Webcams</h3>
+        <p class="muted">The <strong>📷 Webcams</strong> layer shows nearby live webcam feeds — each plays inside the
+          app, with a switcher when a spot has several. Add a free <a href="https://api.windy.com/webcams" target="_blank" rel="noopener">Windy Webcams API</a>
+          key to auto-discover webcams across the map (these are labelled by their own name, with the nearest airport
+          shown as context — use <strong>Airports only</strong> in the Layers menu to show just cams at/near a field),
+          or add your own airport feeds below. Toggle it from the map's <strong>Layers</strong> menu.</p>
         <div class="row wrap">
           <label>Windy Webcams API key <input id="s-windy" size="36" placeholder="(optional)" /></label>
         </div>

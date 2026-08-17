@@ -276,9 +276,10 @@ button.danger:hover { background: rgba(239,68,68,0.12); border-color: var(--dang
 /* airport webcam markers + viewer panel */
 .webcam-pin {
   display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; cursor: pointer;
-  padding: 2px 6px; background: rgba(13, 20, 38, 0.9); border: 1px solid #a855f7;
+  padding: 2px 6px; background: rgba(13, 20, 38, 0.9); border: 1px solid #6b7a91;
   border-radius: 11px; font-size: 12px; line-height: 16px; color: var(--text);
 }
+.webcam-pin.is-airport { border-color: #a855f7; } /* at/near an airport */
 .webcam-pin .webcam-code { font-weight: 700; }
 .webcam-pin .webcam-badge {
   background: #a855f7; color: #f5f3ff; font-weight: 700; font-size: 10px;

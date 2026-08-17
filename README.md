@@ -72,9 +72,10 @@ container.
   bearing), accumulated over time and persisted; resettable in Settings
 - 🛬 **Arrivals** overlay — groups tracked aircraft by their destination airport and shows, per airport,
   a table of inbound flights with arrival time, time-to-go, the flight, and its departure airport
-- 📷 **Airport webcams** overlay — airports with live webcam feeds; click a marker to play the feed
-  inside the app, with a switcher when an airport has several. Built-in / user-curated list
-  (`config.webcams.custom`) plus optional **Windy Webcams API** (free key) for automatic discovery
+- 📷 **Webcams** overlay — nearby live webcam feeds; click a marker to play the feed inside the app,
+  with a switcher when a spot has several. Auto-discovered cams (optional **Windy Webcams API**, free
+  key) are labelled by their own name with the nearest airport as context, and an **Airports only**
+  toggle narrows to cams at/near a field; add your own airport feeds via `config.webcams.custom`
 - 🛬 **Arrivals board** (own tab) — a live airport-style FIDS: every inbound flight sorted by ETA with
   from/to airports, arrival time + live countdown, distance flown vs. still to go, a progress bar, and a
   live status (En route / Descending / Approaching / Landing); filter by destination, click a row to

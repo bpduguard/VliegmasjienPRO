@@ -2,6 +2,17 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.28.3
+- **The webcams layer is now honest about what it shows.** The Windy Webcams API returns *all* nearby
+  cams (beaches, city centres, highways…), not just airports, so:
+  - Renamed the layer **📷 Airport webcams → 📷 Webcams**.
+  - Auto-discovered cams are now labelled by **their own name** (no longer stamped with a nearby
+    airport's name); the nearest airport is shown only as **context** ("· near EHAM (2 km)"). Feeds you
+    add yourself keep their airport name.
+  - New **Airports only** toggle (Layers menu) narrows the auto-discovered cams to those actually at/near
+    a field — flagged when within ~3 km of a known airport or tagged as an aviation cam by Windy. Airport
+    cams get a violet marker; other cams are muted.
+
 ## 1.28.2
 - **Webcam feeds now play inline instead of opening a new tab** — for feeds whose source allows
   embedding. Pasted YouTube links (`watch?v=`, `youtu.be/…`, `/live/…`) are auto-converted to proper

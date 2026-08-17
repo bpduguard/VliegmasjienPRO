@@ -67,7 +67,7 @@ async function fetchWindy(lat, lon, radiusKm) {
   const hit = windyCache.get(ck);
   if (hit && Date.now() - hit.ts < CACHE_TTL) return hit.list;
   const url = `${WINDY_BASE}/webcams?nearby=${lat.toFixed(3)},${lon.toFixed(3)},${Math.round(radiusKm)}`
-    + '&include=images,location,player,urls&limit=50';
+    + '&include=categories,images,location,player,urls&limit=50';
   let list = [];
   try {
     const res = await fetch(url, { headers: { 'x-windy-api-key': key }, signal: AbortSignal.timeout(10000) });
@@ -82,7 +82,10 @@ async function fetchWindy(lat, lon, radiusKm) {
       const embed = w.player?.live?.embed || w.player?.day?.embed
         || (id != null ? `https://webcams.windy.com/webcams/public/embed/player/${id}/live` : null);
       if (lat2 == null || lon2 == null || !embed) return null;
-      return { title: w.title || loc.city || 'Webcam', lat: lat2, lon: lon2, image, embed, source: 'windy' };
+      // Windy category tags (best-effort) — used to flag aviation/airport cams.
+      const cats = (w.categories || []).map((c) => String(c?.id || c?.name || c?.slug || c || '').toLowerCase());
+      const aviation = cats.some((c) => /airport|aviation|airfield|aerodrome/.test(c));
+      return { title: w.title || loc.city || 'Webcam', city: loc.city || null, lat: lat2, lon: lon2, image, embed, source: 'windy', aviation };
     }).filter(Boolean);
     windyCache.set(ck, { ts: Date.now(), list });
     if (windyCache.size > 200) windyCache.clear();
@@ -111,34 +114,42 @@ export async function webcamsInBounds({ n, s, e, w }) {
   const radius = Math.min(250, Math.max(20, haversineKm(cLat, cLon, n, e) || 50));
   for (const wc of await fetchWindy(cLat, cLon, radius)) if (inB(wc.lat, wc.lon)) points.push({ ...wc, embed: normalizeEmbed(wc.embed) });
 
-  // cluster feeds that share a location into one marker (one airport)
+  // cluster feeds that share a location into one marker
   const clusters = [];
   for (const p of points) {
     let c = clusters.find((cl) => haversineKm(cl.lat, cl.lon, p.lat, p.lon) < CLUSTER_KM);
-    if (!c) { c = { lat: p.lat, lon: p.lon, airport: p.airport || null, feeds: [] }; clusters.push(c); }
-    if (!c.airport?.name && p.airport?.name) c.airport = p.airport;
+    if (!c) { c = { lat: p.lat, lon: p.lon, airport: null, title: null, aviation: false, feeds: [] }; clusters.push(c); }
+    if (p.airport?.name || p.airport?.icao) c.airport = p.airport;   // user-tagged airport (custom feed)
+    if (!c.title && p.title) c.title = p.title;                      // the cam's own name/city
+    if (p.aviation) c.aviation = true;
     c.feeds.push({ title: p.title, embed: p.embed, image: p.image || null, source: p.source });
   }
 
-  // label unlabelled clusters by their nearest airport (best-effort; needs the
-  // frequency database — otherwise the cluster keeps a generic label)
-  for (const c of clusters) {
-    if (c.airport?.name) continue;
+  const AIRPORT_KM = 3; // "at an airport" if this close to a known field
+  const webcams = clusters.map((c) => {
+    const custom = !!(c.airport && (c.airport.name || c.airport.icao));
+    // nearest airport (context + proximity test) — best-effort, needs the freq DB
+    let near = null;
     try {
       let best = null, bkm = Infinity;
       for (const a of airportsNear(c.lat, c.lon, 15)) {
         const dk = haversineKm(c.lat, c.lon, a.lat, a.lon);
         if (dk < bkm) { bkm = dk; best = a; }
       }
-      if (best) c.airport = { icao: best.ident, name: best.name };
+      if (best) near = { icao: best.ident, name: best.name, distKm: +bkm.toFixed(1) };
     } catch { /* freq db may be empty */ }
-  }
-
-  const airports = clusters.map((c) => ({
-    icao: c.airport?.icao || null,
-    name: c.airport?.name || 'Webcam location',
-    lat: c.lat, lon: c.lon,
-    feeds: c.feeds
-  }));
-  return { hasKey: !!cfg.webcams?.windyKey, airports };
+    // Honest labelling: user-tagged feeds keep their airport name; auto-discovered
+    // cams are named by themselves, with the nearest airport only as context.
+    const name = custom ? (c.airport.name || c.airport.icao) : (c.title || 'Webcam');
+    const isAirport = custom || c.aviation || (near != null && near.distKm <= AIRPORT_KM);
+    return {
+      name,
+      icao: custom ? (c.airport.icao || null) : null,
+      near: custom ? null : near,   // context tag for auto-discovered cams
+      isAirport,
+      lat: c.lat, lon: c.lon,
+      feeds: c.feeds
+    };
+  });
+  return { hasKey: !!cfg.webcams?.windyKey, webcams };
 }

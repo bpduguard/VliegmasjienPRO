@@ -506,40 +506,47 @@ const webcamLayer = L.layerGroup();
 let webcamTimer = null;
 let wcFeeds = [], wcIdx = 0; // the currently-open location's feeds + selected index
 
+const wcShort = (s) => (s && s.length > 18 ? s.slice(0, 17) + '…' : (s || 'Webcam'));
+
 async function drawWebcams() {
   const b = map.getBounds();
   try {
     const url = `/api/webcams?n=${b.getNorth()}&s=${b.getSouth()}&e=${b.getEast()}&w=${b.getWest()}`;
     const data = await (await fetch(url)).json();
     webcamLayer.clearLayers();
-    for (const ap of data.airports || []) {
-      if (ap.lat == null || ap.lon == null) continue;
-      const n = ap.feeds.length;
-      const label = esc(ap.icao || ap.name || '📷');
+    const list = (data.webcams || []).filter((c) => !state.webcamAirportsOnly || c.isAirport);
+    for (const c of list) {
+      if (c.lat == null || c.lon == null) continue;
+      const nFeeds = c.feeds.length;
+      const label = esc(c.icao || wcShort(c.name));
       const icon = L.divIcon({
         className: 'webcam-icon',
-        html: `<div class="webcam-pin"><span class="webcam-code">📷 ${label}</span>${n > 1 ? `<span class="webcam-badge">${n}</span>` : ''}</div>`,
+        html: `<div class="webcam-pin${c.isAirport ? ' is-airport' : ''}"><span class="webcam-code">📷 ${label}</span>${nFeeds > 1 ? `<span class="webcam-badge">${nFeeds}</span>` : ''}</div>`,
         iconSize: [64, 22], iconAnchor: [32, 11]
       });
-      L.marker([ap.lat, ap.lon], { icon, zIndexOffset: 900 })
+      L.marker([c.lat, c.lon], { icon, zIndexOffset: 900 })
         .addTo(webcamLayer)
-        .on('click', () => openWebcam(ap));
+        .on('click', () => openWebcam(c));
     }
-    if (!data.airports?.length && !state.webcamHinted) {
+    if (!list.length && !state.webcamHinted) {
       state.webcamHinted = true;
-      toast({ kind: 'test', title: 'Airport webcams',
-        message: data.hasKey
-          ? 'No webcams found in this area. Pan/zoom to a covered airport.'
-          : 'Showing built-in feeds only. Add a free Windy Webcams API key in Settings → Airport webcams to discover more.' });
+      toast({ kind: 'test', title: 'Webcams',
+        message: state.webcamAirportsOnly
+          ? 'No webcams at airports in this area. Turn off “Airports only”, or pan to a field.'
+          : data.hasKey
+            ? 'No webcams found in this area. Pan/zoom around.'
+            : 'No feeds here yet. Add your own in Settings → Webcams, or add a free Windy Webcams API key to discover more.' });
     }
   } catch { /* ignore */ }
 }
 
-function openWebcam(ap) {
-  wcFeeds = ap.feeds || [];
+function openWebcam(c) {
+  wcFeeds = c.feeds || [];
   wcIdx = 0;
   if (!wcFeeds.length) return;
-  $('#wc-title').textContent = ap.name ? `📷 ${ap.name}${ap.icao ? ` (${ap.icao})` : ''}` : '📷 Webcam';
+  let title = c.icao ? `📷 ${c.name} (${c.icao})` : `📷 ${c.name}`;
+  if (c.near && !c.icao) title += ` · near ${c.near.icao || c.near.name} (${c.near.distKm} km)`;
+  $('#wc-title').textContent = title;
   $('#webcam-panel').classList.remove('hidden');
   showWebcamFeed();
 }
@@ -565,6 +572,7 @@ $('#wc-close').addEventListener('click', closeWebcam);
 
 $('#webcam-toggle').addEventListener('change', (e) => {
   state.webcamOn = e.target.checked;
+  $('#webcam-opts').classList.toggle('hidden', !state.webcamOn);
   if (state.webcamOn) {
     webcamLayer.addTo(map);
     drawWebcams();
@@ -576,6 +584,11 @@ $('#webcam-toggle').addEventListener('change', (e) => {
     closeWebcam();
   }
   refreshLayersBtn();
+});
+$('#webcam-airports-only').addEventListener('change', (e) => {
+  state.webcamAirportsOnly = e.target.checked;
+  state.webcamHinted = false;
+  if (state.webcamOn) drawWebcams();
 });
 
 // Settings: manage custom webcam feeds
