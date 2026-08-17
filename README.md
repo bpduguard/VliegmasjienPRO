@@ -17,6 +17,9 @@ container.
   escaping, security headers, prototype-pollution & SSRF guards, scrypt password + HMAC sessions
   (see [SECURITY.md](SECURITY.md))
 
+- 📡 **Multiple receivers** — merge extra `aircraft.json` feeds (a second or mobile Pi) into one map;
+  aircraft are combined by ICAO address and tagged with which receivers saw them, each with live health.
+  The range outline stays tied to your primary receiver
 - 🗺 **Live map** (Leaflet, dark & light) with rotating plane icons, labels, and **follow mode**,
   plus **🎯 Auto-follow** — automatically centres on and shows details of the newest aircraft, holding
   each for at least 10 s before switching to a newer arrival. Clicking an aircraft shows its **full

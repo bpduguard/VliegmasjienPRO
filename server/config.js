@@ -17,6 +17,10 @@ const DEFAULTS = {
   },
   // Where to fetch aircraft.json from. dump1090-fa / readsb / tar1090 all serve this.
   dump1090Url: process.env.DUMP1090_URL || 'http://dump1090:8080/data/aircraft.json',
+  // Extra aircraft.json feeds merged into the map alongside the primary source
+  // (e.g. a second/mobile receiver). Each: { id, name, url, enabled }. Aircraft are
+  // merged by ICAO hex; the range outline stays tied to the primary receiver only.
+  extraSources: [],
   pollIntervalMs: 2000,
   // Receiver location (used as map center and for distance calculations).
   // Auto-detected from dump1090 receiver.json when possible.

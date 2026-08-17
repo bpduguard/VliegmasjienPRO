@@ -534,6 +534,7 @@
               <option value="sbs">SBS / BaseStation TCP (beasthost port 30003)</option>
             </select>
           </label>
+          <label>Name <input id="s-src-name" size="12" placeholder="Home" /></label>
         </div>
         <div class="row wrap" id="s-src-json">
           <label>aircraft.json URL <input id="s-dump-url" size="42" /></label>
@@ -546,6 +547,17 @@
         <div class="row wrap">
           <label>Poll interval (ms) <input id="s-poll" type="number" min="500" step="500" size="8" /></label>
         </div>
+        <h4 class="wc-sub">Extra sources</h4>
+        <p class="muted">Merge additional <code>aircraft.json</code> feeds — e.g. a second or mobile receiver.
+          Aircraft are combined by ICAO address (positions come from the aircraft, so there's no conflict);
+          each is tagged with the receivers that saw it. The range outline stays tied to your primary receiver.</p>
+        <div id="src-list" class="wc-custom-list"></div>
+        <div class="row wrap wc-add">
+          <input id="src-add-name" size="12" placeholder="Name (e.g. Mobile)" />
+          <input id="src-add-url" size="40" placeholder="http://192.168.x.x/data/aircraft.json" />
+          <button id="src-add-btn" type="button" class="primary">+ Add source</button>
+        </div>
+        <div id="src-add-msg" class="muted"></div>
         <div class="row wrap">
           <label>Receiver lat <input id="s-rlat" size="10" /></label>
           <label>Receiver lon <input id="s-rlon" size="10" /></label>

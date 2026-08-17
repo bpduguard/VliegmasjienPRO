@@ -2,6 +2,16 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.29.0
+- **Multiple data sources** — feed the map from more than one receiver (e.g. a second or mobile Pi).
+  In *Settings → Receiver → Extra sources*, add any number of `aircraft.json` URLs; each shows **live
+  health** (reachable / aircraft count / error) and an enable toggle. Aircraft are **merged by ICAO
+  address** — positions come from the aircraft itself so two receivers never conflict; the freshest fix
+  wins and gaps are filled from the other feed. Each aircraft is **tagged with the receivers that saw
+  it** ("Received by: Home, Mobile" in the detail panel). The **range outline stays tied to your primary
+  receiver** so a mobile source can't inflate your home coverage map. You can also **name** the primary
+  source. Fully backward compatible — single-source setups are unaffected.
+
 ## 1.28.3
 - **The webcams layer is now honest about what it shows.** The Windy Webcams API returns *all* nearby
   cams (beaches, city centres, highways…), not just airports, so:

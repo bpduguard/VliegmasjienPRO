@@ -314,6 +314,10 @@ button.danger:hover { background: rgba(239,68,68,0.12); border-color: var(--dang
 .wc-c-del { background: transparent; border: 1px solid var(--border); color: #f87171; border-radius: 6px; padding: 2px 9px; cursor: pointer; }
 .wc-c-del:hover { background: rgba(248,113,113,0.12); border-color: #f87171; }
 .wc-add { align-items: center; gap: 6px; }
+.src-en { display: inline-flex; align-items: center; }
+.src-health { white-space: nowrap; font-size: 0.78rem; }
+.src-ok { color: #4ade80; }
+.src-bad { color: #f87171; }
 
 /* aerospace (satellite) markers */
 .sat-pin {

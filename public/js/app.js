@@ -643,6 +643,57 @@ $('#wc-custom-list').addEventListener('click', async (e) => {
   if (state.webcamOn) drawWebcams();
 });
 
+// Settings: manage extra data sources (second/mobile receiver feeds)
+async function loadExtraSources() {
+  try {
+    const [{ sources }, status] = await Promise.all([
+      (await fetch('/api/sources/extra')).json(),
+      (await fetch('/api/status')).json().catch(() => ({}))
+    ]);
+    const stById = {};
+    for (const st of status.extraSources || []) stById[st.id] = st;
+    $('#src-list').innerHTML = (sources && sources.length)
+      ? sources.map((s) => {
+          const st = stById[s.id];
+          const health = !s.enabled ? '<span class="muted">disabled</span>'
+            : st?.error ? `<span class="src-bad">✗ ${esc(st.error)}</span>`
+            : st ? `<span class="src-ok">✓ ${st.count} aircraft</span>`
+            : '<span class="muted">…</span>';
+          return `<div class="wc-custom-row" data-id="${esc(s.id)}">
+            <label class="src-en"><input type="checkbox" class="src-toggle"${s.enabled ? ' checked' : ''} /> </label>
+            <span class="wc-c-ap">${esc(s.name)}</span>
+            <span class="wc-c-embed muted" title="${esc(s.url)}">${esc(s.url)}</span>
+            <span class="src-health">${health}</span>
+            <button class="wc-c-del src-del">delete</button>
+          </div>`;
+        }).join('')
+      : '<span class="muted">No extra sources. Add your second/mobile receiver below.</span>';
+  } catch { /* not authed */ }
+}
+$('#src-add-btn').addEventListener('click', async () => {
+  const body = { name: $('#src-add-name').value.trim(), url: $('#src-add-url').value.trim() };
+  const r = await fetch('/api/sources/extra', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) { $('#src-add-msg').textContent = data.error || 'Failed to add.'; return; }
+  $('#src-add-name').value = ''; $('#src-add-url').value = '';
+  $('#src-add-msg').textContent = '✓ Source added — merging on the next poll.';
+  loadExtraSources();
+});
+$('#src-list').addEventListener('click', async (e) => {
+  const row = e.target.closest('.wc-custom-row'); if (!row) return;
+  const id = row.dataset.id;
+  if (e.target.closest('.src-del')) {
+    await fetch(`/api/sources/extra/${id}`, { method: 'DELETE' });
+    loadExtraSources();
+  }
+});
+$('#src-list').addEventListener('change', async (e) => {
+  const t = e.target.closest('.src-toggle'); if (!t) return;
+  const id = e.target.closest('.wc-custom-row').dataset.id;
+  await fetch(`/api/sources/extra/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ enabled: t.checked }) });
+  loadExtraSources();
+});
+
 // ----------------------------------------------------------------- arrivals board (FIDS tab)
 // A live airport-style arrivals board. Data (routes + ETA) is refreshed from the
 // server every ~12s; the clock and ETA countdowns tick every second in between so
@@ -1890,6 +1941,8 @@ function updateDetailLive(ac) {
     ...(isAuthed() ? [['Distance', fmt.dist(ac.distKm)]] : []),
     ['Signal', ac.rssi != null ? ac.rssi + ' dBFS' : '—'],
     ['Messages', ac.messages?.toLocaleString() ?? '—'],
+    // Only meaningful when more than one receiver feeds the map.
+    ...(ac.receivers && ac.receivers.length ? [['Received by', esc(ac.receivers.join(', '))]] : []),
     ['First seen', fmt.time(ac.firstSeen)],
     ['Position', ac.lat != null ? `${ac.lat.toFixed(3)}, ${ac.lon.toFixed(3)}` : '—']
   ];
@@ -2646,7 +2699,9 @@ async function loadSettings() {
   const c = await (await fetch('/api/config')).json();
   state.config = c;
   loadWebcamCustom();
+  loadExtraSources();
   $('#s-src-mode').value = c.source?.mode || 'json';
+  $('#s-src-name').value = c.source?.name || '';
   $('#s-sbs-host').value = c.source?.sbsHost || '';
   $('#s-sbs-port').value = c.source?.sbsPort || 30003;
   toggleSourceRows();
@@ -2786,6 +2841,7 @@ $('#s-save').addEventListener('click', async () => {
   const patch = {
     source: {
       mode: $('#s-src-mode').value,
+      name: $('#s-src-name').value.trim() || 'Home',
       sbsHost: $('#s-sbs-host').value.trim(),
       sbsPort: parseInt($('#s-sbs-port').value, 10) || 30003
     },

@@ -41,7 +41,8 @@ export function trackerStatus() {
     lastPollOk,
     lastPollError,
     messagesTotal,
-    receiver: getConfig().receiver
+    receiver: getConfig().receiver,
+    extraSources: extraSourceStatus()
   };
 }
 
@@ -130,9 +131,66 @@ function iconKind(ac) {
 const TRACK_RECORD_MS = 8000;
 const lastTrackRec = new Map(); // hex -> ts of last recorded track point
 
+// ── multi-source: extra aircraft.json feeds merged onto the primary ──────────
+const extraStatus = new Map(); // id -> { name, ok, count, error }
+export function extraSourceStatus() { return [...extraStatus.values()]; }
+
+async function fetchExtraSources(cfg) {
+  const out = [];
+  const active = new Set();
+  for (const src of cfg.extraSources || []) {
+    if (!src || src.enabled === false || !src.url) continue;
+    active.add(src.id);
+    const name = src.name || src.id;
+    try {
+      const res = await fetch(src.url, { signal: AbortSignal.timeout(8000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const j = await res.json();
+      const aircraft = j.aircraft || [];
+      out.push({ name, aircraft });
+      extraStatus.set(src.id, { id: src.id, name, ok: Date.now(), count: aircraft.length, error: null });
+    } catch (e) {
+      extraStatus.set(src.id, { id: src.id, name, ok: extraStatus.get(src.id)?.ok || null, count: 0, error: e.message });
+    }
+  }
+  for (const id of [...extraStatus.keys()]) if (!active.has(id)) extraStatus.delete(id);
+  return out;
+}
+
+// Overlay `incoming` onto `base` for the same hex: the fresher fix (lower `seen`)
+// wins, and either way any field the winner is missing is filled from the other.
+function mergeRaw(base, incoming) {
+  const fresher = (incoming.seen ?? 1e9) < (base.seen ?? 1e9);
+  for (const k in incoming) {
+    if (incoming[k] == null) continue;
+    if (fresher || base[k] == null) base[k] = incoming[k];
+  }
+}
+// Merge the primary + extra feeds into one aircraft list keyed by ICAO hex, and
+// tag each with the set of receivers that saw it (and whether the primary did).
+function mergeAircraft(primaryName, primaryList, extras) {
+  const merged = new Map();
+  const add = (list, name, isPrimary) => {
+    for (const raw of list || []) {
+      const hex = (raw.hex || '').toLowerCase().replace('~', '');
+      if (!hex) continue;
+      let m = merged.get(hex);
+      if (!m) { m = { raw: { ...raw }, receivers: new Set() }; merged.set(hex, m); }
+      else mergeRaw(m.raw, raw);
+      m.receivers.add(name);
+      if (isPrimary) m.primary = true;
+    }
+  };
+  add(primaryList, primaryName, true);
+  for (const ex of extras) add(ex.aircraft, ex.name, false);
+  const aircraft = [];
+  for (const m of merged.values()) { m.raw._receivers = [...m.receivers]; m.raw._primary = !!m.primary; aircraft.push(m.raw); }
+  return aircraft;
+}
+
 async function pollOnce() {
   const cfg = getConfig();
-  let data;
+  let primaryData;
   if (cfg.source?.mode === 'sbs') {
     ensureSbs(cfg.source.sbsHost, cfg.source.sbsPort);
     const st = sbsStatus();
@@ -140,7 +198,7 @@ async function pollOnce() {
       lastPollError = st.error || `connecting to ${cfg.source.sbsHost}:${cfg.source.sbsPort}…`;
       return;
     }
-    data = sbsSnapshot();
+    primaryData = sbsSnapshot();
     lastPollOk = Date.now();
     lastPollError = null;
   } else {
@@ -148,7 +206,7 @@ async function pollOnce() {
     try {
       const res = await fetch(cfg.dump1090Url, { signal: AbortSignal.timeout(8000) });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      data = await res.json();
+      primaryData = await res.json();
       lastPollOk = Date.now();
       lastPollError = null;
     } catch (e) {
@@ -156,6 +214,11 @@ async function pollOnce() {
       return;
     }
   }
+  // Merge extra sources (e.g. a mobile receiver) onto the primary feed.
+  const extras = await fetchExtraSources(cfg);
+  const data = extras.length
+    ? { messages: primaryData.messages, aircraft: mergeAircraft(cfg.source?.name || 'Primary', primaryData.aircraft, extras) }
+    : primaryData;
   messagesTotal = data.messages ?? messagesTotal;
   const now = Date.now();
   const seen = new Set();
@@ -194,6 +257,7 @@ async function pollOnce() {
     ac.seen = raw.seen ?? 0;
     ac.emitterCategory = raw.category || ac.emitterCategory;
     ac.source = deriveSource(raw, ac);
+    ac.receivers = raw._receivers || null; // which physical receivers saw it (multi-source)
     // readsb/tar1090 extras when available
     ac.registration = raw.r || ac.registration;
     ac.type = raw.t || ac.type;
@@ -259,8 +323,10 @@ async function pollOnce() {
     const rcv = cfg.receiver;
     if (rcv.lat != null && ac.lat != null) {
       ac.distKm = +haversineKm(rcv.lat, rcv.lon, ac.lat, ac.lon).toFixed(1);
-      // accumulate the actual reception-range outline
-      if (!ac.onGround) updateRangePoint(rcv, ac.lat, ac.lon, ac.alt_baro, ac.distKm, now);
+      // Accumulate the reception-range outline from the PRIMARY receiver only, so a
+      // mobile/extra source doesn't inflate the home range map. (undefined = single
+      // source = primary.)
+      if (!ac.onGround && raw._primary !== false) updateRangePoint(rcv, ac.lat, ac.lon, ac.alt_baro, ac.distKm, now);
     }
 
     // trail
@@ -488,6 +554,7 @@ function snapshotAircraft(ac, tail) {
     country: icaoToCountry(ac.hex),
     classification: ac.classification,
     source: ac.source || null,
+    receivers: ac.receivers || null,
     padbCategory: ac.padbCategory || null,
     category: ac.emitterCategory || null,
     iconKind: ac.iconKind || iconKind(ac), // memoized in pollOnce; fallback for safety

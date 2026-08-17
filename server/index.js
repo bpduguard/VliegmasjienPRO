@@ -271,6 +271,39 @@ app.get('/api/detections', requireAuth, (req, res) => {
   res.json({ detections: recentDetectionList(limit) });
 });
 
+// Manage extra data sources (config.extraSources) — additional aircraft.json feeds.
+app.get('/api/sources/extra', requireAuth, (req, res) => {
+  res.json({ sources: getConfig().extraSources || [] });
+});
+app.post('/api/sources/extra', requireAuth, (req, res) => {
+  const { name, url } = req.body || {};
+  if (!url || !/^https?:\/\//i.test(String(url).trim())) {
+    return res.status(400).json({ error: 'A valid http(s) aircraft.json URL is required.' });
+  }
+  const entry = { id: crypto.randomUUID(), name: String(name || '').trim() || 'Extra', url: String(url).trim(), enabled: true };
+  const extraSources = [...(getConfig().extraSources || []), entry];
+  saveConfig({ extraSources });
+  res.json({ entry, sources: extraSources });
+});
+app.patch('/api/sources/extra/:id', requireAuth, (req, res) => {
+  const b = req.body || {};
+  const extraSources = (getConfig().extraSources || []).map((s) => {
+    if (s.id !== req.params.id) return s;
+    const u = { ...s };
+    if (typeof b.enabled === 'boolean') u.enabled = b.enabled;
+    if (typeof b.name === 'string' && b.name.trim()) u.name = b.name.trim();
+    if (typeof b.url === 'string' && /^https?:\/\//i.test(b.url.trim())) u.url = b.url.trim();
+    return u;
+  });
+  saveConfig({ extraSources });
+  res.json({ sources: extraSources });
+});
+app.delete('/api/sources/extra/:id', requireAuth, (req, res) => {
+  const extraSources = (getConfig().extraSources || []).filter((s) => s.id !== req.params.id);
+  saveConfig({ extraSources });
+  res.json({ sources: extraSources });
+});
+
 // Manage the user-curated custom webcam feeds (config.webcams.custom).
 app.get('/api/webcams/custom', requireAuth, (req, res) => {
   res.json({ custom: getConfig().webcams?.custom || [] });
