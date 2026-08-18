@@ -66,11 +66,18 @@ function classify(ac) {
   const padb = ac.padbCategory ? ac.padbCategory.toLowerCase() : '';
   if (padb.includes('mil')) return 'military';
   if (isMilitaryAircraft(ac)) return 'military'; // hex block / callsign prefix / type
+  const cat = (ac.emitterCategory || '').toUpperCase();
+  const t = (ac.type || '').toUpperCase();
+  // Physical airframe classes first — a helicopter is a helicopter whatever
+  // callsign it uses, and these are otherwise lost in "other"/"private".
+  if (cat === 'A7' || (t && HELI_TYPES.test(t))) return 'helicopter';
+  if (cat === 'B1') return 'glider';
+  if (cat === 'B6' || cat === 'B7') return 'drone'; // UAV
   if (ac.airlineCallsign) return 'airline';
-  if (ac.type && BIZJET_TYPES.test(ac.type.toUpperCase())) return 'business';
-  // ICAO emitter categories: A1 light, A2 small, A7 rotorcraft → mostly GA/private
-  if (ac.emitterCategory === 'A1' || ac.emitterCategory === 'A7') return 'private';
-  if (ac.emitterCategory === 'A2' && !ac.airlineCallsign) return 'private';
+  if (t && BIZJET_TYPES.test(t)) return 'business';
+  // Light / general aviation: ICAO emitter A1 (light) / A2 (small), or a known
+  // light-aircraft type designator.
+  if (cat === 'A1' || cat === 'A2' || (t && LIGHT_TYPES.test(t))) return 'private';
   if (ac.type) return 'other';
   return 'unknown';
 }

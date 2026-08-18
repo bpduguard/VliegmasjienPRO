@@ -2,6 +2,17 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.30.0
+- **Finer aircraft categories** — the classifier now splits **helicopter**, **glider** and **drone/UAV**
+  out of the old "other"/"private" catch-alls, using the ADS-B emitter category (A7/B1/B6/B7) and type
+  designators. Physical class is decided before role (a helicopter is a helicopter whatever callsign it
+  flies), and light-aircraft *type codes* (not just the emitter category) now count as **private/GA** —
+  so "other" shrinks to genuinely unclassifiable known types. The new categories flow everywhere: marker
+  **colours**, the map **filter chips** (🚁 helicopters, 🪂 gliders, 🛸 drones), and the Statistics
+  **Categories** chart. *("other" = a known type in no specific bucket; "unknown" = no type at all.
+  Existing sightings keep the label they were logged with, so the split fills in for traffic seen from
+  now on.)*
+
 ## 1.29.0
 - **Multiple data sources** — feed the map from more than one receiver (e.g. a second or mobile Pi).
   In *Settings → Receiver → Extra sources*, add any number of `aircraft.json` URLs; each shows **live

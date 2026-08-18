@@ -1268,6 +1268,9 @@ const CLASS_COLORS = {
   military: '#4ade80',
   private: '#facc15',
   business: '#c084fc',
+  helicopter: '#fb923c',
+  glider: '#5eead4',
+  drone: '#f472b6',
   emergency: '#ef4444',
   other: '#94a3b8',
   unknown: '#64748b'
