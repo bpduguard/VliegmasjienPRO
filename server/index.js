@@ -10,13 +10,14 @@ import {
 } from './enrich.js';
 import { lookupPhoto, extFetch, photoServiceError, parseCsvLine } from './enrich.js';
 import {
-  startTracker, snapshot, aircraftDetail, trackerStatus, setTrackerBroadcast, arrivalsSnapshot, arrivalsBoard, rebuildAirportIndex
+  startTracker, snapshot, aircraftDetail, trackerStatus, setTrackerBroadcast, arrivalsSnapshot, arrivalsBoard, rebuildAirportIndex, reloadFromDisk
 } from './tracker.js';
 import { setBroadcast, notify } from './notify.js';
 import { refreshFrequencies, frequenciesMeta } from './freq.js';
 import { airportFreqsInBounds, replayBounds, replayFrame, spottedSince, heatmapCells, airportByIdent } from './db.js';
 import { recentDetectionList } from './detect.js';
 import { webcamsInBounds, normalizeEmbed, isEmbeddableHost } from './webcams.js';
+import { createBackup, restoreBackup, readManifest } from './backup.js';
 import { icaoToCountry } from './country.js';
 import { rangeOutline, clearRange } from './range.js';
 import { getTles, startPassNotifier } from './space.js';
@@ -459,6 +460,36 @@ app.get('/api/storage', requireAuth, (req, res) => {
 app.post('/api/storage/purge', requireAuth, (req, res) => {
   try { res.json(purgeLogs()); }
   catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ------------------------------------------------------------------ backup & restore
+// Download a full backup ZIP (database snapshot + settings + reference files).
+app.get('/api/backup', requireAuth, (req, res) => {
+  try {
+    const buf = createBackup();
+    const stamp = new Date().toISOString().slice(0, 16).replace(/[-:]/g, '').replace('T', '-');
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="vliegmasjienpro-backup-${stamp}.zip"`);
+    res.send(buf);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+// Peek at an uploaded backup (returns its manifest) — the raw ZIP is the body.
+app.post('/api/backup/inspect', requireAuth, express.raw({ type: '*/*', limit: '1gb' }), (req, res) => {
+  res.json(readManifest(req.body));
+});
+// Restore selected categories from an uploaded backup (raw ZIP body; selection in query).
+app.post('/api/backup/restore', requireAuth, express.raw({ type: '*/*', limit: '1gb' }), (req, res) => {
+  try {
+    const sel = {
+      settings: req.query.settings === '1',
+      history: req.query.history === '1',
+      tracks: req.query.tracks === '1',
+      reference: req.query.reference === '1'
+    };
+    const result = restoreBackup(req.body, sel);
+    try { reloadFromDisk(); } catch (e) { console.warn('[restore] reinit:', e.message); }
+    res.json({ ok: true, ...result });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get('/api/status', (req, res) => {

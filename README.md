@@ -20,6 +20,8 @@ container.
 - 📡 **Multiple receivers** — merge extra `aircraft.json` feeds (a second or mobile Pi) into one map;
   aircraft are combined by ICAO address and tagged with which receivers saw them, each with live health.
   The range outline stays tied to your primary receiver
+- 💾 **Backup & restore** — download a ZIP with the whole database, settings and reference data, and
+  restore selected parts of it (settings / history / replay / reference) later, live and without a restart
 - 🗺 **Live map** (Leaflet, dark & light) with rotating plane icons, labels, and **follow mode**,
   plus **🎯 Auto-follow** — automatically centres on and shows details of the newest aircraft, holding
   each for at least 10 s before switching to a newer arrival. Clicking an aircraft shows its **full

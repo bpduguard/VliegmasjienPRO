@@ -573,6 +573,27 @@
           <span id="s-storage-meta" class="muted">—</span>
           <button id="s-storage-purge" class="danger">Purge log now</button>
         </div>
+
+        <h4 class="wc-sub">Backup &amp; restore</h4>
+        <p class="muted">Download a ZIP with the whole database (history, statistics, replay, reference data)
+          and your settings. <b>Keep it safe</b> — it also contains your password hash and any API keys.
+          Restoring lets you choose exactly what to bring back and <b>overwrites</b> those parts.</p>
+        <div class="row wrap">
+          <a id="s-backup-dl" class="btnlink" href="/api/backup">⬇ Download backup</a>
+        </div>
+        <div class="row wrap">
+          <label>Restore from a backup <input type="file" id="s-restore-file" accept=".zip,application/zip" /></label>
+          <span id="s-restore-info" class="muted"></span>
+        </div>
+        <div class="row wrap hidden" id="s-restore-opts">
+          <label class="toggle"><input type="checkbox" id="s-rest-settings" checked /> Settings</label>
+          <label class="toggle"><input type="checkbox" id="s-rest-history" checked /> History &amp; statistics</label>
+          <label class="toggle"><input type="checkbox" id="s-rest-tracks" checked /> Replay tracks</label>
+          <label class="toggle"><input type="checkbox" id="s-rest-reference" checked /> Reference data</label>
+          <button id="s-restore-btn" class="danger">Restore selected</button>
+        </div>
+        <div id="s-restore-msg" class="muted"></div>
+
         <div class="row wrap">
           <label>Units
             <select id="s-units">

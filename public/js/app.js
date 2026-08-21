@@ -2811,6 +2811,41 @@ $('#s-storage-purge').addEventListener('click', async () => {
   }
 });
 
+// Backup & restore
+let restoreFile = null;
+$('#s-restore-file').addEventListener('change', async (e) => {
+  restoreFile = e.target.files[0] || null;
+  $('#s-restore-opts').classList.add('hidden');
+  $('#s-restore-info').textContent = '';
+  $('#s-restore-msg').textContent = '';
+  if (!restoreFile) return;
+  try {
+    const m = await (await fetch('/api/backup/inspect', { method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: restoreFile })).json();
+    if (m.error) { $('#s-restore-info').textContent = m.error; return; }
+    const when = m.createdAt ? new Date(m.createdAt).toLocaleString() : 'unknown date';
+    $('#s-restore-info').textContent = `Backup from ${when}${m.version ? ` · v${m.version}` : ''}`;
+    $('#s-restore-opts').classList.remove('hidden');
+  } catch { $('#s-restore-info').textContent = 'Could not read the file.'; }
+});
+$('#s-restore-btn').addEventListener('click', async () => {
+  if (!restoreFile) return;
+  const sel = {
+    settings: $('#s-rest-settings').checked, history: $('#s-rest-history').checked,
+    tracks: $('#s-rest-tracks').checked, reference: $('#s-rest-reference').checked
+  };
+  if (!Object.values(sel).some(Boolean)) { $('#s-restore-msg').textContent = 'Select at least one category.'; return; }
+  if (!confirm('Restore will OVERWRITE the selected data with the contents of the backup. This cannot be undone. Continue?')) return;
+  $('#s-restore-msg').textContent = 'Restoring…';
+  const qs = Object.entries(sel).map(([k, v]) => `${k}=${v ? 1 : 0}`).join('&');
+  try {
+    const res = await fetch(`/api/backup/restore?${qs}`, { method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: restoreFile });
+    const d = await res.json();
+    if (!res.ok || d.error) { $('#s-restore-msg').textContent = `Restore failed: ${d.error || res.status}`; return; }
+    const parts = [...(d.files || []), ...(d.tables || [])];
+    $('#s-restore-msg').textContent = `✓ Restored ${parts.length ? parts.join(', ') : 'nothing (no matching data in the backup)'}. Reload the page to see all changes.`;
+  } catch { $('#s-restore-msg').textContent = 'Restore failed.'; }
+});
+
 $('#s-freq-refresh').addEventListener('click', async () => {
   $('#s-freq-meta').textContent = 'Downloading OurAirports data… (a few MB)';
   const res = await fetch('/api/frequencies/refresh', { method: 'POST' });

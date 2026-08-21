@@ -2,6 +2,18 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.32.0
+- **Backup & restore (Settings → Receiver).** Download a single **ZIP** containing a consistent snapshot
+  of the whole database (history, statistics, replay tracks, aircraft/photo/frequency reference data),
+  your **settings**, and the reference/cache files. To restore, pick the ZIP and choose exactly which
+  categories to bring back — **Settings**, **History & statistics**, **Replay tracks**, **Reference
+  data** — each overwrites only that part. The database snapshot is made with `VACUUM INTO` (WAL folded
+  in, one clean file) and restored live via `ATTACH` + column-matched table copy, so no restart is
+  needed; the in-memory caches (rarity ledgers, coverage outline, airport index) are re-seeded
+  afterwards. *The backup ZIP contains your password hash and any API keys — keep it private.* New
+  endpoints: `GET /api/backup`, `POST /api/backup/inspect`, `POST /api/backup/restore` (all auth-only).
+  Adds the `adm-zip` dependency.
+
 ## 1.31.0
 Code review + optimisation pass (functionality preserved; verified with tests).
 

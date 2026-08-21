@@ -861,6 +861,14 @@ export function rebuildAirportIndex() {
   } catch (e) { console.warn('[detect] airport index failed:', e.message); }
 }
 
+// Re-seed the in-memory caches from disk after a restore, so it takes effect
+// without a full restart (rarity ledgers, range outline, airport index).
+export function reloadFromDisk() {
+  try { initDetections(loadKnownIdentities()); } catch (e) { console.warn('[restore] detect reseed:', e.message); }
+  try { initRange(); } catch (e) { console.warn('[restore] range reload:', e.message); }
+  rebuildAirportIndex();
+}
+
 export function startTracker() {
   detectReceiver();
   initRange();

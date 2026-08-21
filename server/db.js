@@ -562,6 +562,52 @@ export function logStorageInfo() {
   };
 }
 
+// --- backup / restore -------------------------------------------------------
+
+// Write a consistent, defragmented single-file snapshot of the database (used by
+// the backup ZIP). VACUUM INTO folds in the WAL and produces one clean .db file.
+export function backupDatabaseTo(dest) {
+  db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+  db.exec(`VACUUM INTO '${dest.replace(/'/g, "''")}'`);
+}
+
+// Which tables belong to each restore category.
+export const RESTORE_TABLE_GROUPS = {
+  history: ['sightings', 'alerts', 'known_types', 'known_operators'],
+  tracks: ['tracks'],
+  reference: ['aircraft_db', 'photos', 'airport_freqs']
+};
+
+// Restore the given table groups from a backup .db file into the live database,
+// without closing the connection. Copies only the columns both schemas share, so
+// a backup from a slightly different app version still restores safely. Returns
+// the list of tables actually restored.
+export function restoreTablesFrom(srcPath, groups) {
+  const restored = [];
+  db.exec(`ATTACH '${srcPath.replace(/'/g, "''")}' AS bak`);
+  try {
+    withTransaction(() => {
+      for (const g of groups) {
+        for (const t of RESTORE_TABLE_GROUPS[g] || []) {
+          const srcHas = db.prepare("SELECT 1 FROM bak.sqlite_master WHERE type='table' AND name=?").get(t);
+          const dstHas = db.prepare("SELECT 1 FROM main.sqlite_master WHERE type='table' AND name=?").get(t);
+          if (!srcHas || !dstHas) continue;
+          const srcCols = new Set(db.prepare(`PRAGMA bak.table_info(${t})`).all().map((r) => r.name));
+          const cols = db.prepare(`PRAGMA main.table_info(${t})`).all().map((r) => r.name).filter((c) => srcCols.has(c));
+          if (!cols.length) continue;
+          const list = cols.map((c) => `"${c}"`).join(',');
+          db.exec(`DELETE FROM main.${t}`);
+          db.exec(`INSERT INTO main.${t} (${list}) SELECT ${list} FROM bak.${t}`);
+          restored.push(t);
+        }
+      }
+    });
+  } finally {
+    try { db.exec('DETACH bak'); } catch { /* ignore */ }
+  }
+  return restored;
+}
+
 // Manually clear all retention-governed log data and reclaim the disk space.
 export function purgeLogs() {
   for (const t of LOG_TABLES) db.prepare(`DELETE FROM ${t}`).run();
