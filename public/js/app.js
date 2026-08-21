@@ -2122,6 +2122,7 @@ function connectStream() {
     }
   });
   es.onerror = () => {
+    es.onerror = null; // fires repeatedly during an outage — only schedule one reconnect
     $('#conn-status').classList.remove('ok');
     setTimeout(() => { es.close(); connectStream(); }, 5000);
   };
@@ -2380,8 +2381,8 @@ function renderAlerts() {
   $('#alerts-table tbody').innerHTML = rows.length
     ? rows
         .map(
-          (a) => `<tr><td>${fmt.dateTime(a.ts)}</td><td>${a.kind}</td>
-        <td>${a.callsign || a.hex || '—'}</td><td>${a.message}</td></tr>`
+          (a) => `<tr><td>${fmt.dateTime(a.ts)}</td><td>${esc(a.kind)}</td>
+        <td>${esc(a.callsign || a.hex || '—')}</td><td>${esc(a.message)}</td></tr>`
         )
         .join('')
     : '<tr><td colspan="4" class="muted">No alerts yet</td></tr>';
@@ -2589,7 +2590,7 @@ function renderSpotted() {
             <td>${fmt.dateTime(s.firstSeen)}</td>
             <td>${fmt.dateTime(s.lastSeen)}</td>
             <td class="auth-only">${closest}</td>
-            <td class="spotted-route" data-cs="${s.callsign || ''}">${spottedRouteHtml(s.callsign)}</td>
+            <td class="spotted-route" data-cs="${esc(s.callsign || '')}">${spottedRouteHtml(s.callsign)}</td>
           </tr>`;
         })
         .join('')
@@ -2667,7 +2668,11 @@ function hydrateSpotted(rows) {
       entry = { route: r.route, agreement: r.agreement };
     } catch { /* ignore */ }
     spottedRoute.set(s.callsign, entry);
-    $$(`#spotted-table td.spotted-route[data-cs="${s.callsign}"]`).forEach((c) => (c.innerHTML = spottedRouteHtml(s.callsign)));
+    // Match by dataset value (no CSS-selector interpolation — a callsign with a
+    // quote would break the selector and is an injection vector).
+    $$('#spotted-table td.spotted-route').forEach((c) => {
+      if (c.dataset.cs === s.callsign) c.innerHTML = spottedRouteHtml(s.callsign);
+    });
   });
 }
 
@@ -3233,6 +3238,8 @@ function startWxRadarAnim() {
   clearInterval(wxRadar.timer);
   wxRadar.timer = setInterval(() => {
     if (!wxRadar || !wxRadar.playing || !wxRadar.frames.length) return;
+    // Idle when the Weather tab isn't showing — no wasted layer redraws.
+    if (!$('#tab-weather').classList.contains('active')) return;
     wxRadar.idx = (wxRadar.idx + 1) % wxRadar.frames.length;
     showWxRadarFrame(wxRadar.idx);
   }, 700);
@@ -3442,7 +3449,6 @@ function renderSkyObjects(d) {
 }
 
 (async function boot() {
-  await loadAuth();
   await loadAuth();
   try {
     state.config = await (await fetch('/api/config')).json();

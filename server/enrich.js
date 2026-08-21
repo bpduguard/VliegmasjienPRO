@@ -64,7 +64,7 @@ let planeDb = new Map();
 const PLANEDB_FILE = path.join(DATA_DIR, 'plane-alert-db.csv');
 const PLANEDB_META = path.join(DATA_DIR, 'plane-alert-db.meta.json');
 
-function parseCsvLine(line) {
+export function parseCsvLine(line) {
   const out = [];
   let cur = '';
   let inQ = false;

@@ -20,7 +20,14 @@ export function initDb() {
     PRAGMA journal_mode = WAL;
     PRAGMA synchronous = NORMAL;
     PRAGMA busy_timeout = 5000;
-    PRAGMA wal_autocheckpoint = 1000;
+    -- SD-card wear: check-point less often (fewer main-DB rewrites), cap the WAL
+    -- so it doesn't grow unbounded on disk, keep scratch/temp in RAM (no temp
+    -- files written to the card), and cache more pages to cut read I/O.
+    PRAGMA wal_autocheckpoint = 4000;
+    PRAGMA journal_size_limit = 16777216;
+    PRAGMA temp_store = MEMORY;
+    PRAGMA mmap_size = 67108864;
+    PRAGMA cache_size = -8000;
     CREATE TABLE IF NOT EXISTS sightings (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       hex TEXT NOT NULL,
@@ -301,6 +308,12 @@ export function airportFreqsInBounds(s, w, n, e, limit = 500) {
 const SESSION_GAP_MS = 30 * 60 * 1000;
 
 export function upsertSighting(ac, now) {
+  // Session extremes: the tracker keeps running maxima in memory (sMaxAlt etc.) so
+  // the sighting write can be throttled without losing peaks; fall back to the
+  // current values for any caller that doesn't set them.
+  const mAlt = Number.isFinite(ac.sMaxAlt) ? ac.sMaxAlt : (Number.isFinite(ac.alt_baro) ? ac.alt_baro : null);
+  const mSpd = Number.isFinite(ac.sMaxSpeed) ? Math.round(ac.sMaxSpeed) : (Number.isFinite(ac.gs) ? Math.round(ac.gs) : null);
+  const mDist = ac.sMinDist ?? ac.distKm ?? null;
   const row = prep('SELECT id, last_seen FROM sightings WHERE hex = ? ORDER BY last_seen DESC LIMIT 1')
     .get(ac.hex);
   if (row && now - row.last_seen < SESSION_GAP_MS) {
@@ -330,11 +343,11 @@ export function upsertSighting(ac, now) {
       ac.airline || '',
       ac.origin || '',
       ac.destination || '',
-      Number.isFinite(ac.alt_baro) ? ac.alt_baro : null,
-      Number.isFinite(ac.gs) ? Math.round(ac.gs) : null,
-      ac.distKm ?? null,
-      ac.distKm ?? null,
-      ac.distKm ?? null,
+      mAlt,
+      mSpd,
+      mDist,
+      mDist,
+      mDist,
       row.id
     );
     return row.id;
@@ -355,9 +368,9 @@ export function upsertSighting(ac, now) {
       ac.destination || null,
       now,
       now,
-      Number.isFinite(ac.alt_baro) ? ac.alt_baro : null,
-      Number.isFinite(ac.gs) ? Math.round(ac.gs) : null,
-      ac.distKm ?? null
+      mAlt,
+      mSpd,
+      mDist
     );
   return res.lastInsertRowid;
 }
@@ -562,14 +575,22 @@ export function purgeLogs() {
 const insertTrackStmt = () =>
   prep('INSERT INTO tracks (ts, hex, lat, lon, alt, gs, trk, callsign, src) VALUES (?,?,?,?,?,?,?,?,?)');
 
-export function insertTracks(rows) {
+// Insert track rows WITHOUT opening a transaction — for calling inside an existing
+// one (e.g. the per-poll sightings transaction), so a poll commits just once.
+export function insertTrackRows(rows) {
   if (!rows.length) return 0;
   const stmt = insertTrackStmt();
+  for (const r of rows) {
+    stmt.run(r.ts, r.hex, r.lat, r.lon, r.alt ?? null, r.gs ?? null, r.trk ?? null, r.callsign ?? null, r.src ?? null);
+  }
+  return rows.length;
+}
+
+export function insertTracks(rows) {
+  if (!rows.length) return 0;
   db.exec('BEGIN');
   try {
-    for (const r of rows) {
-      stmt.run(r.ts, r.hex, r.lat, r.lon, r.alt ?? null, r.gs ?? null, r.trk ?? null, r.callsign ?? null, r.src ?? null);
-    }
+    insertTrackRows(rows);
     db.exec('COMMIT');
   } catch (e) {
     db.exec('ROLLBACK');

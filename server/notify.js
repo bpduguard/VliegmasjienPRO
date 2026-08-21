@@ -17,20 +17,25 @@ export function underCooldown(key) {
   return Date.now() - last < cfg.notifyCooldownMin * 60000;
 }
 
+// Record a key's cooldown timestamp and cap the Map so it can't grow unbounded.
+function setCooldown(key) {
+  cooldowns.set(key, Date.now());
+  if (cooldowns.size > 5000) {
+    for (const k of cooldowns.keys()) { cooldowns.delete(k); if (cooldowns.size <= 4000) break; }
+  }
+}
+
 // Register a key against the cooldown without sending anything — used when a
 // detection is recorded to its feed but notifications are turned off, so the
 // same de-dup still applies.
 export function noteCooldown(key) {
-  if (key) cooldowns.set(key, Date.now());
+  if (key) setCooldown(key);
 }
 
 export async function notify({ key, title, message, kind, aircraft, url }) {
   if (key) {
     if (underCooldown(key)) return false;
-    cooldowns.set(key, Date.now());
-    if (cooldowns.size > 5000) {
-      for (const k of cooldowns.keys()) { cooldowns.delete(k); if (cooldowns.size <= 4000) break; }
-    }
+    setCooldown(key);
   }
   const cfg = getConfig();
 

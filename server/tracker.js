@@ -7,7 +7,7 @@ import {
   planeDbLookup, lookupRoute, cachedAirlineName, maybeAutoRefreshPlaneDb,
   aircraftDbLocal, lookupAircraft, cachedRoute
 } from './enrich.js';
-import { upsertSighting, pruneOldData, insertTracks, pruneTracks, withTransaction, loadKnownIdentities, airportsNear, recordKnownType, recordKnownOperator } from './db.js';
+import { upsertSighting, pruneOldData, insertTrackRows, pruneTracks, withTransaction, loadKnownIdentities, airportsNear, recordKnownType, recordKnownOperator } from './db.js';
 import { notify } from './notify.js';
 import { runDetections, initDetections, dropDetectState, initGoAround } from './detect.js';
 import { isMilitaryHex, startMilFeed } from './milfeed.js';
@@ -30,9 +30,11 @@ let lastPollOk = null;
 let lastPollError = null;
 let messagesTotal = null;
 let broadcast = null;
+let hasListeners = () => true; // whether any SSE client is connected
 
-export function setTrackerBroadcast(fn) {
+export function setTrackerBroadcast(fn, hasListenersFn) {
   broadcast = fn;
+  if (typeof hasListenersFn === 'function') hasListeners = hasListenersFn;
 }
 
 export function trackerStatus() {
@@ -137,6 +139,10 @@ function iconKind(ac) {
 // Replay recording: at most one stored position per aircraft per interval.
 const TRACK_RECORD_MS = 8000;
 const lastTrackRec = new Map(); // hex -> ts of last recorded track point
+// Sighting persistence throttle: the row is rewritten at most this often per
+// aircraft (running extremes are kept in memory + a final flush on expiry), so
+// we don't rewrite every aircraft's row every 2s — much gentler on the SD card.
+const SIGHTING_WRITE_MS = 10000;
 
 // ── multi-source: extra aircraft.json feeds merged onto the primary ──────────
 const extraStatus = new Map(); // id -> { name, ok, count, error }
@@ -249,7 +255,10 @@ async function pollOnce() {
     ac.lat = raw.lat ?? ac.lat;
     ac.lon = raw.lon ?? ac.lon;
     ac.alt_baro = raw.alt_baro === 'ground' ? 0 : raw.alt_baro ?? ac.alt_baro;
-    ac.onGround = raw.alt_baro === 'ground';
+    // Only recompute when the message actually carries altitude — otherwise carry
+    // the previous state forward (like every other field), so a message that omits
+    // alt_baro doesn't momentarily flip a parked aircraft to "airborne".
+    if (raw.alt_baro !== undefined) ac.onGround = raw.alt_baro === 'ground';
     ac.alt_geom = raw.alt_geom ?? ac.alt_geom;
     ac.gs = raw.gs ?? ac.gs;
     ac.ias = raw.ias ?? ac.ias;
@@ -360,9 +369,19 @@ async function pollOnce() {
       });
     }
 
-    // persist sighting
+    // Running session extremes — kept in memory so the sighting write below can be
+    // throttled without ever losing a peak altitude/speed or closest approach.
+    if (Number.isFinite(ac.alt_baro)) ac.sMaxAlt = Math.max(ac.sMaxAlt ?? -Infinity, ac.alt_baro);
+    if (Number.isFinite(ac.gs)) ac.sMaxSpeed = Math.max(ac.sMaxSpeed ?? -Infinity, ac.gs);
+    if (ac.distKm != null) ac.sMinDist = Math.min(ac.sMinDist ?? Infinity, ac.distKm);
+
+    // persist sighting — first appearance writes immediately, then at most once per
+    // SIGHTING_WRITE_MS; the exact last_seen is captured by the flush on expiry.
     try {
-      upsertSighting(ac, now);
+      if (!ac._sightingAt || now - ac._sightingAt >= SIGHTING_WRITE_MS) {
+        upsertSighting(ac, now);
+        ac._sightingAt = now;
+      }
       // Permanent "ever seen" ledgers (once per session per field, as identity
       // enriches). Feeds the rarity detector's all-time memory + the stats tab.
       if (ac.type && !ac._recType) { ac._recType = true; recordKnownType(ac.type, now); }
@@ -375,24 +394,35 @@ async function pollOnce() {
     try { runDetections(ac, cfg, now); } catch (e) { console.warn('[detect] error:', e.message); }
     backgroundRouteLookup(ac);
   }
+  // Flush this poll's replay track points inside the SAME transaction, so the
+  // whole poll is a single commit (halves WAL churn on the SD card).
+  if (trackBuf.length) {
+    try { insertTrackRows(trackBuf); } catch (e) { console.warn('[db] track insert failed:', e.message); }
+  }
   });
 
   // expire aircraft not seen for 60s
+  const toFlush = [];
   for (const [hex, ac] of aircraft) {
     if (!seen.has(hex) && now - ac.lastSeen > 60000) {
+      // If newer data arrived after the last throttled write, flush the final
+      // state (exact last_seen + any late peak) before dropping the aircraft.
+      if (ac._sightingAt && ac._sightingAt < ac.lastSeen) toFlush.push(ac);
       aircraft.delete(hex);
       zonePresence.delete(hex);
       lastTrackRec.delete(hex);
       dropDetectState(hex);
     }
   }
-
-  // flush replay track points for this poll
-  if (trackBuf.length) {
-    try { insertTracks(trackBuf); } catch (e) { console.warn('[db] track insert failed:', e.message); }
+  if (toFlush.length) {
+    try { withTransaction(() => { for (const ac of toFlush) upsertSighting(ac, ac.lastSeen); }); }
+    catch (e) { console.warn('[db] expiry flush failed:', e.message); }
   }
 
-  if (broadcast) broadcast('aircraft', snapshot());
+
+  // Only build the (per-aircraft) snapshot when a browser is actually listening —
+  // pure wasted CPU on the Pi in headless / notification-only operation.
+  if (broadcast && hasListeners()) broadcast('aircraft', snapshot());
 }
 
 function computeZones(ac, cfg) {

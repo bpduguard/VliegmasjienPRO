@@ -8,7 +8,7 @@ import { initDb, aircraftHistory, recentAlerts, statsSummary, aircraftDbCount, b
 import {
   loadPlaneDbFromDisk, refreshPlaneDb, planeDbMeta, planeDbLookup, planeDbSearch, aircraftDbError, lookupRoute
 } from './enrich.js';
-import { lookupPhoto, extFetch, photoServiceError } from './enrich.js';
+import { lookupPhoto, extFetch, photoServiceError, parseCsvLine } from './enrich.js';
 import {
   startTracker, snapshot, aircraftDetail, trackerStatus, setTrackerBroadcast, arrivalsSnapshot, arrivalsBoard, rebuildAirportIndex
 } from './tracker.js';
@@ -135,7 +135,7 @@ function broadcast(event, data) {
   }
 }
 setBroadcast(broadcast);
-setTrackerBroadcast(broadcast);
+setTrackerBroadcast(broadcast, () => sseClients.size > 0);
 
 app.get('/api/stream', (req, res) => {
   res.writeHead(200, {
@@ -566,8 +566,8 @@ function parseAircraftDataset(text) {
     }
     return out;
   }
-  // CSV with header
-  const header = (lines[0] || '').split(',').map((h) => h.trim().toLowerCase().replace(/^["']|["']$/g, ''));
+  // CSV with header (quote-aware — OpenSky's model/manufacturer fields contain commas)
+  const header = parseCsvLine(lines[0] || '').map((h) => h.trim().toLowerCase().replace(/^["']|["']$/g, ''));
   const col = (...names) => names.map((n) => header.indexOf(n)).find((i) => i >= 0) ?? -1;
   const iHex = col('icao24', 'icao', 'hex');
   const iReg = col('registration', 'reg', 'r');
@@ -575,7 +575,7 @@ function parseAircraftDataset(text) {
   const iOwner = col('operator', 'ownop', 'registered_owner', 'owner');
   if (iHex < 0) return out;
   for (let n = 1; n < lines.length; n++) {
-    const c = lines[n].split(',').map((v) => v.replace(/^["']|["']$/g, '').trim());
+    const c = parseCsvLine(lines[n]).map((v) => v.replace(/^["']|["']$/g, '').trim());
     const hex = (c[iHex] || '').toLowerCase();
     if (!/^[0-9a-f]{6}$/.test(hex)) continue;
     out.push({
@@ -686,7 +686,7 @@ app.post('/api/watchlist/import', requireAuth, (req, res) => {
   const existing = new Set(watchlist.map((w) => w.icao));
   for (const line of csv.split(/\r?\n/)) {
     if (!line || line.startsWith('$ICAO') || line.startsWith('#')) continue;
-    const c = line.split(',');
+    const c = parseCsvLine(line); // quote-aware: operator/type can contain commas
     const hex = (c[0] || '').trim().toLowerCase();
     if (!/^[0-9a-f]{6}$/.test(hex) || existing.has(hex)) continue;
     watchlist.push({

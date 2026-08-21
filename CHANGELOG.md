@@ -2,6 +2,29 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.31.0
+Code review + optimisation pass (functionality preserved; verified with tests).
+
+**SD-card wear reduced** (the main goal — fewer writes = longer card life):
+- **One commit per poll** instead of two: the replay track points now flush inside the same
+  transaction as the sightings, halving WAL commits in the hot loop.
+- **Sighting rows are rewritten at most every ~10 s per aircraft** (was every poll, ~2 s). Peak
+  altitude/speed and closest approach are kept in memory and a final flush on expiry captures the exact
+  last-seen, so **no statistic is lost** — verified. Quiet polls now produce no write at all.
+- **SQLite tuned for flash**: check-point 4× less often, WAL size capped, temp/scratch kept in RAM (no
+  temp files on the card), larger page cache to cut read I/O.
+- CPU/power: the per-aircraft SSE snapshot is no longer built when **no browser is connected**.
+
+**Bugs fixed (from a full review):**
+- **Security:** two stored-XSS holes where an aircraft's (over-the-air, attacker-controlled) callsign
+  was inserted into the Alerts table and the Spotted route cell without escaping — now escaped.
+- **Leaks:** SSE reconnect could spawn multiple parallel streams during an outage (now one); the
+  detection cooldown map could grow unbounded when notifications were off (now capped).
+- **CSV imports** (watchlist + aircraft-DB) now use a quote-aware parser, so operator/model fields
+  containing commas no longer shift every following column.
+- Minor: `onGround` no longer flips to airborne on a message that omits altitude; the RainViewer radar
+  animation idles when the Weather tab isn't showing; removed a duplicate startup call.
+
 ## 1.30.0
 - **Finer aircraft categories** — the classifier now splits **helicopter**, **glider** and **drone/UAV**
   out of the old "other"/"private" catch-alls, using the ADS-B emitter category (A7/B1/B6/B7) and type
