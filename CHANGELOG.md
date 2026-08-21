@@ -2,6 +2,18 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
+## 1.33.0
+- **Settings page redesigned — organised by feature category.** The controls are the same, but they're
+  now grouped under seven clear categories instead of one long list: **📡 Receiver & sources**
+  (data source, extra/mobile sources, receiver location), **🖥️ Display** (units, Sky Watch),
+  **🔔 Notifications**, **🛰️ Detections**, **🗺️ Map layers** (frequencies, range outline, weather,
+  aeronautical, webcams), **✈️ Aircraft data** (aircraft database, plane-alert-db) and
+  **💾 Storage & backup** (data retention, backup & restore). A sticky **jump-nav** of category chips
+  sits at the top for quick navigation, and the **Save settings** button is now a sticky bar that stays
+  in reach while scrolling. The overloaded old *Receiver* section (which mixed data source, retention,
+  storage purge, backup and units) is split into focused blocks. Layout-only change — every setting and
+  its behaviour are unchanged.
+
 ## 1.32.0
 - **Backup & restore (Settings → Receiver).** Download a single **ZIP** containing a consistent snapshot
   of the whole database (history, statistics, replay tracks, aircraft/photo/frequency reference data),

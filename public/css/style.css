@@ -609,6 +609,19 @@ button.danger:hover { background: rgba(239,68,68,0.12); border-color: var(--dang
 
 .settings-block { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 14px 18px; margin: 14px 0; }
 .settings-block h3 { margin: 0 0 10px; color: var(--accent); font-size: 1rem; }
+
+/* Settings: category grouping, jump-nav and sticky save bar */
+.settings-nav { position: sticky; top: 0; z-index: 6; display: flex; flex-wrap: wrap; gap: 8px;
+  margin: 0 0 8px; padding: 10px 0; background: var(--bg); border-bottom: 1px solid var(--border); }
+.settings-nav a { font-size: 0.82rem; padding: 5px 12px; border: 1px solid var(--border); border-radius: 999px;
+  color: var(--muted); text-decoration: none; background: var(--bg2); white-space: nowrap; }
+.settings-nav a:hover { border-color: var(--accent); color: var(--text); }
+.settings-cat { margin: 0 0 8px; scroll-margin-top: 62px; }
+.settings-cat > .cat-h { display: flex; align-items: center; gap: 9px; margin: 26px 0 6px;
+  padding-bottom: 7px; border-bottom: 2px solid var(--border); color: var(--text); font-size: 1.18rem; }
+.settings-cat > .cat-h .cat-ico { font-size: 1.15em; line-height: 1; }
+.settings-save { position: sticky; bottom: 0; z-index: 6; margin: 18px 0 0; padding: 14px 0;
+  background: var(--bg); border-top: 1px solid var(--border); }
 .settings-footer { margin: 26px 0 12px; padding-top: 14px; border-top: 1px solid var(--border); text-align: center; font-size: 0.85rem; }
 .settings-footer a { color: var(--accent); text-decoration: none; }
 .settings-footer a:hover { text-decoration: underline; }

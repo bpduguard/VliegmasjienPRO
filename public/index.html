@@ -528,262 +528,316 @@
 
       <div id="auth-gate"></div>
 
-      <section class="settings-block">
-        <h3>Receiver</h3>
-        <div class="row wrap">
-          <label>Data source
-            <select id="s-src-mode">
-              <option value="json">aircraft.json over HTTP (dump1090/readsb/tar1090 web)</option>
-              <option value="sbs">SBS / BaseStation TCP (beasthost port 30003)</option>
-            </select>
-          </label>
-          <label>Name <input id="s-src-name" size="12" placeholder="Home" /></label>
-        </div>
-        <div class="row wrap" id="s-src-json">
-          <label>aircraft.json URL <input id="s-dump-url" size="42" /></label>
-        </div>
-        <div class="row wrap" id="s-src-sbs">
-          <label>SBS host <input id="s-sbs-host" size="18" placeholder="dump1090 or 192.168.…" /></label>
-          <label>SBS port <input id="s-sbs-port" type="number" size="7" placeholder="30003" /></label>
-          <span class="muted">Use port 30003 (BaseStation text). 30005 is binary Beast — not needed here.</span>
-        </div>
-        <div class="row wrap">
-          <label>Poll interval (ms) <input id="s-poll" type="number" min="500" step="500" size="8" /></label>
-        </div>
-        <h4 class="wc-sub">Extra sources</h4>
-        <p class="muted">Merge additional <code>aircraft.json</code> feeds — e.g. a second or mobile receiver.
-          Aircraft are combined by ICAO address (positions come from the aircraft, so there's no conflict);
-          each is tagged with the receivers that saw it. The range outline stays tied to your primary receiver.</p>
-        <div id="src-list" class="wc-custom-list"></div>
-        <div class="row wrap wc-add">
-          <input id="src-add-name" size="12" placeholder="Name (e.g. Mobile)" />
-          <input id="src-add-url" size="40" placeholder="http://192.168.x.x/data/aircraft.json" />
-          <button id="src-add-btn" type="button" class="primary">+ Add source</button>
-        </div>
-        <div id="src-add-msg" class="muted"></div>
-        <div class="row wrap">
-          <label>Receiver lat <input id="s-rlat" size="10" /></label>
-          <label>Receiver lon <input id="s-rlon" size="10" /></label>
-        </div>
-        <div class="row wrap">
-          <label title="How long the Spotted list, Statistics and alert log are kept.">History retention (days) <input id="s-retention" type="number" min="1" size="6" /></label>
-          <label title="How far back the map Replay and the per-session historical tracks go. Higher = more SD-card use.">Replay/track retention (days) <input id="s-replay-retention" type="number" min="1" size="6" /></label>
-        </div>
-        <div class="row wrap">
-          <span id="s-storage-meta" class="muted">—</span>
-          <button id="s-storage-purge" class="danger">Purge log now</button>
+      <nav class="settings-nav" id="s-nav">
+        <a href="#cat-connection">📡 Receiver &amp; sources</a>
+        <a href="#cat-display">🖥️ Display</a>
+        <a href="#cat-notify">🔔 Notifications</a>
+        <a href="#cat-detect">🛰️ Detections</a>
+        <a href="#cat-layers">🗺️ Map layers</a>
+        <a href="#cat-aircraft">✈️ Aircraft data</a>
+        <a href="#cat-storage">💾 Storage &amp; backup</a>
+      </nav>
+
+      <section class="settings-cat" id="cat-connection">
+        <h3 class="cat-h"><span class="cat-ico">📡</span> Receiver &amp; sources</h3>
+
+        <div class="settings-block">
+          <h3>Data source</h3>
+          <div class="row wrap">
+            <label>Data source
+              <select id="s-src-mode">
+                <option value="json">aircraft.json over HTTP (dump1090/readsb/tar1090 web)</option>
+                <option value="sbs">SBS / BaseStation TCP (beasthost port 30003)</option>
+              </select>
+            </label>
+            <label>Name <input id="s-src-name" size="12" placeholder="Home" /></label>
+          </div>
+          <div class="row wrap" id="s-src-json">
+            <label>aircraft.json URL <input id="s-dump-url" size="42" /></label>
+          </div>
+          <div class="row wrap" id="s-src-sbs">
+            <label>SBS host <input id="s-sbs-host" size="18" placeholder="dump1090 or 192.168.…" /></label>
+            <label>SBS port <input id="s-sbs-port" type="number" size="7" placeholder="30003" /></label>
+            <span class="muted">Use port 30003 (BaseStation text). 30005 is binary Beast — not needed here.</span>
+          </div>
+          <div class="row wrap">
+            <label>Poll interval (ms) <input id="s-poll" type="number" min="500" step="500" size="8" /></label>
+          </div>
         </div>
 
-        <h4 class="wc-sub">Backup &amp; restore</h4>
-        <p class="muted">Download a ZIP with the whole database (history, statistics, replay, reference data)
-          and your settings. <b>Keep it safe</b> — it also contains your password hash and any API keys.
-          Restoring lets you choose exactly what to bring back and <b>overwrites</b> those parts.</p>
-        <div class="row wrap">
-          <a id="s-backup-dl" class="btnlink" href="/api/backup">⬇ Download backup</a>
+        <div class="settings-block">
+          <h3>Extra sources</h3>
+          <p class="muted">Merge additional <code>aircraft.json</code> feeds — e.g. a second or mobile receiver.
+            Aircraft are combined by ICAO address (positions come from the aircraft, so there's no conflict);
+            each is tagged with the receivers that saw it. The range outline stays tied to your primary receiver.</p>
+          <div id="src-list" class="wc-custom-list"></div>
+          <div class="row wrap wc-add">
+            <input id="src-add-name" size="12" placeholder="Name (e.g. Mobile)" />
+            <input id="src-add-url" size="40" placeholder="http://192.168.x.x/data/aircraft.json" />
+            <button id="src-add-btn" type="button" class="primary">+ Add source</button>
+          </div>
+          <div id="src-add-msg" class="muted"></div>
         </div>
-        <div class="row wrap">
-          <label>Restore from a backup <input type="file" id="s-restore-file" accept=".zip,application/zip" /></label>
-          <span id="s-restore-info" class="muted"></span>
-        </div>
-        <div class="row wrap hidden" id="s-restore-opts">
-          <label class="toggle"><input type="checkbox" id="s-rest-settings" checked /> Settings</label>
-          <label class="toggle"><input type="checkbox" id="s-rest-history" checked /> History &amp; statistics</label>
-          <label class="toggle"><input type="checkbox" id="s-rest-tracks" checked /> Replay tracks</label>
-          <label class="toggle"><input type="checkbox" id="s-rest-reference" checked /> Reference data</label>
-          <button id="s-restore-btn" class="danger">Restore selected</button>
-        </div>
-        <div id="s-restore-msg" class="muted"></div>
 
-        <div class="row wrap">
-          <label>Units
-            <select id="s-units">
-              <option value="metric">Metric — altitude in m, speed in km/h, distance in km</option>
-              <option value="aviation">Aviation — altitude in ft, speed in kt, distance in km</option>
-            </select>
-          </label>
+        <div class="settings-block">
+          <h3>Receiver location</h3>
+          <div class="row wrap">
+            <label>Receiver lat <input id="s-rlat" size="10" /></label>
+            <label>Receiver lon <input id="s-rlon" size="10" /></label>
+          </div>
         </div>
       </section>
 
-      <section class="settings-block">
-        <h3>Notifications</h3>
-        <div class="row wrap">
-          <label class="toggle"><input type="checkbox" id="s-po-enabled" /> Pushover</label>
-          <label>Token <input id="s-po-token" size="22" /></label>
-          <label>User key <input id="s-po-user" size="22" /></label>
+      <section class="settings-cat" id="cat-display">
+        <h3 class="cat-h"><span class="cat-ico">🖥️</span> Display</h3>
+
+        <div class="settings-block">
+          <h3>Units</h3>
+          <div class="row wrap">
+            <label>Units
+              <select id="s-units">
+                <option value="metric">Metric — altitude in m, speed in km/h, distance in km</option>
+                <option value="aviation">Aviation — altitude in ft, speed in kt, distance in km</option>
+              </select>
+            </label>
+          </div>
         </div>
-        <div class="row wrap">
-          <label class="toggle"><input type="checkbox" id="s-dc-enabled" /> Discord webhook</label>
-          <label>Webhook URL <input id="s-dc-url" size="50" /></label>
-        </div>
-        <div class="row wrap">
-          <label class="toggle"><input type="checkbox" id="s-browser-enabled" /> Browser notifications</label>
-          <button id="s-browser-perm">Allow in this browser</button>
-          <label>Cooldown (min) <input id="s-cooldown" type="number" min="1" size="5" /></label>
-        </div>
-        <div class="row wrap">
-          <label class="toggle"><input type="checkbox" id="s-notify-mil" /> Notify on any military</label>
-          <label class="toggle"><input type="checkbox" id="s-notify-emerg" /> Notify on emergency squawks</label>
-          <button id="s-test-notify">Send test notification</button>
-        </div>
-        <div class="row wrap">
-          <label class="toggle"><input type="checkbox" id="s-notify-passes" /> Notify ~1h before a visible <b>ISS / Hubble</b> pass (only when the sky is dark)</label>
-        </div>
-        <div class="row wrap">
-          <label class="toggle"><input type="checkbox" id="s-notify-weather" /> Notify about <b>extreme weather</b> forecast for today/tomorrow (heat, wind, heavy rain, storms…)</label>
+
+        <div class="settings-block">
+          <h3>Sky Watch <span class="muted">(stargazing)</span></h3>
+          <p class="muted">Set the light-pollution level at your location on the
+            <a href="https://en.wikipedia.org/wiki/Bortle_scale" target="_blank" rel="noopener">Bortle scale</a>
+            so the <strong>Sky Watch</strong> tab can estimate what's visible. Not sure? Check a light-pollution
+            map (e.g. <a href="https://www.lightpollutionmap.info" target="_blank" rel="noopener">lightpollutionmap.info</a>).
+            Cloud &amp; Moon data are automatic.</p>
+          <div class="row wrap">
+            <label>Light pollution
+              <select id="s-bortle">
+                <option value="1">Bortle 1 — pristine dark sky</option>
+                <option value="2">Bortle 2 — truly dark site</option>
+                <option value="3">Bortle 3 — rural sky</option>
+                <option value="4">Bortle 4 — rural/suburban</option>
+                <option value="5">Bortle 5 — suburban sky</option>
+                <option value="6">Bortle 6 — bright suburban</option>
+                <option value="7">Bortle 7 — suburban/urban</option>
+                <option value="8">Bortle 8 — city sky</option>
+                <option value="9">Bortle 9 — inner city</option>
+              </select>
+            </label>
+          </div>
         </div>
       </section>
 
-      <section class="settings-block">
-        <h3>Detections</h3>
-        <p class="muted">Anomaly detectors that run on the live ADS-B stream and populate the <b>Detections</b> tab.</p>
-        <div class="row wrap">
-          <label class="toggle"><input type="checkbox" id="s-det-enabled" /> <b>Enable anomaly detection</b></label>
-          <label class="toggle"><input type="checkbox" id="s-det-notify" /> Send notifications for detections <span class="muted">(they always appear in the Detections tab)</span></label>
-        </div>
-        <div class="row wrap">
-          <label>Confirmation time (s) <input id="s-det-confirm" type="number" min="0" max="600" size="6" /></label>
-          <span class="muted">How long a pattern must persist before it's flagged. Higher = fewer false positives, slightly slower to alert.</span>
-        </div>
-        <div class="row wrap">
-          <label class="toggle"><input type="checkbox" id="s-det-squawk" /> Squawk watch (7500/7600/7700 + NL 7000/0033)</label>
-          <label class="toggle"><input type="checkbox" id="s-det-orbit" /> Loiter / orbit</label>
-          <label class="toggle"><input type="checkbox" id="s-det-descent" /> Emergency descent</label>
-          <label class="toggle"><input type="checkbox" id="s-det-integrity" /> ADS-B integrity / spoofing</label>
-          <label class="toggle"><input type="checkbox" id="s-det-rarity" /> Rarity (first-time type/operator)</label>
-          <label class="toggle"><input type="checkbox" id="s-det-survey" /> Survey / patrol grid</label>
-          <label class="toggle"><input type="checkbox" id="s-det-goaround" /> Go-around / missed approach</label>
-          <label class="toggle"><input type="checkbox" id="s-det-military" /> Military fleet feed</label>
-        </div>
-        <div class="row wrap">
-          <label class="toggle"><input type="checkbox" id="s-milfeed-enabled" /> Fetch the external <b>military fleet list</b> (adsb.lol/adsb.fi) to confirm military traffic</label>
+      <section class="settings-cat" id="cat-notify">
+        <h3 class="cat-h"><span class="cat-ico">🔔</span> Notifications</h3>
+
+        <div class="settings-block">
+          <h3>Channels &amp; alerts</h3>
+          <div class="row wrap">
+            <label class="toggle"><input type="checkbox" id="s-po-enabled" /> Pushover</label>
+            <label>Token <input id="s-po-token" size="22" /></label>
+            <label>User key <input id="s-po-user" size="22" /></label>
+          </div>
+          <div class="row wrap">
+            <label class="toggle"><input type="checkbox" id="s-dc-enabled" /> Discord webhook</label>
+            <label>Webhook URL <input id="s-dc-url" size="50" /></label>
+          </div>
+          <div class="row wrap">
+            <label class="toggle"><input type="checkbox" id="s-browser-enabled" /> Browser notifications</label>
+            <button id="s-browser-perm">Allow in this browser</button>
+            <label>Cooldown (min) <input id="s-cooldown" type="number" min="1" size="5" /></label>
+          </div>
+          <div class="row wrap">
+            <label class="toggle"><input type="checkbox" id="s-notify-mil" /> Notify on any military</label>
+            <label class="toggle"><input type="checkbox" id="s-notify-emerg" /> Notify on emergency squawks</label>
+            <button id="s-test-notify">Send test notification</button>
+          </div>
+          <div class="row wrap">
+            <label class="toggle"><input type="checkbox" id="s-notify-passes" /> Notify ~1h before a visible <b>ISS / Hubble</b> pass (only when the sky is dark)</label>
+          </div>
+          <div class="row wrap">
+            <label class="toggle"><input type="checkbox" id="s-notify-weather" /> Notify about <b>extreme weather</b> forecast for today/tomorrow (heat, wind, heavy rain, storms…)</label>
+          </div>
         </div>
       </section>
 
-      <section class="settings-block">
-        <h3>plane-alert-db</h3>
-        <div class="row wrap">
-          <span id="s-padb-meta" class="muted">—</span>
-          <button id="s-padb-refresh">Refresh database now</button>
+      <section class="settings-cat" id="cat-detect">
+        <h3 class="cat-h"><span class="cat-ico">🛰️</span> Detections</h3>
+
+        <div class="settings-block">
+          <h3>Anomaly detection</h3>
+          <p class="muted">Anomaly detectors that run on the live ADS-B stream and populate the <b>Detections</b> tab.</p>
+          <div class="row wrap">
+            <label class="toggle"><input type="checkbox" id="s-det-enabled" /> <b>Enable anomaly detection</b></label>
+            <label class="toggle"><input type="checkbox" id="s-det-notify" /> Send notifications for detections <span class="muted">(they always appear in the Detections tab)</span></label>
+          </div>
+          <div class="row wrap">
+            <label>Confirmation time (s) <input id="s-det-confirm" type="number" min="0" max="600" size="6" /></label>
+            <span class="muted">How long a pattern must persist before it's flagged. Higher = fewer false positives, slightly slower to alert.</span>
+          </div>
+          <div class="row wrap">
+            <label class="toggle"><input type="checkbox" id="s-det-squawk" /> Squawk watch (7500/7600/7700 + NL 7000/0033)</label>
+            <label class="toggle"><input type="checkbox" id="s-det-orbit" /> Loiter / orbit</label>
+            <label class="toggle"><input type="checkbox" id="s-det-descent" /> Emergency descent</label>
+            <label class="toggle"><input type="checkbox" id="s-det-integrity" /> ADS-B integrity / spoofing</label>
+            <label class="toggle"><input type="checkbox" id="s-det-rarity" /> Rarity (first-time type/operator)</label>
+            <label class="toggle"><input type="checkbox" id="s-det-survey" /> Survey / patrol grid</label>
+            <label class="toggle"><input type="checkbox" id="s-det-goaround" /> Go-around / missed approach</label>
+            <label class="toggle"><input type="checkbox" id="s-det-military" /> Military fleet feed</label>
+          </div>
+          <div class="row wrap">
+            <label class="toggle"><input type="checkbox" id="s-milfeed-enabled" /> Fetch the external <b>military fleet list</b> (adsb.lol/adsb.fi) to confirm military traffic</label>
+          </div>
         </div>
       </section>
 
-      <section class="settings-block">
-        <h3>Aircraft database <span class="muted">(registration &amp; type)</span></h3>
-        <p class="muted">Plain dump1090-fa and the SBS feed don't include registration or aircraft type
-          per plane — only readsb/tar1090 do. VliegmasjienPRO fills the gap automatically: each new
-          aircraft is looked up once and cached here, so the list, type filters and statistics fill in
-          over time. To load a whole database at once (e.g. if your receiver has no internet), import a
-          CSV/NDJSON below.</p>
-        <div class="row wrap">
-          <span id="s-acdb-meta" class="muted">—</span>
+      <section class="settings-cat" id="cat-layers">
+        <h3 class="cat-h"><span class="cat-ico">🗺️</span> Map layers</h3>
+
+        <div class="settings-block">
+          <h3>Communication frequencies <span class="muted">(map layer)</span></h3>
+          <p class="muted">Toggle the 📻 <strong>Freqs</strong> layer on the map to see airport radio
+            frequencies (tower, ground, approach, ATIS…) near your view. Data is the public-domain
+            <a href="https://ourairports.com/data/" target="_blank" rel="noopener">OurAirports</a> dataset —
+            download it once below (a few MB), then it's served locally and offline.</p>
+          <div class="row wrap">
+            <span id="s-freq-meta" class="muted">—</span>
+            <button id="s-freq-refresh">Download frequencies now</button>
+          </div>
         </div>
-        <div class="row wrap">
-          <input id="s-acdb-url" size="46" placeholder="Import URL (CSV: icao24,registration,typecode or basic-ac-db NDJSON)" />
-          <button id="s-acdb-import-url">Import from URL</button>
-          <button id="s-acdb-import-file">Import file…</button>
-          <input type="file" id="s-acdb-file" accept=".csv,.json,.ndjson,text/csv" hidden />
+
+        <div class="settings-block">
+          <h3>Range outline <span class="muted">(map layer)</span></h3>
+          <p class="muted">Your receiver's actual coverage shape, built from the farthest aircraft seen in
+            each direction. It grows and refines the longer the app runs. Toggle it from the map's
+            <strong>Layers ▸ Range outline</strong>.</p>
+          <div class="row wrap">
+            <span id="s-range-meta" class="muted">—</span>
+            <button id="s-range-clear">Reset range outline</button>
+          </div>
+        </div>
+
+        <div class="settings-block">
+          <h3>Weather <span class="muted">(map layer)</span></h3>
+          <p class="muted">Rain radar (RainViewer) works out of the box. For cloud/precipitation/wind layers, add a free
+            <a href="https://openweathermap.org/api" target="_blank" rel="noopener">OpenWeatherMap API key</a>.</p>
+          <div class="row wrap">
+            <label>OpenWeatherMap key <input id="s-owm" size="36" placeholder="(optional)" /></label>
+          </div>
+        </div>
+
+        <div class="settings-block">
+          <h3>Aeronautical layers</h3>
+          <p class="muted">The <strong>🛫 Airspace</strong> overlay (controlled airspace, CTR/TMA/CTA…) uses
+            <a href="https://www.openaip.net" target="_blank" rel="noopener">OpenAIP</a> — get a free API key from your
+            OpenAIP account (<em>My Account → API Keys</em>) and paste it here. The
+            <strong>🌬 Aviation weather (METAR)</strong> layer uses
+            <a href="https://aviationweather.gov" target="_blank" rel="noopener">aviationweather.gov</a> and needs no key.
+            Toggle both from the map's <strong>Layers</strong> menu.</p>
+          <div class="row wrap">
+            <label>OpenAIP API key <input id="s-openaip" size="36" placeholder="(optional)" /></label>
+          </div>
+        </div>
+
+        <div class="settings-block">
+          <h3>Webcams <span class="muted">(map layer)</span></h3>
+          <p class="muted">The <strong>📷 Webcams</strong> layer shows nearby live webcam feeds — each plays inside the
+            app, with a switcher when a spot has several. Add a free <a href="https://api.windy.com/webcams" target="_blank" rel="noopener">Windy Webcams API</a>
+            key to auto-discover webcams across the map (these are labelled by their own name, with the nearest airport
+            shown as context — use <strong>Airports only</strong> in the Layers menu to show just cams at/near a field),
+            or add your own airport feeds below. Toggle it from the map's <strong>Layers</strong> menu.</p>
+          <div class="row wrap">
+            <label>Windy Webcams API key <input id="s-windy" size="36" placeholder="(optional)" /></label>
+          </div>
+          <h4 class="wc-sub">Custom feeds</h4>
+          <p class="muted">Add your own airport webcam feeds. <b>Embed URL</b> is an iframe URL — e.g. a YouTube
+            <em>Share → Embed</em> link (<code>https://www.youtube.com/embed/…</code>) or a Windy webcam embed.
+            Multiple feeds at the same airport are grouped with a switcher. (YouTube and Windy embeds are
+            allowed by the app's security policy; other hosts may be blocked by your browser.)</p>
+          <div id="wc-custom-list" class="wc-custom-list"></div>
+          <div class="row wrap wc-add">
+            <input id="wc-add-icao" size="6" placeholder="ICAO" />
+            <button id="wc-add-lookup" type="button">Look up ✈</button>
+            <input id="wc-add-name" size="18" placeholder="Airport name" />
+            <input id="wc-add-lat" size="9" placeholder="Lat" />
+            <input id="wc-add-lon" size="9" placeholder="Lon" />
+            <input id="wc-add-title" size="16" placeholder="Feed title" />
+            <input id="wc-add-embed" size="34" placeholder="Embed URL (iframe)" />
+            <button id="wc-add-btn" type="button" class="primary">+ Add feed</button>
+          </div>
+          <div id="wc-add-msg" class="muted"></div>
         </div>
       </section>
 
-      <section class="settings-block">
-        <h3>Communication frequencies <span class="muted">(map layer)</span></h3>
-        <p class="muted">Toggle the 📻 <strong>Freqs</strong> layer on the map to see airport radio
-          frequencies (tower, ground, approach, ATIS…) near your view. Data is the public-domain
-          <a href="https://ourairports.com/data/" target="_blank" rel="noopener">OurAirports</a> dataset —
-          download it once below (a few MB), then it's served locally and offline.</p>
-        <div class="row wrap">
-          <span id="s-freq-meta" class="muted">—</span>
-          <button id="s-freq-refresh">Download frequencies now</button>
+      <section class="settings-cat" id="cat-aircraft">
+        <h3 class="cat-h"><span class="cat-ico">✈️</span> Aircraft data</h3>
+
+        <div class="settings-block">
+          <h3>Aircraft database <span class="muted">(registration &amp; type)</span></h3>
+          <p class="muted">Plain dump1090-fa and the SBS feed don't include registration or aircraft type
+            per plane — only readsb/tar1090 do. VliegmasjienPRO fills the gap automatically: each new
+            aircraft is looked up once and cached here, so the list, type filters and statistics fill in
+            over time. To load a whole database at once (e.g. if your receiver has no internet), import a
+            CSV/NDJSON below.</p>
+          <div class="row wrap">
+            <span id="s-acdb-meta" class="muted">—</span>
+          </div>
+          <div class="row wrap">
+            <input id="s-acdb-url" size="46" placeholder="Import URL (CSV: icao24,registration,typecode or basic-ac-db NDJSON)" />
+            <button id="s-acdb-import-url">Import from URL</button>
+            <button id="s-acdb-import-file">Import file…</button>
+            <input type="file" id="s-acdb-file" accept=".csv,.json,.ndjson,text/csv" hidden />
+          </div>
+        </div>
+
+        <div class="settings-block">
+          <h3>plane-alert-db <span class="muted">(spotted watchlist)</span></h3>
+          <div class="row wrap">
+            <span id="s-padb-meta" class="muted">—</span>
+            <button id="s-padb-refresh">Refresh database now</button>
+          </div>
         </div>
       </section>
 
-      <section class="settings-block">
-        <h3>Range outline <span class="muted">(map layer)</span></h3>
-        <p class="muted">Your receiver's actual coverage shape, built from the farthest aircraft seen in
-          each direction. It grows and refines the longer the app runs. Toggle it from the map's
-          <strong>Layers ▸ Range outline</strong>.</p>
-        <div class="row wrap">
-          <span id="s-range-meta" class="muted">—</span>
-          <button id="s-range-clear">Reset range outline</button>
+      <section class="settings-cat" id="cat-storage">
+        <h3 class="cat-h"><span class="cat-ico">💾</span> Storage &amp; backup</h3>
+
+        <div class="settings-block">
+          <h3>Data retention</h3>
+          <div class="row wrap">
+            <label title="How long the Spotted list, Statistics and alert log are kept.">History retention (days) <input id="s-retention" type="number" min="1" size="6" /></label>
+            <label title="How far back the map Replay and the per-session historical tracks go. Higher = more SD-card use.">Replay/track retention (days) <input id="s-replay-retention" type="number" min="1" size="6" /></label>
+          </div>
+          <div class="row wrap">
+            <span id="s-storage-meta" class="muted">—</span>
+            <button id="s-storage-purge" class="danger">Purge log now</button>
+          </div>
+        </div>
+
+        <div class="settings-block">
+          <h3>Backup &amp; restore</h3>
+          <p class="muted">Download a ZIP with the whole database (history, statistics, replay, reference data)
+            and your settings. <b>Keep it safe</b> — it also contains your password hash and any API keys.
+            Restoring lets you choose exactly what to bring back and <b>overwrites</b> those parts.</p>
+          <div class="row wrap">
+            <a id="s-backup-dl" class="btnlink" href="/api/backup">⬇ Download backup</a>
+          </div>
+          <div class="row wrap">
+            <label>Restore from a backup <input type="file" id="s-restore-file" accept=".zip,application/zip" /></label>
+            <span id="s-restore-info" class="muted"></span>
+          </div>
+          <div class="row wrap hidden" id="s-restore-opts">
+            <label class="toggle"><input type="checkbox" id="s-rest-settings" checked /> Settings</label>
+            <label class="toggle"><input type="checkbox" id="s-rest-history" checked /> History &amp; statistics</label>
+            <label class="toggle"><input type="checkbox" id="s-rest-tracks" checked /> Replay tracks</label>
+            <label class="toggle"><input type="checkbox" id="s-rest-reference" checked /> Reference data</label>
+            <button id="s-restore-btn" class="danger">Restore selected</button>
+          </div>
+          <div id="s-restore-msg" class="muted"></div>
         </div>
       </section>
 
-      <section class="settings-block">
-        <h3>Weather</h3>
-        <p class="muted">Rain radar (RainViewer) works out of the box. For cloud/precipitation/wind layers, add a free
-          <a href="https://openweathermap.org/api" target="_blank" rel="noopener">OpenWeatherMap API key</a>.</p>
-        <div class="row wrap">
-          <label>OpenWeatherMap key <input id="s-owm" size="36" placeholder="(optional)" /></label>
-        </div>
-      </section>
-
-      <section class="settings-block">
-        <h3>Sky Watch <span class="muted">(stargazing)</span></h3>
-        <p class="muted">Set the light-pollution level at your location on the
-          <a href="https://en.wikipedia.org/wiki/Bortle_scale" target="_blank" rel="noopener">Bortle scale</a>
-          so the <strong>Sky Watch</strong> tab can estimate what's visible. Not sure? Check a light-pollution
-          map (e.g. <a href="https://www.lightpollutionmap.info" target="_blank" rel="noopener">lightpollutionmap.info</a>).
-          Cloud &amp; Moon data are automatic.</p>
-        <div class="row wrap">
-          <label>Light pollution
-            <select id="s-bortle">
-              <option value="1">Bortle 1 — pristine dark sky</option>
-              <option value="2">Bortle 2 — truly dark site</option>
-              <option value="3">Bortle 3 — rural sky</option>
-              <option value="4">Bortle 4 — rural/suburban</option>
-              <option value="5">Bortle 5 — suburban sky</option>
-              <option value="6">Bortle 6 — bright suburban</option>
-              <option value="7">Bortle 7 — suburban/urban</option>
-              <option value="8">Bortle 8 — city sky</option>
-              <option value="9">Bortle 9 — inner city</option>
-            </select>
-          </label>
-        </div>
-      </section>
-
-      <section class="settings-block">
-        <h3>Aeronautical layers</h3>
-        <p class="muted">The <strong>🛫 Airspace</strong> overlay (controlled airspace, CTR/TMA/CTA…) uses
-          <a href="https://www.openaip.net" target="_blank" rel="noopener">OpenAIP</a> — get a free API key from your
-          OpenAIP account (<em>My Account → API Keys</em>) and paste it here. The
-          <strong>🌬 Aviation weather (METAR)</strong> layer uses
-          <a href="https://aviationweather.gov" target="_blank" rel="noopener">aviationweather.gov</a> and needs no key.
-          Toggle both from the map's <strong>Layers</strong> menu.</p>
-        <div class="row wrap">
-          <label>OpenAIP API key <input id="s-openaip" size="36" placeholder="(optional)" /></label>
-        </div>
-      </section>
-
-      <section class="settings-block">
-        <h3>Webcams</h3>
-        <p class="muted">The <strong>📷 Webcams</strong> layer shows nearby live webcam feeds — each plays inside the
-          app, with a switcher when a spot has several. Add a free <a href="https://api.windy.com/webcams" target="_blank" rel="noopener">Windy Webcams API</a>
-          key to auto-discover webcams across the map (these are labelled by their own name, with the nearest airport
-          shown as context — use <strong>Airports only</strong> in the Layers menu to show just cams at/near a field),
-          or add your own airport feeds below. Toggle it from the map's <strong>Layers</strong> menu.</p>
-        <div class="row wrap">
-          <label>Windy Webcams API key <input id="s-windy" size="36" placeholder="(optional)" /></label>
-        </div>
-        <h4 class="wc-sub">Custom feeds</h4>
-        <p class="muted">Add your own airport webcam feeds. <b>Embed URL</b> is an iframe URL — e.g. a YouTube
-          <em>Share → Embed</em> link (<code>https://www.youtube.com/embed/…</code>) or a Windy webcam embed.
-          Multiple feeds at the same airport are grouped with a switcher. (YouTube and Windy embeds are
-          allowed by the app's security policy; other hosts may be blocked by your browser.)</p>
-        <div id="wc-custom-list" class="wc-custom-list"></div>
-        <div class="row wrap wc-add">
-          <input id="wc-add-icao" size="6" placeholder="ICAO" />
-          <button id="wc-add-lookup" type="button">Look up ✈</button>
-          <input id="wc-add-name" size="18" placeholder="Airport name" />
-          <input id="wc-add-lat" size="9" placeholder="Lat" />
-          <input id="wc-add-lon" size="9" placeholder="Lon" />
-          <input id="wc-add-title" size="16" placeholder="Feed title" />
-          <input id="wc-add-embed" size="34" placeholder="Embed URL (iframe)" />
-          <button id="wc-add-btn" type="button" class="primary">+ Add feed</button>
-        </div>
-        <div id="wc-add-msg" class="muted"></div>
-      </section>
-
-      <div class="row">
+      <div class="row settings-save">
         <button id="s-save" class="primary big">💾 Save settings</button>
         <span id="s-saved" class="muted"></span>
       </div>
