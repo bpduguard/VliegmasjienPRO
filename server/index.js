@@ -922,6 +922,38 @@ app.get('/api/weather/owm/:layer/:z/:x/:y', requireAuth, async (req, res) => {
   }
 });
 
+// ------------------------------------------------------------------ basemap (CARTO)
+// CARTO now requires a free API key for their basemaps. When one is configured
+// we proxy the tiles so the key stays server-side. Unlike the OWM/OpenAIP
+// overlays this is the *basemap* and must render for anyone viewing the map
+// (incl. public mode), so it is not auth-gated. Without a key the client loads
+// CARTO's public tiles directly, so this route just 404s.
+const CARTO_STYLES = new Set([
+  'dark_all', 'light_all', 'dark_nolabels', 'light_nolabels', 'dark_only_labels', 'light_only_labels'
+]);
+app.get('/api/basemap/:style/:z/:x/:tile', async (req, res) => {
+  const key = getConfig().basemap?.cartoKey;
+  if (!key) return res.status(404).end();
+  const { style, z, x, tile } = req.params;
+  const m = /^(\d+)(@2x)?\.png$/.exec(tile);
+  if (!CARTO_STYLES.has(style) || !/^\d+$/.test(z) || !/^\d+$/.test(x) || !m) return res.status(400).end();
+  const y = m[1], scale = m[2] || '';
+  const sub = 'abcd'[(Number(x) + Number(y)) % 4];
+  const base = process.env.CARTO_TILES_BASE || `https://${sub}.basemaps.cartocdn.com`;
+  try {
+    const r = await fetch(
+      `${base}/${style}/${z}/${x}/${y}${scale}.png?key=${key}`,
+      { signal: AbortSignal.timeout(10000) }
+    );
+    if (!r.ok) return res.status(r.status).end();
+    res.setHeader('content-type', 'image/png');
+    res.setHeader('cache-control', 'public, max-age=86400');
+    res.end(Buffer.from(await r.arrayBuffer()));
+  } catch {
+    res.status(502).end();
+  }
+});
+
 // ------------------------------------------------------------------ airspace (OpenAIP)
 // Controlled-airspace tile overlay proxied from OpenAIP so the API key stays
 // server-side and there are no CORS issues. Needs a free OpenAIP API key.

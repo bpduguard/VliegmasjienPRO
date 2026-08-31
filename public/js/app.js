@@ -253,6 +253,19 @@ async function changePassword() {
 }
 
 // ----------------------------------------------------------------- map
+// CARTO basemap tiles. When a CARTO Basemaps API key is configured it's kept
+// server-side and tiles are loaded through the app's proxy; without a key we use
+// CARTO's public tiles directly (the historic default). The map is created before
+// config is fetched, so darkTiles starts on the direct URL and applyBasemapKey()
+// switches it to the proxy once we know a key is set.
+function cartoUrl(style) {
+  return state.config?.basemap?.hasKey
+    ? `/api/basemap/${style}/{z}/{x}/{y}{r}.png`
+    : `https://{s}.basemaps.cartocdn.com/${style}/{z}/{x}/{y}{r}.png`;
+}
+function applyBasemapKey() {
+  if (state.config?.basemap?.hasKey) darkTiles.setUrl(cartoUrl('dark_all'));
+}
 const darkTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
   attribution: '&copy; OpenStreetMap &copy; CARTO',
   maxZoom: 19
@@ -2749,6 +2762,8 @@ async function loadSettings() {
   $('#s-owm').placeholder = c.weather.hasOwmKey ? 'key configured ✓ (enter to replace)' : '(optional)';
   $('#s-openaip').value = '';
   $('#s-openaip').placeholder = c.openAip?.hasKey ? 'key configured ✓ (enter to replace)' : '(optional)';
+  $('#s-carto').value = '';
+  $('#s-carto').placeholder = c.basemap?.hasKey ? 'key configured ✓ (enter to replace)' : '(optional)';
   $('#s-windy').value = '';
   $('#s-windy').placeholder = c.webcams?.hasWindyKey ? 'key configured ✓ (enter to replace)' : '(optional)';
   const meta = await (await fetch('/api/planedb/meta')).json();
@@ -2928,9 +2943,16 @@ $('#s-save').addEventListener('click', async () => {
   if ($('#s-owm').value.trim()) patch.weather = { openWeatherMapKey: $('#s-owm').value.trim() };
   if ($('#s-openaip').value.trim()) patch.openAip = { apiKey: $('#s-openaip').value.trim() };
   if ($('#s-windy').value.trim()) patch.webcams = { windyKey: $('#s-windy').value.trim() };
+  if ($('#s-carto').value.trim()) patch.basemap = { cartoKey: $('#s-carto').value.trim() };
   await fetch('/api/config', {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch)
   });
+  // Switch the basemap to the proxied (keyed) tiles right away when a key was set.
+  if (patch.basemap?.cartoKey) {
+    state.config = state.config || {};
+    state.config.basemap = { hasKey: true };
+    applyBasemapKey();
+  }
   // Apply units immediately, no reload needed.
   state.units = patch.ui.units;
   applyUnits();
@@ -3218,7 +3240,7 @@ async function initWxRadar() {
   const center = (rcv && rcv.lat != null && rcv.lon != null) ? [rcv.lat, rcv.lon] : map.getCenter();
   if (!wxRadar) {
     const rmap = L.map('wx-radar', { center, zoom: 7, zoomControl: true, attributionControl: false });
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { subdomains: 'abcd', maxZoom: 12 }).addTo(rmap);
+    L.tileLayer(cartoUrl('dark_all'), { subdomains: 'abcd', maxZoom: 12 }).addTo(rmap);
     if (rcv && rcv.lat != null) {
       L.circleMarker(center, { radius: 5, color: '#38bdf8', weight: 2, fillColor: '#38bdf8', fillOpacity: 0.7 }).addTo(rmap);
     }
@@ -3488,6 +3510,7 @@ function renderSkyObjects(d) {
   try {
     state.config = await (await fetch('/api/config')).json();
     state.units = state.config.ui?.units || 'aviation';
+    applyBasemapKey();
   } catch { /* server starting */ }
   if (isAuthed()) loadZones();
   connectStream();

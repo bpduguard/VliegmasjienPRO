@@ -695,6 +695,18 @@
         <h3 class="cat-h"><span class="cat-ico">🗺️</span> Map layers</h3>
 
         <div class="settings-block">
+          <h3>Basemap <span class="muted">(map tiles)</span></h3>
+          <p class="muted">The dark map tiles are served by <a href="https://carto.com/basemaps/" target="_blank" rel="noopener">CARTO</a>,
+            which now needs a free API key for their basemaps. Request one at
+            <a href="https://carto.com/basemaps/apikey/" target="_blank" rel="noopener">carto.com/basemaps/apikey</a> and paste it here.
+            The key is kept on the server — tiles are proxied through the app, so it's never exposed to visitors. Without a key the
+            app falls back to CARTO's public tiles, which may show an "API key required" watermark.</p>
+          <div class="row wrap">
+            <label>CARTO Basemaps API key <input id="s-carto" size="36" placeholder="(optional)" /></label>
+          </div>
+        </div>
+
+        <div class="settings-block">
           <h3>Communication frequencies <span class="muted">(map layer)</span></h3>
           <p class="muted">Toggle the 📻 <strong>Freqs</strong> layer on the map to see airport radio
             frequencies (tower, ground, approach, ATIS…) near your view. Data is the public-domain

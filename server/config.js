@@ -62,6 +62,10 @@ const DEFAULTS = {
   },
   // OpenAIP (controlled-airspace tile overlay) — needs a free API key.
   openAip: { apiKey: process.env.OPENAIP_API_KEY || '' },
+  // Basemap tiles. CARTO now requires a free API key for their basemaps
+  // (carto.com/basemaps/apikey). When set, tiles are proxied server-side so the
+  // key stays private; without a key the app uses CARTO's public tiles directly.
+  basemap: { cartoKey: process.env.CARTO_API_KEY || '' },
   // Airport webcams layer. windyKey enables dynamic discovery via the Windy
   // Webcams API (free key from api.windy.com). `custom` is a user-editable list of
   // known airport feeds — { icao, name, lat, lon, feeds:[{ title, embed }] } — that
@@ -134,6 +138,9 @@ export function loadConfig() {
   if (fileCfg.webcams?.windyKey === undefined && process.env.WINDY_WEBCAMS_KEY) {
     config.webcams.windyKey = process.env.WINDY_WEBCAMS_KEY;
   }
+  if (fileCfg.basemap?.cartoKey === undefined && process.env.CARTO_API_KEY) {
+    config.basemap.cartoKey = process.env.CARTO_API_KEY;
+  }
   return config;
 }
 
@@ -158,6 +165,7 @@ export function publicConfig() {
     discord: { ...c.discord, webhookUrl: c.discord.webhookUrl ? '••••' : '' },
     weather: { hasOwmKey: !!c.weather.openWeatherMapKey },
     openAip: { hasKey: !!c.openAip?.apiKey },
+    basemap: { hasKey: !!c.basemap?.cartoKey },
     webcams: { hasWindyKey: !!c.webcams?.windyKey }
   };
 }

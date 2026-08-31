@@ -2,7 +2,15 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
-## 1.33.0
+## 1.34.0
+- **CARTO Basemaps API key (Settings → Map layers → Basemap).** CARTO now requires a free API key for
+  their basemaps, so the dark map tiles can show an "API key required" watermark without one. Request a
+  key at [carto.com/basemaps/apikey](https://carto.com/basemaps/apikey/) and paste it into the new
+  **Basemap** setting. The key is kept **server-side** — basemap tiles are proxied through the app
+  (`GET /api/basemap/:style/:z/:x/:tile`), so it's never exposed to visitors — matching how the
+  OpenWeatherMap and OpenAIP keys are handled. Without a key the app keeps using CARTO's public tiles
+  directly (unchanged behaviour). Also settable via the `CARTO_API_KEY` environment variable on first
+  run. The main map and the Weather-tab radar mini-map both use the keyed tiles when configured.
 - **Settings page redesigned — organised by feature category.** The controls are the same, but they're
   now grouped under seven clear categories instead of one long list: **📡 Receiver & sources**
   (data source, extra/mobile sources, receiver location), **🖥️ Display** (units, Sky Watch),

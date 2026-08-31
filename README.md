@@ -191,6 +191,7 @@ later start, so the app never "forgets" a URL you set in the UI:
 | `SBS_HOST` / `SBS_PORT` | Beasthost address + SBS port (default 30003) when `SOURCE_MODE=sbs` |
 | `OWM_API_KEY` | Optional OpenWeatherMap key for the cloud layer (rain radar needs no key) |
 | `OPENAIP_API_KEY` | Optional OpenAIP key for the controlled-airspace layer |
+| `CARTO_API_KEY` | Optional [CARTO Basemaps](https://carto.com/basemaps/apikey/) key for the dark map tiles (kept server-side; tiles are proxied) |
 | `PORT` | HTTP port (default 8390) |
 | `DATA_DIR` | Data directory (default `/data` in Docker) |
 | `TRUST_PROXY` | Set to `1` behind a reverse proxy / Cloudflare Tunnel so rate-limiting and logging use the real client IP (`CF-Connecting-IP` / `X-Forwarded-For`) instead of the proxy's address |
@@ -227,6 +228,7 @@ ingress:
 
 | Service | Used for | Key needed |
 |---|---|---|
+| [CARTO](https://carto.com/basemaps/) | dark basemap tiles | free key |
 | [plane-alert-db](https://github.com/sdr-enthusiasts/plane-alert-db) | watchlist data, categories, operator/type enrichment | no |
 | [adsbdb.com](https://www.adsbdb.com) | callsign → route (origin/destination, airline) | no |
 | [hexdb.io](https://hexdb.io) | second callsign → route source (cross-checked with adsbdb) | no |
