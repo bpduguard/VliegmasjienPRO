@@ -771,6 +771,35 @@ button.danger:hover { background: rgba(239,68,68,0.12); border-color: var(--dang
 .wx-hour-pop { color: var(--accent); font-size: 0.72rem; min-height: 0.9em; }
 .wx-hour-wind { color: var(--muted); font-size: 0.7rem; text-align: center; }
 
+/* activities — "is today good for…" */
+.wx-acts { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.wx-act { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; background: var(--bg2);
+  border-left: 4px solid var(--border); }
+.wx-act-top { display: flex; align-items: center; gap: 9px; }
+.wx-act-ico { font-size: 1.5rem; line-height: 1; }
+.wx-act-name { flex: 1; font-weight: 600; color: var(--text); font-size: 0.95rem; }
+.wx-act-score { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 1.35rem; color: var(--text); }
+.wx-act-bar { height: 6px; border-radius: 99px; background: rgba(255,255,255,0.08); margin: 10px 0 8px; overflow: hidden; }
+.wx-act-bar > span { display: block; height: 100%; border-radius: 99px; background: var(--muted); transition: width 0.3s ease; }
+.wx-act-meta { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.wx-act-rating { font-weight: 700; font-size: 0.82rem; }
+.wx-act-when { color: var(--muted); font-size: 0.8rem; text-align: right; }
+.wx-act-reason { color: var(--muted); font-size: 0.82rem; margin-top: 4px; }
+/* rating colours: great/good = green, fair = amber, poor = red */
+.wx-act-great { border-left-color: #22c55e; }
+.wx-act-great .wx-act-bar > span { background: #22c55e; }
+.wx-act-great .wx-act-rating { color: #22c55e; }
+.wx-act-good { border-left-color: #84cc16; }
+.wx-act-good .wx-act-bar > span { background: #84cc16; }
+.wx-act-good .wx-act-rating { color: #a3e635; }
+.wx-act-fair { border-left-color: var(--accent2); }
+.wx-act-fair .wx-act-bar > span { background: var(--accent2); }
+.wx-act-fair .wx-act-rating { color: var(--accent2); }
+.wx-act-poor { border-left-color: var(--danger); }
+.wx-act-poor .wx-act-bar > span { background: var(--danger); }
+.wx-act-poor .wx-act-rating { color: var(--danger); }
+.wx-act-none .wx-act-rating { color: var(--muted); }
+
 /* 7-day list */
 .wx-daily { display: flex; flex-direction: column; }
 .wx-day { display: grid; grid-template-columns: 92px 28px 42px 1fr 42px auto; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--border); }

@@ -184,6 +184,132 @@ export function weatherWarnings(forecast, todayStr) {
   return all;
 }
 
+// --------------------------------------------------------- activities
+// Rate how comfortable today's weather is for a few outdoor activities, scoring
+// each hour 0–100 and reporting the best time. Purely DERIVED from the trusted
+// forecast (same as the warnings above). Wind is in km/h, temps in °C; reasons
+// are kept qualitative so the client can render in its own unit system.
+function clamp100(n) { return Math.max(0, Math.min(100, Math.round(n))); }
+function ratingFor(score) {
+  if (score >= 75) return 'Great';
+  if (score >= 55) return 'Good';
+  if (score >= 35) return 'Fair';
+  return 'Poor';
+}
+const FOG_CODES = new Set([45, 48]);
+
+// Each scorer returns penalties as [amount, label]; the biggest label (if it
+// actually bites) becomes the limiting factor shown to the user.
+function limiter(pens) {
+  let max = 0, label = null;
+  for (const [p, l] of pens) if (p > max) { max = p; label = l; }
+  return max >= 12 ? label : null;
+}
+function scoreFrom(pens) {
+  const total = pens.reduce((a, [p]) => a + p, 0);
+  return { score: clamp100(100 - total), factor: limiter(pens) };
+}
+
+function evalDrone(h) {
+  const wind = h.windKmh ?? 0, gust = h.gustKmh ?? wind;
+  const pens = [
+    [Math.max(0, wind - 12) * 3, 'too windy'],
+    [Math.max(0, gust - 18) * 3.2, 'gusty'],
+    [FOG_CODES.has(h.code) ? 60 : 0, 'foggy'],
+    [(h.temp ?? 10) < 0 ? 20 : 0, 'freezing (battery)']
+  ];
+  if ((h.precip ?? 0) > 0.1 || (h.precipProb ?? 0) >= 40) pens.push([75, 'rain risk']);
+  else if ((h.precipProb ?? 0) >= 20) pens.push([25, 'showers possible']);
+  return scoreFrom(pens);
+}
+function evalBike(h) {
+  const gust = h.gustKmh ?? h.windKmh ?? 0, feels = h.feels ?? h.temp ?? 15;
+  const pens = [
+    [Math.max(0, gust - 30) * 2, 'windy'],
+    [feels < 5 ? (5 - feels) * 4 : 0, 'cold'],
+    [feels > 28 ? (feels - 28) * 4 : 0, 'hot'],
+    [THUNDER_CODES.has(h.code) ? 100 : 0, 'thunderstorms']
+  ];
+  if ((h.precip ?? 0) > 0.2 || (h.precipProb ?? 0) >= 50) pens.push([70, 'rain likely']);
+  else if ((h.precipProb ?? 0) >= 30) pens.push([30, 'showers possible']);
+  return scoreFrom(pens);
+}
+function evalStar(h) {
+  const pens = [
+    [(h.cloud ?? 100) * 0.85, 'cloudy'],
+    [FOG_CODES.has(h.code) ? 50 : 0, 'foggy'],
+    [((h.precip ?? 0) > 0 || (h.precipProb ?? 0) >= 30) ? 60 : 0, 'rain risk']
+  ];
+  return scoreFrom(pens);
+}
+function evalBbq(h) {
+  const gust = h.gustKmh ?? h.windKmh ?? 0, feels = h.feels ?? h.temp ?? 15;
+  const pens = [
+    [Math.max(0, gust - 25) * 2.2, 'windy'],
+    [feels < 8 ? (8 - feels) * 3.5 : 0, 'chilly'],
+    [feels > 32 ? (feels - 32) * 4 : 0, 'very hot'],
+    [THUNDER_CODES.has(h.code) ? 100 : 0, 'thunderstorms']
+  ];
+  if ((h.precip ?? 0) > 0.1 || (h.precipProb ?? 0) >= 40) pens.push([80, 'rain risk']);
+  else if ((h.precipProb ?? 0) >= 25) pens.push([30, 'showers possible']);
+  return scoreFrom(pens);
+}
+
+// Best-of-today per activity. `nowMs` injectable for testing.
+export function activityForecast(forecast, nowMs = Date.now()) {
+  const hrs = forecast?.hourly;
+  if (!hrs?.length) return [];
+  const offsetMs = (forecast.utcOffsetSeconds || 0) * 1000;
+  const local = new Date(nowMs + offsetMs);
+  const todayStr = local.toISOString().slice(0, 10);
+  const curHour = local.getUTCHours(); // local wall-clock hour (offset already applied)
+
+  const today = hrs
+    .filter((h) => typeof h.time === 'string' && h.time.slice(0, 10) === todayStr)
+    .map((h) => ({ ...h, hour: Number(h.time.slice(11, 13)) }));
+
+  const fmtHour = (hr) => `${String(hr).padStart(2, '0')}:00`;
+  const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
+  function build(key, icon, label, pool, scorer, opts = {}) {
+    const base = { key, icon, label };
+    if (!pool.length) {
+      return { ...base, score: null, rating: 'No data', bestTime: null, window: opts.window || null, reason: 'No window left today.' };
+    }
+    const future = pool.filter((h) => h.hour >= curHour);
+    const cands = future.length ? future : pool;
+    let best = null;
+    for (const h of cands) {
+      const s = scorer(h);
+      if (!best || s.score > best.score) best = { ...s, hour: h.hour };
+    }
+    const rating = ratingFor(best.score);
+    let reason;
+    if (best.factor) reason = cap(best.factor) + '.';
+    else reason = best.score >= 75 ? 'Looks great.' : (best.score >= 55 ? 'Decent conditions.' : 'Marginal conditions.');
+    return {
+      ...base,
+      score: best.score,
+      rating,
+      // best future hour; once the window has passed we still score today but drop the time
+      bestTime: (!opts.noTime && future.length) ? fmtHour(best.hour) : null,
+      window: opts.window || null,
+      reason
+    };
+  }
+
+  const daylight = today.filter((h) => h.isDay === 1);
+  const night = today.filter((h) => h.isDay === 0);
+  const evening = today.filter((h) => h.hour >= 17 && h.hour <= 22);
+
+  return [
+    build('drone', '🚁', 'Drone flying', daylight, evalDrone),
+    build('biking', '🚴', 'Biking', daylight, evalBike),
+    build('stargazing', '🔭', 'Star gazing', night, evalStar),
+    build('bbq', '🍖', 'BBQ', evening, evalBbq, { noTime: true, window: 'This evening' })
+  ];
+}
+
 // --------------------------------------------------------- notifications
 const notified = new Map(); // key -> ts (dedupe + prune)
 

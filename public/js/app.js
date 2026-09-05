@@ -3073,6 +3073,7 @@ async function loadWeatherTab() {
     renderWxWarnings(f.warnings || []);
     renderWxNow(f.current, f.daily?.[0]);
     renderWxHourly(f.hourly || []);
+    renderWxActivities(f.activities || []);
     renderWxDaily(f.daily || []);
     renderWxMetar(mRes && mRes.ok ? await mRes.json() : { station: null });
     initWxRadar();
@@ -3169,6 +3170,39 @@ function renderWxHourly(hourly) {
       pop +
       `<span class="wx-hour-wind">${esc(wxWind(h.windKmh))}</span>`;
     box.appendChild(cell);
+  }
+}
+
+// "Is today good for…" — activity comfort scores derived server-side from the
+// forecast. Each card shows a 0–100 score, a rating, and the best time today
+// (BBQ is fixed to the evening, so it shows the window instead of a time).
+function renderWxActivities(acts) {
+  const box = $('#wx-activities');
+  if (!box) return;
+  box.innerHTML = '';
+  if (!acts.length) { box.innerHTML = '<div class="wx-loading">No activity data.</div>'; return; }
+  for (const a of acts) {
+    const cls = a.score == null ? 'none' : (a.rating || '').toLowerCase().replace(/\s+/g, '-');
+    const scoreTxt = a.score == null ? '—' : String(a.score);
+    const when = a.window
+      ? a.window
+      : (a.bestTime ? `Best around ${a.bestTime}` : (a.score == null ? '' : 'Window has passed'));
+    const pct = a.score == null ? 0 : a.score;
+    const card = document.createElement('div');
+    card.className = `wx-act wx-act-${esc(cls || 'none')}`;
+    card.innerHTML =
+      `<div class="wx-act-top">` +
+        `<span class="wx-act-ico">${esc(a.icon || '•')}</span>` +
+        `<span class="wx-act-name">${esc(a.label)}</span>` +
+        `<span class="wx-act-score">${esc(scoreTxt)}</span>` +
+      `</div>` +
+      `<div class="wx-act-bar"><span style="width:${pct}%"></span></div>` +
+      `<div class="wx-act-meta">` +
+        `<span class="wx-act-rating">${esc(a.rating || '')}</span>` +
+        (when ? `<span class="wx-act-when">${esc(when)}</span>` : '') +
+      `</div>` +
+      `<div class="wx-act-reason">${esc(a.reason || '')}</div>`;
+    box.appendChild(card);
   }
 }
 

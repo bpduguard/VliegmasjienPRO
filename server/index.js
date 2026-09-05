@@ -21,7 +21,7 @@ import { createBackup, restoreBackup, readManifest } from './backup.js';
 import { icaoToCountry } from './country.js';
 import { rangeOutline, clearRange } from './range.js';
 import { getTles, startPassNotifier } from './space.js';
-import { getForecast, weatherWarnings, startWeatherNotifier } from './weather.js';
+import { getForecast, weatherWarnings, activityForecast, startWeatherNotifier } from './weather.js';
 import { skyAssessment } from './skywatch.js';
 import {
   authed, requireAuth, isPasswordSet, setPassword, verifyPassword, setAuthCookie, clearAuthCookie,
@@ -803,7 +803,7 @@ app.get('/api/weather/forecast', requireAuth, async (req, res) => {
   if (r.lat == null || r.lon == null) return res.status(400).json({ error: 'no receiver location set' });
   try {
     const forecast = await getForecast(r.lat, r.lon);
-    res.json({ ...forecast, warnings: weatherWarnings(forecast) });
+    res.json({ ...forecast, warnings: weatherWarnings(forecast), activities: activityForecast(forecast) });
   } catch (e) {
     res.status(502).json({ error: e.message });
   }

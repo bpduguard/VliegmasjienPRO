@@ -32,8 +32,10 @@ container.
 - ⛅ **Weather tab** (authenticated) combining every source for the receiver location into one view:
   **current conditions** and a **7-day + hourly forecast** from Open-Meteo (national weather-service
   models), the **nearest observed METAR** from aviationweather.gov as a ground-truth cross-check, a
-  **live animated rain-radar** mini-map, and **extreme-condition warnings** (heat, wind, heavy rain,
-  storms, snow, UV) with an optional notification when severe weather is forecast for today/tomorrow
+  **live animated rain-radar** mini-map, **extreme-condition warnings** (heat, wind, heavy rain,
+  storms, snow, UV) with an optional notification when severe weather is forecast for today/tomorrow,
+  and an **Activities** card scoring how good today is for drone flying, biking, star gazing and BBQ
+  (0–100 with the best time today)
 - 🔭 **Sky Watch tab** (authenticated) — a stargazing forecast for your location: a 0–100 observing
   score for tonight and the next few nights (real astronomical-darkness window, cloud cover, Moon
   phase/brightness, your Bortle light-pollution class), plus the **best objects to see tonight** —

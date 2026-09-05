@@ -2,7 +2,15 @@
 
 The app version is shown in **Settings** and reported by `GET /api/status`.
 
-## 1.34.0
+## 1.35.0
+- **Activities in the Weather tab.** A new **Activities** card rates how good today is for
+  **🚁 drone flying**, **🚴 biking**, **🔭 star gazing** and **🍖 BBQ**. Each shows a 0–100 comfort
+  **score**, a rating (Poor → Fair → Good → Great), and the **best time today** — drones/biking pick the
+  best remaining daylight hour, star gazing the best dark hour tonight, and BBQ is fixed to *this evening*
+  (so it shows the window, not a time). Scores are derived server-side from the Open-Meteo hourly forecast
+  using per-activity rules (drone: wind & gusts, rain, fog; biking: rain, gusts, feels-like, storms; star
+  gazing: cloud cover, rain, fog; BBQ: evening rain, wind, feels-like), and each card names the limiting
+  factor (e.g. "Gusty", "Rain likely", "Cloudy"). Exposed as `activities` on `GET /api/weather/forecast`.
 - **CARTO Basemaps API key (Settings → Map layers → Basemap).** CARTO now requires a free API key for
   their basemaps, so the dark map tiles can show an "API key required" watermark without one. Request a
   key at [carto.com/basemaps/apikey](https://carto.com/basemaps/apikey/) and paste it into the new
